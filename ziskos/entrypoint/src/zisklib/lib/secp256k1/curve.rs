@@ -138,6 +138,13 @@ pub fn secp256k1_double_scalar_mul_with_g(
     let mut gp_is_infinity = false;
     add_points_complete_assign(&mut gp, &mut gp_is_infinity, p);
 
+    let one = [1u64, 0, 0, 0];
+    if *k1 == one && *k2 == one {
+        // Return G + p
+        return (gp_is_infinity, gp);
+    }
+    // From here on, at least one of k1 or k2 is greater than 1
+
     // Hint the maximum length between the binary representations of k1 and k2
     // We will verify the output by recomposing both k1 and k2
     // Moreover, we should check that the first received bit (of either k1 or k2) is 1
@@ -213,7 +220,7 @@ pub fn secp256k1_double_scalar_mul_with_g(
     // Determine starting limb/bit for the loop
     let mut limb = max_limb;
     let mut bit = if max_bit == 0 {
-        // If max_bit is 0 then limb > 0; otherwise k = 1, which is excluded here
+        // If max_bit is 0 then limb > 0; otherwise k1,k2 = 1, which is excluded here
         limb -= 1;
         63
     } else {

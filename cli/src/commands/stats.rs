@@ -1,30 +1,14 @@
 use anyhow::Result;
-use asm_runner::{AsmRunnerOptions, AsmServices};
 use clap::Parser;
-use colored::Colorize;
-use fields::Goldilocks;
-use libloading::{Library, Symbol};
-use proofman::ProofMan;
-use proofman_common::{
-    initialize_logger, json_to_debug_instances_map, DebugInfo, ParamsGPU, ProofOptions,
-};
-use rom_setup::{
-    gen_elf_hash, get_elf_bin_file_path, get_elf_data_hash, get_rom_blowup_factor,
-    DEFAULT_CACHE_PATH,
-};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf, thread, time::Instant};
-use zisk_common::{ExecutorStats, Stats, ZiskExecutionResult, ZiskLibInitFn};
+use std::{collections::HashMap, fs, path::PathBuf, time::Instant};
+use zisk_build::ZISK_VERSION_MESSAGE;
+use zisk_common::io::ZiskStdin;
+use zisk_common::{ExecutorStats, Stats};
 use zisk_pil::*;
+use zisk_sdk::ProverClient;
 
-use crate::{
-    commands::{get_proving_key, get_witness_computation_lib, Field},
-    ux::print_banner,
-    ZISK_VERSION_MESSAGE,
-};
-
-#[cfg(distributed)]
-use mpi::traits::*;
+use crate::ux::print_banner;
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, version = ZISK_VERSION_MESSAGE)]
@@ -62,9 +46,6 @@ pub struct ZiskStats {
     /// Setup folder path
     #[clap(short = 'k', long)]
     pub proving_key: Option<PathBuf>,
-
-    #[clap(long, default_value_t = Field::Goldilocks)]
-    pub field: Field,
 
     /// Base port for Assembly microservices (default: 23115).
     /// A single execution will use 3 consecutive ports, from this port to port + 2.
@@ -110,259 +91,74 @@ impl ZiskStats {
     pub fn run(&mut self) -> Result<()> {
         print_banner();
 
-        let proving_key = get_proving_key(self.proving_key.as_ref());
-
-        let debug_info = match &self.debug {
-            None => DebugInfo::default(),
-            Some(None) => DebugInfo::new_debug(),
-            Some(Some(debug_value)) => {
-                json_to_debug_instances_map(proving_key.clone(), debug_value.clone())
-            }
-        };
-
-        let default_cache_path =
-            std::env::var("HOME").ok().map(PathBuf::from).unwrap().join(DEFAULT_CACHE_PATH);
-
-        if !default_cache_path.exists() {
-            if let Err(e) = fs::create_dir_all(default_cache_path.clone()) {
-                if e.kind() != std::io::ErrorKind::AlreadyExists {
-                    // prevent collision in distributed mode
-                    panic!("Failed to create the cache directory: {e:?}");
-                }
-            }
-        }
+        let stdin = self.create_stdin()?;
 
         let emulator = if cfg!(target_os = "macos") { true } else { self.emulator };
-
-        let mut asm_rom = None;
-        if emulator {
-            self.asm = None;
-        } else if self.asm.is_none() {
-            let stem = self.elf.file_stem().unwrap().to_str().unwrap();
-            let hash = get_elf_data_hash(&self.elf)
-                .map_err(|e| anyhow::anyhow!("Error computing ELF hash: {}", e))?;
-            let new_filename = format!("{stem}-{hash}-mt.bin");
-            let asm_rom_filename = format!("{stem}-{hash}-rh.bin");
-            asm_rom = Some(default_cache_path.join(asm_rom_filename));
-            self.asm = Some(default_cache_path.join(new_filename));
-        }
-
-        if let Some(asm_path) = &self.asm {
-            if !asm_path.exists() {
-                return Err(anyhow::anyhow!("ASM file not found at {:?}", asm_path.display()));
-            }
-        }
-
-        if let Some(asm_rom) = &asm_rom {
-            if !asm_rom.exists() {
-                return Err(anyhow::anyhow!("ASM file not found at {:?}", asm_rom.display()));
-            }
-        }
-
-        if let Some(input) = &self.input {
-            if !input.exists() {
-                return Err(anyhow::anyhow!("Input file not found at {:?}", input.display()));
-            }
-        }
-
-        let blowup_factor = get_rom_blowup_factor(&proving_key);
-
-        let rom_bin_path =
-            get_elf_bin_file_path(&self.elf.to_path_buf(), &default_cache_path, blowup_factor)?;
-
-        if !rom_bin_path.exists() {
-            let _ = gen_elf_hash(&self.elf.clone(), rom_bin_path.as_path(), blowup_factor, false)
-                .map_err(|e| anyhow::anyhow!("Error generating elf hash: {}", e));
-        }
-
-        self.print_command_info();
-
-        let mut custom_commits_map: HashMap<String, PathBuf> = HashMap::new();
-        custom_commits_map.insert("rom".to_string(), rom_bin_path);
-
-        let mut gpu_params = ParamsGPU::new(false);
-        gpu_params.with_max_number_streams(1);
-        if self.number_threads_witness.is_some() {
-            gpu_params.with_number_threads_pools_witness(self.number_threads_witness.unwrap());
-        }
-        if self.max_witness_stored.is_some() {
-            gpu_params.with_max_witness_stored(self.max_witness_stored.unwrap());
-        }
-
-        let mpi_info = ProofMan::<Goldilocks>::get_mpi_info();
-
-        initialize_logger(self.verbose.into(), Some(mpi_info.rank));
-
-        let world_ranks = mpi_info.n_processes;
-
-        let world_rank = mpi_info.rank;
-        let local_rank = mpi_info.node_rank;
-
-        let asm_services = AsmServices::new(world_rank, local_rank, self.port);
-        let asm_runner_options = AsmRunnerOptions::new()
-            .with_verbose(self.verbose > 0)
-            .with_base_port(self.port)
-            .with_world_rank(world_rank)
-            .with_local_rank(local_rank)
-            .with_unlock_mapped_memory(self.unlock_mapped_memory);
-
-        if self.asm.is_some() {
-            // Start ASM microservices
-            tracing::info!(">>> [{}] Starting ASM microservices.", mpi_info.rank,);
-
-            asm_services.start_asm_services(self.asm.as_ref().unwrap(), asm_runner_options)?;
-        }
-
-        let library =
-            unsafe { Library::new(get_witness_computation_lib(self.witness_lib.as_ref()))? };
-        let witness_lib_constructor: Symbol<ZiskLibInitFn<Goldilocks>> =
-            unsafe { library.get(b"init_library")? };
-        let mut witness_lib = witness_lib_constructor(
-            self.verbose.into(),
-            self.elf.clone(),
-            self.asm.clone(),
-            asm_rom,
-            Some(world_rank),
-            Some(local_rank),
-            self.port,
-            self.unlock_mapped_memory,
-            self.shared_tables,
-        )
-        .expect("Failed to initialize witness library");
-
-        let proofman = ProofMan::<Goldilocks>::new(
-            proving_key,
-            custom_commits_map,
-            true,
-            false,
-            false,
-            gpu_params,
-            self.verbose.into(),
-            witness_lib.get_packed_info(),
-        )
-        .expect("Failed to initialize proofman");
-
-        #[cfg(distributed)]
-        {
-            let mut is_active = true;
-
-            if let Some(mpi_node) = self.mpi_node {
-                if local_rank != mpi_node as i32 {
-                    is_active = false;
-                }
-            }
-
-            // All processes must participate in these calls:
-            let color = if is_active {
-                mpi::topology::Color::with_value(1)
-            } else {
-                mpi::topology::Color::undefined()
-            };
-            let _sub_comm = mpi_info.world.split_by_color(color);
-
-            mpi_info.world.split_shared(world_rank);
-
-            if !is_active {
-                println!(
-                    "{}: {}",
-                    format!("Rank {local_rank}").bright_yellow().bold(),
-                    "Inactive rank, skipping computation.".bright_yellow()
-                );
-
-                return Ok(());
-            }
-        }
-
-        match self.field {
-            Field::Goldilocks => {
-                proofman.register_witness(&mut *witness_lib, library);
-
-                proofman
-                    .compute_witness_from_lib(
-                        self.input.clone(),
-                        &debug_info,
-                        ProofOptions::new(
-                            false,
-                            false,
-                            false,
-                            false,
-                            self.minimal_memory,
-                            false,
-                            PathBuf::new(),
-                        ),
-                    )
-                    .map_err(|e| anyhow::anyhow!("Error generating stats: {}", e))?;
-            }
-        };
-
-        #[allow(clippy::type_complexity)]
-        let (_, stats, witness_stats): (
-            ZiskExecutionResult,
-            ExecutorStats,
-            HashMap<usize, Stats>,
-        ) = witness_lib.get_execution_result().expect("Failed to get execution result");
+        let (world_rank, n_processes, stats) =
+            if emulator { self.run_emu(stdin)? } else { self.run_asm(stdin)? };
 
         if world_rank % 2 == 1 {
-            thread::sleep(std::time::Duration::from_millis(2000));
+            std::thread::sleep(std::time::Duration::from_millis(2000));
         }
         tracing::info!("");
         tracing::info!(
             "{} {}",
-            format!("--- STATS SUMMARY RANK {}/{}", world_rank, world_ranks),
+            format!("--- STATS SUMMARY RANK {}/{}", world_rank, n_processes),
             "-".repeat(55)
         );
 
-        Self::print_stats(&witness_stats);
-
-        stats.print_stats();
-
-        if self.asm.is_some() {
-            // Shut down ASM microservices
-            tracing::info!("<<< [{}] Shutting down ASM microservices.", world_rank);
-            asm_services.stop_asm_services()?;
+        if let Some(stats) = &stats {
+            Self::print_stats(&stats.witness_stats);
+            stats.print_stats();
         }
 
         Ok(())
     }
 
-    fn print_command_info(&self) {
-        // Print Stats command info
-        println!("{} Stats", format!("{: >12}", "Command").bright_green().bold());
-        println!(
-            "{: >12} {}",
-            "Witness Lib".bright_green().bold(),
-            get_witness_computation_lib(self.witness_lib.as_ref()).display()
-        );
-
-        println!("{: >12} {}", "Elf".bright_green().bold(), self.elf.display());
-
-        if self.asm.is_some() {
-            let asm_path = self.asm.as_ref().unwrap().display();
-            println!("{: >12} {}", "ASM runner".bright_green().bold(), asm_path);
+    fn create_stdin(&mut self) -> Result<ZiskStdin> {
+        let stdin = if let Some(input) = &self.input {
+            if !input.exists() {
+                return Err(anyhow::anyhow!("Input file not found at {:?}", input.display()));
+            }
+            ZiskStdin::from_file(input)?
         } else {
-            println!(
-                "{: >12} {}",
-                "Emulator".bright_green().bold(),
-                "Running in emulator mode".bright_yellow()
-            );
-        }
+            ZiskStdin::null()
+        };
+        Ok(stdin)
+    }
 
-        if self.input.is_some() {
-            let inputs_path = self.input.as_ref().unwrap().display();
-            println!("{: >12} {}", "Inputs".bright_green().bold(), inputs_path);
-        }
+    pub fn run_emu(&mut self, stdin: ZiskStdin) -> Result<(i32, i32, Option<ExecutorStats>)> {
+        let prover = ProverClient::builder()
+            .emu()
+            .witness()
+            .witness_lib_path_opt(self.witness_lib.clone())
+            .proving_key_path_opt(self.proving_key.clone())
+            .elf_path(self.elf.clone())
+            .verbose(self.verbose)
+            .shared_tables(self.shared_tables)
+            .print_command_info()
+            .build()?;
 
-        println!(
-            "{: >12} {}",
-            "Proving key".bright_green().bold(),
-            get_proving_key(self.proving_key.as_ref()).display()
-        );
+        prover.stats(stdin, self.debug.clone(), self.mpi_node.map(|n| n as u32))
+    }
 
-        let std_mode = if self.debug.is_some() { "Debug mode" } else { "Standard mode" };
-        println!("{: >12} {}", "STD".bright_green().bold(), std_mode);
-        // println!("{}", format!("{: >12} {}", "Distributed".bright_green().bold(), "ON (nodes: 4, threads: 32)"));
+    pub fn run_asm(&mut self, stdin: ZiskStdin) -> Result<(i32, i32, Option<ExecutorStats>)> {
+        let prover = ProverClient::builder()
+            .asm()
+            .witness()
+            .witness_lib_path_opt(self.witness_lib.clone())
+            .proving_key_path_opt(self.proving_key.clone())
+            .elf_path(self.elf.clone())
+            .verbose(self.verbose)
+            .shared_tables(self.shared_tables)
+            .asm_path_opt(self.asm.clone())
+            .base_port_opt(self.port)
+            .unlock_mapped_memory(self.unlock_mapped_memory)
+            .print_command_info()
+            .build()?;
 
-        println!();
+        let mpi_node = self.mpi_node.map(|n| n as u32);
+        prover.stats(stdin, self.debug.clone(), mpi_node)
     }
 
     /// Prints stats individually and grouped, with aligned columns.
@@ -387,7 +183,7 @@ impl ZiskStats {
         let mut total_witness_time = 0;
         for stat in sorted_stats.iter() {
             let collect_ms = stat.collect_duration;
-            let witness_ms = stat.witness_duration;
+            let witness_ms = stat.witness_duration as u64;
 
             println!(
                 "    {:<8} {:<25} {:<8} {:<12} {:<12}",
@@ -432,7 +228,7 @@ impl ZiskStats {
 
             for e in &entries {
                 let collect_ms = e.collect_duration;
-                let witness_ms = e.witness_duration;
+                let witness_ms = e.witness_duration as u64;
 
                 c_min = c_min.min(collect_ms);
                 c_max = c_max.max(collect_ms);
@@ -542,8 +338,11 @@ impl ZiskStats {
                 //     "{} num_chunks={}, start_time={}, duration={}",
                 //     name, stat.num_chunks, witness_start_time, stat.witness_duration
                 // );
-                let task =
-                    Task { name, start: witness_start_time, duration: stat.witness_duration };
+                let task = Task {
+                    name,
+                    start: witness_start_time,
+                    duration: stat.witness_duration as u64,
+                };
                 tasks.push(task);
             }
         }

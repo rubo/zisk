@@ -20,6 +20,7 @@ vergen = { version = "8", default-features = false, features = [
 
 [dependencies]
 zisk-common = { workspace = true }
+zisk-build = { workspace = true }
 executor = { workspace = true }
 rom-setup = { workspace = true }
 zisk-core = { workspace = true }
@@ -32,12 +33,14 @@ fields = { workspace = true }
 proofman = { workspace = true }
 proofman-common = { workspace = true }
 proofman-verifier = { workspace = true }
+proofman-util = { workspace = true }
 sysinfo = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
 libloading = { workspace = true }
+zisk-sdk = { workspace = true }
 
 zstd = { workspace = true }
 bytemuck = { workspace = true }
@@ -58,7 +61,7 @@ mpi = { workspace = true }
 [features]
 default = []
 disable_distributed = ["proofman/disable_distributed", "proofman-common/disable_distributed"]
-gpu = ["proofman-common/gpu", "packed"]
+gpu = ["proofman-common/gpu", "proofman/gpu", "packed"]
 packed = ["proofman-common/packed"]
 stats = []
 verify = ["fields/verify"]

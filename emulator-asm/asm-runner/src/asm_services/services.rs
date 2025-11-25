@@ -91,8 +91,6 @@ impl AsmServices {
             }
         }
 
-        let start = std::time::Instant::now();
-
         for service in &Self::SERVICES {
             tracing::debug!(
                 ">>> [{}] Starting ASM service: {} on port {}",
@@ -121,12 +119,6 @@ impl AsmServices {
             self.send_status_request(service)
                 .with_context(|| format!("Service {service} failed to respond to ping"))?;
         }
-
-        tracing::info!(
-            ">>> [{}] ASM microservices are ready ({:.2} seconds)",
-            self.world_rank,
-            start.elapsed().as_secs_f32()
-        );
 
         Ok(())
     }
@@ -299,15 +291,26 @@ impl AsmServices {
         })?;
 
         // Wait for the shutdown signal (up to 30s)
-        sem.timed_wait(Duration::from_secs(30)).map_err(|e| {
-            tracing::error!(
-                "[{}] Timeout or error waiting on semaphore {}: {}",
-                self.world_rank,
-                sem_name,
-                e
-            );
-            crate::AsmRunError::SemaphoreError(sem_name.clone(), e)
-        })?;
+        loop {
+            match sem.timed_wait(Duration::from_secs(30)) {
+                Ok(_) => break,
+                Err(named_sem::Error::WaitFailed(e))
+                    if e.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    continue
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "[{}] Timeout or error waiting on semaphore {}: {}",
+                        self.world_rank,
+                        sem_name,
+                        e
+                    );
+
+                    return Err(crate::AsmRunError::SemaphoreError(sem_name.clone(), e).into());
+                }
+            }
+        }
 
         // Manually drop and unlink the semaphore to clean up
         // This is necessary to ensure the semaphore is properly cleaned up

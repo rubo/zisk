@@ -1,11 +1,10 @@
 use tracing::error;
-use zisk_common::ExecutorStats;
+use zisk_common::ExecutorStatsHandle;
 
 use crate::{AsmRHData, AsmRHHeader, AsmRunError, AsmService, AsmServices, AsmSharedMemory};
 use anyhow::{Context, Result};
 use named_sem::NamedSemaphore;
 use std::sync::atomic::{fence, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub struct PreloadedRH {
@@ -61,20 +60,14 @@ impl AsmRunnerRH {
         local_rank: i32,
         base_port: Option<u16>,
         unlock_mapped_memory: bool,
-        _stats: Arc<Mutex<ExecutorStats>>,
+        _stats: ExecutorStatsHandle,
     ) -> Result<AsmRunnerRH> {
-        let __stats = Arc::clone(&_stats);
+        let __stats = _stats.clone();
 
         #[cfg(feature = "stats")]
-        let parent_stats_id = __stats.lock().unwrap().get_id();
+        let parent_stats_id = __stats.next_id();
         #[cfg(feature = "stats")]
-        _stats.lock().unwrap().add_stat(
-            0,
-            parent_stats_id,
-            "ASM_RH_RUNNER",
-            0,
-            ExecutorStatsEvent::Begin,
-        );
+        _stats.add_stat(0, parent_stats_id, "ASM_RH_RUNNER", 0, ExecutorStatsEvent::Begin);
 
         let port = if let Some(base_port) = base_port {
             AsmServices::port_for(&AsmService::RH, base_port, local_rank)
@@ -91,16 +84,24 @@ impl AsmRunnerRH {
         let asm_services = AsmServices::new(world_rank, local_rank, base_port);
         asm_services.send_rom_histogram_request(max_steps)?;
 
-        match sem_chunk_done.timed_wait(Duration::from_secs(30)) {
-            Err(e) => {
-                error!("Semaphore '{}' error: {:?}", sem_chunk_done_name, e);
+        loop {
+            match sem_chunk_done.timed_wait(Duration::from_secs(10)) {
+                Ok(()) => {
+                    // Synchronize with memory changes from the C++ side
+                    fence(Ordering::Acquire);
+                    break;
+                }
+                Err(named_sem::Error::WaitFailed(e))
+                    if e.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    continue
+                }
+                Err(e) => {
+                    error!("Semaphore '{}' error: {:?}", sem_chunk_done_name, e);
 
-                return Err(AsmRunError::SemaphoreError(sem_chunk_done_name, e))
-                    .context("Child process returned error");
-            }
-            Ok(()) => {
-                // Synchronize with memory changes from the C++ side
-                fence(Ordering::Acquire);
+                    return Err(AsmRunError::SemaphoreError(sem_chunk_done_name, e))
+                        .context("Child process returned error");
+                }
             }
         }
 
@@ -114,13 +115,7 @@ impl AsmRunnerRH {
 
         // Add to executor stats
         #[cfg(feature = "stats")]
-        _stats.lock().unwrap().add_stat(
-            0,
-            parent_stats_id,
-            "ASM_RH_RUNNER",
-            0,
-            ExecutorStatsEvent::End,
-        );
+        _stats.add_stat(0, parent_stats_id, "ASM_RH_RUNNER", 0, ExecutorStatsEvent::End);
 
         Ok(AsmRunnerRH::new(asm_rowh_output))
     }

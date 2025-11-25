@@ -28,7 +28,7 @@ Writing a Rust program for ZisK is similar to writing a standard Rust program, w
 
 Let's show these changes using the example program from the [Quickstart](./quickstart.md) section.
 
-### Example program    
+### Example program
 
 `main.rs`:
 ```rust
@@ -40,15 +40,18 @@ ziskos::entrypoint!(main);
 
 use sha2::{Digest, Sha256};
 use std::convert::TryInto;
-use ziskos::{read_input, set_output};
+use ziskos::{read_input_slice, set_output};
 use byteorder::ByteOrder;
 
 fn main() {
     // Read the input data as a byte array from ziskos
-    let input: Vec<u8> = read_input();
+    let input = read_input_slice();
 
-    // Get the 'n' value converting the input byte array into a u64 value
-    let n: u64 = u64::from_le_bytes(input.try_into().unwrap());
+    // Convert the input data to a u64 integer
+    let n: u64 = match input.as_ref().try_into() {
+        Ok(input_bytes) => u64::from_le_bytes(input_bytes),
+        Err(e) => panic!("Invalid input, error: {}", e),
+    };
 
     let mut hash = [0u8; 32];
 
@@ -87,12 +90,12 @@ To provide input data for ZisK, you need to write that data in a binary file (e.
 
 If your program requires complex input data, consider using a serialization mechanism (like [`bincode`](https://crates.io/crates/bincode) crate) to store it in `input.bin` file.
 
-In your program, use the `ziskos::read_input()` function to retrieve the input data from the `input.bin` file:
+In your program, use the `ziskos::read_input_slice()` function to retrieve the input data from the `input.bin` file:
 
 ```rust
 // Read the input data as a byte array from ziskos
-let input: Vec<u8> = read_input();
-```    
+let input = read_input_slice();
+```
 
 To write public output data, use the `ziskos::set_output()` function. Since the function accepts `u32` values, split the output data into 32-bit chunks if necessary and increase the `id` parameter of the function in each call:
 
@@ -102,7 +105,7 @@ for i in 0..8 {
     let val = byteorder::BigEndian::read_u32(&mut hash[i * 4..i * 4 + 4]);
     set_output(i, val);
 }
-```    
+```
 
 ## Build
 
@@ -314,23 +317,28 @@ The total memory requirement increases proportionally with the number of process
 
 ### GPU Proof Generation
 
-Zisk proofs can also be generated using GPUs to significantly improve performance and scalability. 
+Zisk proofs can also be generated using GPUs to significantly improve performance and scalability.
 Follow these steps to enable GPU support:
 
 1. GPU support is only available for NVIDIA GPUs.
 
 2. Make sure the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) is installed.
 
-3. Build Zisk with GPU support enabled. 
+3. Build Zisk with GPU support enabled.
+
+    **Note:** It is recommended to compile Zisk directly on the server where it will be executed. The binary will be optimized for the local GPU architecture, which can lead to better runtime performance.
+
     GPU support must be enabled at compile time. Follow the instructions in the **Build ZisK** section under **Option 2: Building from source** in the [Installation](./installation.md) guide, but replace the build command with:
     ```bash
     cargo build --release --features gpu
     ```
 
-4. Build Zisk on the target GPU server. 
-    It is recommended to compile Zisk directly on the server where it will be executed. The binary will be optimized for the local GPU architecture, which can lead to better runtime performance.
+4. Regenerate constant tree files:
+    ```bash
+    cargo-zisk check-setup -a
+    ```
 
-You can combine GPU-based execution with concurrent proof generation using multiple processes, as described in the **Concurrent Proof Generation** section. 
+You can combine GPU-based execution with concurrent proof generation using multiple processes, as described in the **Concurrent Proof Generation** section.
 
 > **Note:** GPU memory is typically more limited than CPU memory. When combining GPU execution with concurrent proof generation, ensure that each process has sufficient memory available on the GPU to avoid out-of-memory errors.
 

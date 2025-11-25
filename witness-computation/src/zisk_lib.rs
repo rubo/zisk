@@ -13,14 +13,14 @@ use precomp_big_int::Add256Manager;
 use precomp_keccakf::KeccakfManager;
 use precomp_sha256f::Sha256fManager;
 use proofman::register_std;
-use proofman_common::PackedInfo;
+use proofman_common::{PackedInfo, ProofmanResult};
 use sm_arith::ArithSM;
 use sm_binary::BinarySM;
 use sm_mem::Mem;
 use sm_rom::RomSM;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use witness::{WitnessLibrary, WitnessManager};
-use zisk_common::{ExecutorStats, Stats, ZiskExecutionResult, ZiskLib, ZiskWitnessLibrary};
+use zisk_common::{io::ZiskStdin, ExecutorStats, ZiskExecutionResult, ZiskLib, ZiskWitnessLibrary};
 use zisk_core::{Riscv2zisk, CHUNK_SIZE};
 #[cfg(feature = "packed")]
 use zisk_pil::PACKED_INFO;
@@ -38,11 +38,10 @@ pub struct WitnessLib<F: PrimeField64> {
     asm_rom_path: Option<PathBuf>,
     executor: Option<Arc<ZiskExecutor<F>>>,
     chunk_size: u64,
-    world_rank: i32,
-    local_rank: i32,
     base_port: Option<u16>,
     unlock_mapped_memory: bool,
     shared_tables: bool,
+    verbose_mode: proofman_common::VerboseMode,
 }
 
 #[no_mangle]
@@ -52,14 +51,10 @@ fn init_library(
     elf_path: PathBuf,
     asm_path: Option<PathBuf>,
     asm_rom_path: Option<PathBuf>,
-    world_rank: Option<i32>,
-    local_rank: Option<i32>,
     base_port: Option<u16>,
     unlock_mapped_memory: bool,
     shared_tables: bool,
 ) -> Result<Box<dyn ZiskLib<Goldilocks>>, Box<dyn std::error::Error>> {
-    proofman_common::initialize_logger(verbose_mode, world_rank);
-
     let chunk_size = CHUNK_SIZE;
 
     let result = Box::new(WitnessLib {
@@ -68,11 +63,10 @@ fn init_library(
         asm_rom_path,
         executor: None,
         chunk_size,
-        world_rank: world_rank.unwrap_or(0),
-        local_rank: local_rank.unwrap_or(0),
         base_port,
         unlock_mapped_memory,
         shared_tables,
+        verbose_mode,
     });
 
     Ok(result)
@@ -92,7 +86,12 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
     ///
     /// # Panics
     /// Panics if the `Riscv2zisk` conversion fails or if required paths cannot be resolved.
-    fn register_witness(&mut self, wcm: &WitnessManager<F>) {
+    fn register_witness(&mut self, wcm: &WitnessManager<F>) -> ProofmanResult<()> {
+        let world_rank = wcm.get_world_rank();
+        let local_rank = wcm.get_local_rank();
+
+        proofman_common::initialize_logger(self.verbose_mode, Some(world_rank));
+
         // Step 1: Create an instance of the RISCV -> ZisK program converter
         let rv2zk = Riscv2zisk::new(self.elf_path.display().to_string());
 
@@ -101,7 +100,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         let zisk_rom = Arc::new(zisk_rom);
 
         // Step 3: Initialize the secondary state machines
-        let std = Std::new(wcm.get_pctx(), wcm.get_sctx(), self.shared_tables);
+        let std = Std::new(wcm.get_pctx(), wcm.get_sctx(), self.shared_tables)?;
         register_std(wcm, &std);
 
         let rom_sm = RomSM::new(zisk_rom.clone(), self.asm_rom_path.clone());
@@ -175,8 +174,8 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
             sm_bundle,
             Some(rom_sm.clone()),
             self.chunk_size,
-            self.world_rank,
-            self.local_rank,
+            world_rank,
+            local_rank,
             self.base_port,
             self.unlock_mapped_memory,
         );
@@ -187,6 +186,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         wcm.register_component(executor.clone());
 
         self.executor = Some(executor);
+        Ok(())
     }
 
     fn get_packed_info(&self) -> HashMap<(usize, usize), PackedInfo> {
@@ -209,13 +209,17 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
 }
 
 impl ZiskWitnessLibrary<Goldilocks> for WitnessLib<Goldilocks> {
+    fn set_stdin(&self, stdin: ZiskStdin) {
+        if let Some(executor) = &self.executor {
+            executor.set_stdin(stdin);
+        }
+    }
+
     /// Returns the execution result of the witness computation.
     ///
     /// # Returns
     /// * `u16` - The execution result code.
-    fn get_execution_result(
-        &self,
-    ) -> Option<(ZiskExecutionResult, ExecutorStats, HashMap<usize, Stats>)> {
+    fn execution_result(&self) -> Option<(ZiskExecutionResult, ExecutorStats)> {
         self.executor.as_ref().map(|executor| executor.get_execution_result())
     }
 }

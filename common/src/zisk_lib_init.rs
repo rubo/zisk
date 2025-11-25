@@ -1,10 +1,10 @@
-use std::{collections::HashMap, path::PathBuf, time::Instant};
+use std::{path::PathBuf, time::Instant};
 
 use fields::PrimeField64;
 use proofman_common::VerboseMode;
 use witness::WitnessLibrary;
 
-use crate::ExecutorStats;
+use crate::{io::ZiskStdin, ExecutorStats};
 
 #[derive(Debug, Default, Clone)]
 pub struct ZiskExecutionResult {
@@ -22,16 +22,15 @@ pub struct Stats {
     /// Witness start time
     pub witness_start_time: Instant,
     /// Witness duration in microseconds
-    pub witness_duration: u64,
+    pub witness_duration: u128,
     /// Number of chunks
     pub num_chunks: usize,
 }
 
 /// Extension trait that provides execution result access without Any boxing
 pub trait ZiskWitnessLibrary<F: PrimeField64> {
-    fn get_execution_result(
-        &self,
-    ) -> Option<(ZiskExecutionResult, ExecutorStats, HashMap<usize, Stats>)>;
+    fn set_stdin(&self, stdin: ZiskStdin);
+    fn execution_result(&self) -> Option<(ZiskExecutionResult, ExecutorStats)>;
 }
 
 // SUpertrait for ZiskWitnessLibrary and WitnessLibrary
@@ -45,8 +44,6 @@ pub type ZiskLibInitFn<F> = fn(
     PathBuf,         // Rom path
     Option<PathBuf>, // Asm path
     Option<PathBuf>, // Asm ROM path
-    Option<i32>,     // mpi World Rank
-    Option<i32>,     // mpi Local Rank
     Option<u16>,     // Base port for the ASM microservices
     bool,            // Unlock_mapped_memory
     bool,            // Shared_tables

@@ -1545,6 +1545,7 @@ impl<'a> Emu<'a> {
                 self.ctx.stats.set_top_rois(options.top_roi);
                 self.ctx.stats.set_roi_callers(options.roi_callers);
                 self.ctx.stats.set_top_roi_detail(options.top_roi_detail);
+                self.ctx.stats.set_coverage(options.coverage);
             }
         }
 
@@ -1842,11 +1843,7 @@ impl<'a> Emu<'a> {
                 self.ctx.inst_ctx.a,
                 self.ctx.inst_ctx.b,
                 pc,
-                &[
-                    self.ctx.inst_ctx.regs[10], // a0
-                    self.ctx.inst_ctx.regs[11], // a1
-                    self.ctx.inst_ctx.regs[12], // a2
-                ],
+                &self.ctx.inst_ctx.regs,
             );
         }
 

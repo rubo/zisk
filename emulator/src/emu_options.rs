@@ -85,6 +85,10 @@ pub struct EmuOptions {
     /// Requires options: -S -X
     #[clap(short = 'D', long, value_name = "TOP_ROI_DETAIL", default_value = "false")]
     pub top_roi_detail: bool,
+    /// Show coverage of opcodes and precompiles.
+    /// Requires option: -X
+    #[clap(short, long, value_name = "COVERAGE", default_value = "false")]
+    pub coverage: bool,
 }
 
 impl Default for EmuOptions {
@@ -112,6 +116,7 @@ impl Default for EmuOptions {
             top_roi: 10,
             top_roi_detail: false,
             legacy_stats: false,
+            coverage: false,
         }
     }
 }

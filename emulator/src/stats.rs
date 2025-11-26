@@ -9,38 +9,42 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs::File,
     io::{BufWriter, Write},
-    str::FromStr,
 };
 
 use sm_arith::ArithFrops;
 use sm_binary::{BinaryBasicFrops, BinaryExtensionFrops};
 use zisk_core::{
     zisk_ops::{OpStats, ZiskOp},
-    ZiskInst, ZiskOperationType, ZiskRom, RAM_ADDR, REGS_IN_MAIN_TOTAL_NUMBER,
+    ZiskInst, ZiskOperationType, ZiskRom, RAM_ADDR, REGS_IN_MAIN_TOTAL_NUMBER, SRC_REG, STORE_REG,
 };
 
 use crate::{
-    get_ops_costs, get_ops_ranks, MemoryOperationsStats, RegionsOfInterest, StatsReport, BASE_COST,
-    MAIN_COST,
+    get_ops_costs, get_ops_ranks, MemoryOperationsStats, RegionsOfInterest, StatsCosts,
+    StatsCoverageReport, StatsReport, BASE_COST, MAIN_COST,
 };
 
+#[derive(Debug, Clone)]
+pub struct CallStackEntry {
+    pub pc: u64,
+    pub ra: u64,
+    pub caller_roi_index: Option<usize>,
+    pub called_roi_index: Option<usize>,
+    pub func_name: String,
+    costs: StatsCosts,
+}
+
 const OP_DATA_BUFFER_DEFAULT_CAPACITY: usize = 128 * 1024 * 1024;
+
+const REG_RA_IDX: usize = 1;
+const REG_A0_IDX: usize = 10;
 
 /// Keeps statistics of the emulator operations
 #[derive(Debug, Clone)]
 pub struct Stats {
-    /// Counters of memory read/write operations, both aligned and non-aligned
-    mops: MemoryOperationsStats,
     /// Counter of FROPS (FRequentOPs)
     frops: u64,
-    /// Detail of FROPS
-    frops_ops: [u64; 256],
     /// Cost of FROPS
     frops_cost: u64,
-    /// Counter of steps
-    steps: u64,
-    /// Counters of operations, one per possible u8 opcode (many remain unused)
-    ops: [u64; 256],
     /// Ops costs
     ops_cost: u64,
     /// Precompiled ops costs
@@ -49,6 +53,7 @@ pub struct Stats {
     regs: [u64; REGS_IN_MAIN_TOTAL_NUMBER],
     /// Flag to indicate whether to store operation data in a buffer
     store_ops: bool,
+    costs: StatsCosts,
     /// Buffer to store operation data before writing to file
     op_data_buffer: Vec<u8>,
     rois_by_address: BTreeMap<u32, u32>,
@@ -57,20 +62,23 @@ pub struct Stats {
     top_rois: usize,
     roi_callers: usize,
     top_rois_detail: bool,
+    coverage: bool,
     legacy_stats: bool,
     /// PC histogram, i.e. number of times each PC was executed
     pc_histogram: HashMap<u64, u64>,
+    previous_pc: u64,
+    call_stack: Vec<CallStackEntry>,
+    previous_verbose: String,
+    is_call: bool,
+    is_return: bool,
 }
 
 impl Default for Stats {
     /// Default constructor for Stats structure.  Sets all counters to zero.
     fn default() -> Self {
         Self {
-            mops: MemoryOperationsStats::default(),
             frops: 0,
-            steps: 0,
-            ops: [0; 256],
-            frops_ops: [0; 256],
+            costs: StatsCosts::default(),
             regs: [0; REGS_IN_MAIN_TOTAL_NUMBER],
             op_data_buffer: vec![],
             store_ops: false,
@@ -83,8 +91,14 @@ impl Default for Stats {
             precompiled_cost: 0,
             frops_cost: 0,
             top_rois_detail: false,
+            coverage: false,
             legacy_stats: false,
             pc_histogram: HashMap::new(),
+            previous_pc: 0,
+            call_stack: Vec::new(),
+            previous_verbose: String::default(),
+            is_call: false,
+            is_return: false,
         }
     }
 }
@@ -92,7 +106,7 @@ impl Default for Stats {
 impl Stats {
     /// Called every time some data is read from memory, if statistics are enabled
     pub fn on_memory_read(&mut self, address: u64, width: u64) {
-        self.mops.memory_read(address, width);
+        self.costs.memory_read(address, width);
         if let Some(roi_index) = self.current_roi {
             self.rois[roi_index].memory_read(address, width);
         }
@@ -100,7 +114,7 @@ impl Stats {
 
     /// Called every time some data is writen to memory, if statistics are enabled
     pub fn on_memory_write(&mut self, address: u64, width: u64, value: u64) {
-        self.mops.memory_write(address, width, value);
+        self.costs.memory_write(address, width, value);
         if let Some(roi_index) = self.current_roi {
             self.rois[roi_index].memory_write(address, width, value);
         }
@@ -121,34 +135,179 @@ impl Stats {
     /// Called at every step with the current number of executed steps, if statistics are enabled
     pub fn on_steps(&mut self, steps: u64) {
         // Store the number of executed steps
-        self.steps = steps;
+        // assert_eq!(self.costs.steps, steps);
     }
 
-    pub fn check_roi(&mut self, pc: u32) {
+    pub fn print_call_stack(&self) {
+        println!("CALL STACK DUMP (top to bottom):");
+        for (i, entry) in self.call_stack.iter().rev().enumerate() {
+            let roi_name = if let Some(roi_index) = entry.called_roi_index {
+                &self.rois[roi_index].name
+            } else {
+                "????"
+            };
+            println!(
+                "#{} PC:0x{:08X} RA:0x{:08X} ROI:{} STEPS:{}",
+                i, entry.pc, entry.ra, roi_name, entry.costs.steps
+            );
+        }
+    }
+    pub fn static_print_call_stack(call_stack: &Vec<CallStackEntry>, prefix: &str) {
+        for (i, entry) in call_stack.iter().rev().enumerate() {
+            println!(
+                "{prefix}#{} PC:0x{:08X} RA:0x{:08X} ROI[{}]:{} STEPS:{}",
+                i,
+                entry.pc,
+                entry.ra,
+                entry.called_roi_index.unwrap_or(usize::MAX),
+                entry.func_name,
+                entry.costs.steps
+            );
+        }
+    }
+    pub fn check_roi(&mut self, pc: u32, regs: &[u64]) {
+        // First, handle RETURN even if we're not changing ROI
+        let return_call = if self.is_return && !self.call_stack.is_empty() {
+            let return_call = self.call_stack.pop().unwrap();
+            // Update ROI stats
+            if let Some(roi_idx) = self.current_roi {
+                let roi = &mut self.rois[roi_idx];
+                roi.inc_step();
+            }
+            Some(return_call)
+        } else {
+            None
+        };
+
+        let previous_roi_index = self.current_roi;
+
+        self.current_roi = if let Some((_, index)) = self.rois_by_address.range(..=pc).next_back() {
+            Some(*index as usize)
+        } else {
+            None
+        };
+
+        // Now handle ROI updates and CALL/JMP
         if let Some(roi_index) = self.current_roi {
             let roi = &mut self.rois[roi_index];
-            if pc >= roi.from_pc && pc <= roi.to_pc {
+            if pc >= roi.from_pc && pc <= roi.to_pc && !self.is_call && !self.is_return {
+                assert!(return_call.is_none());
                 roi.inc_step();
                 return;
             }
         }
-        self.current_roi = if let Some((_, index)) = self.rois_by_address.range(..=pc).next_back() {
-            let roi = &mut self.rois[*index as usize];
-            if pc >= roi.from_pc && pc <= roi.to_pc {
-                if pc == roi.from_pc {
-                    roi.call(self.current_roi);
+
+        if let Some(roi_index) = self.current_roi {
+            // At this point ROI change, search the new ROI
+            // let roi = &mut self.rois[*index as usize];
+            // If return after call, need to add delta costs
+            if let Some(return_call) = return_call {
+                println!(
+                    "#{} RETURN 0x{pc:08X} {} {}",
+                    self.call_stack.len(),
+                    roi_index,
+                    self.rois[roi_index].name
+                );
+
+                if return_call.caller_roi_index != Some(roi_index) {
+                    panic!("{:?} {:?}", return_call, self.rois[roi_index]);
+                }
+
+                self.rois[roi_index].return_call(self.call_stack.len());
+
+                let steps_added = if return_call.called_roi_index == self.current_roi {
+                    0
                 } else {
-                    roi.inc_step();
+                    let _steps = self.rois[roi_index].get_steps();
+                    assert!(_steps <= self.costs.steps);
+                    let res = self.rois[roi_index].add_delta_costs(&return_call.costs, &self.costs);
+                    if res.is_none() {
+                        println!(
+                            "\x1B[1;31mIGNORE ADD_DELTA_COSTS #{} ROI[{}]:{} S:{}+0 GS:{}",
+                            self.rois[roi_index].get_callstack_rc(),
+                            roi_index,
+                            self.rois[roi_index].name,
+                            _steps,
+                            self.costs.steps,
+                        );
+                        Self::static_print_call_stack(&self.call_stack, "  > ");
+                        print!("\x1B[0m");
+                    } else {
+                        println!(
+                            "\x1B[1;32mACCEPT ADD_DELTA_COSTS #{} ROI[{}]:{}  S:{}+{}={} GS:{}",
+                            self.rois[roi_index].get_callstack_rc(),
+                            roi_index,
+                            self.rois[roi_index].name,
+                            _steps,
+                            res.unwrap(),
+                            self.rois[roi_index].get_steps(),
+                            self.costs.steps,
+                        );
+                        Self::static_print_call_stack(&self.call_stack, "  > ");
+                        print!("\x1B[0m");
+                    }
+                    let roi_steps = self.rois[roi_index].get_steps();
+                    let self_steps = self.costs.steps;
+                    let ref_steps = return_call.costs.steps;
+                    let call_stack_len = self.call_stack.len();
+                    if roi_steps > self_steps {
+                        self.print_call_stack();
+                        panic!(
+                            "roi.costs.steps({}) > self.costs.steps({}) ref.steps: {} on #{}",
+                            roi_steps, self_steps, ref_steps, call_stack_len
+                        );
+                    }
+                    assert!(self.rois[roi_index].get_steps() <= self.costs.steps);
+                    res.unwrap_or(0)
+                };
+
+                println!(
+                    "#{} STEPS {} + {steps_added} = {} STEPS:{}",
+                    self.call_stack.len(),
+                    self.rois[roi_index].get_steps() - steps_added,
+                    self.rois[roi_index].get_steps(),
+                    self.costs.steps
+                );
+            }
+            if pc >= self.rois[roi_index].from_pc && pc <= self.rois[roi_index].to_pc {
+                if self.is_call {
+                    assert!(!self.is_return);
+                    if let Some(previous_roi_index) = previous_roi_index {
+                        self.rois[previous_roi_index].caller_call();
+                    }
+                    self.call_stack.push(CallStackEntry {
+                        pc: pc as u64,
+                        ra: regs[REG_RA_IDX],
+                        caller_roi_index: previous_roi_index,
+                        called_roi_index: self.current_roi,
+                        costs: self.costs.clone(),
+                        func_name: self.rois[roi_index].name.clone(),
+                    });
+                    println!(
+                        "#{} CALL 0x{pc:08X} {} {} STEPS:{}",
+                        self.call_stack.len() - 1,
+                        roi_index,
+                        self.rois[roi_index].name,
+                        self.costs.steps
+                    );
+                    self.rois[roi_index].call(self.current_roi, self.call_stack.len());
+                } else if !self.is_return {
+                    // JMP: This is a tail call. Replace the top of the call stack if it exists
+                    if let Some(top) = self.call_stack.last_mut() {
+                        top.pc = pc as u64;
+                        top.called_roi_index = Some(roi_index);
+                        // top.costs = self.costs.clone();
+                    }
+                    self.rois[roi_index].inc_step();
+                    self.rois[roi_index].update_call_depth(self.call_stack.len());
                 }
             }
-            Some(*index as usize)
-        } else {
-            None
         }
     }
     /// Called every time an operation is executed, if statistics are enabled
-    pub fn on_op(&mut self, instruction: &ZiskInst, a: u64, b: u64, pc: u64, _regs: &[u64; 3]) {
-        self.check_roi(pc as u32);
+    pub fn on_op(&mut self, instruction: &ZiskInst, a: u64, b: u64, pc: u64, regs: &[u64]) {
+        self.costs.steps += 1;
+        self.check_roi(pc as u32, regs);
         // If the operation is a usual operation, then increase the usual counter
 
         if self.store_ops
@@ -161,7 +320,7 @@ impl Stats {
         }
         if self.is_frops(instruction, a, b) {
             self.frops += 1;
-            self.frops_ops[instruction.op as usize] += 1;
+            self.costs.frops_ops[instruction.op as usize] += 1;
         }
         // Otherwise, increase the counter corresponding to this opcode
         else {
@@ -171,13 +330,41 @@ impl Stats {
                     roi.add_op(instruction.op);
                 }
             }
-            self.ops[instruction.op as usize] += 1;
+            self.costs.ops[instruction.op as usize] += 1;
         }
         // Increase the PC histogram entry for this PC
         self.pc_histogram.entry(pc).and_modify(|count| *count += 1).or_insert(1);
+        self.previous_pc = pc;
+        self.previous_verbose = instruction.verbose.clone();
+        if instruction.set_pc {
+            // CALL: set_pc=true, store_ra=true, store_offset=1 (stores PC+4 or PC+2 in ra)
+            self.is_call = instruction.store_ra && instruction.store_offset == 1;
+
+            // RETURN: set_pc=true, store_ra=false (no stores RA), b_src=SRC_REG, b_offset_imm0=1 (jumps to ra/x1)
+            // Additionally, verify that the target PC matches the expected return address from the call stack
+            let is_jalr_ra = !instruction.store_ra
+                && instruction.b_src == SRC_REG
+                && instruction.b_offset_imm0 == 1;
+
+            if is_jalr_ra && !self.call_stack.is_empty() {
+                // Check if we're jumping to the expected return address
+                if let Some(top) = self.call_stack.last() {
+                    // The new PC should match the RA from the call stack
+                    // Note: we can't check the future PC here, so we rely on the pattern
+                    self.is_return = true;
+                } else {
+                    self.is_return = false;
+                }
+            } else {
+                self.is_return = false;
+            }
+        } else {
+            self.is_call = false;
+            self.is_return = false;
+        }
     }
     pub fn get_frops_cost(&self) -> u64 {
-        get_ops_costs(&self.frops_ops).0
+        get_ops_costs(&self.costs.frops_ops).0
     }
 
     pub fn set_store_ops(&mut self, store: bool) {
@@ -249,8 +436,8 @@ impl Stats {
 
     pub fn update_costs(&mut self) {
         self.rois.iter_mut().for_each(|roi| roi.update_costs());
-        let (ops_cost, precompiled_cost) = get_ops_costs(&self.ops);
-        self.frops_cost = get_ops_costs(&self.frops_ops).0;
+        let (ops_cost, precompiled_cost) = get_ops_costs(&self.costs.ops);
+        self.frops_cost = get_ops_costs(&self.costs.frops_ops).0;
         self.ops_cost = ops_cost;
         self.precompiled_cost = precompiled_cost;
     }
@@ -303,164 +490,11 @@ impl Stats {
         }
     }
 
-    pub fn report_opcodes_coverage(
-        &self,
-        report: &mut StatsReport,
-        no_frops: &[u64],
-        frops: &[u64],
-        title: &str,
-        rom: &ZiskRom,
-    ) {
-        let mut ops: [u64; 256] = [0; 256];
-        for i in 0..256_usize {
-            ops[i] = no_frops[i] + frops[i];
-        }
-        let mut ops_total_counter: u64 = 0;
-        let mut ops_used_counter: u64 = 0;
-        let mut no_frops_used_counter: u64 = 0;
-        let mut frops_used_counter: u64 = 0;
-
-        let mut ops_used_text: String = String::new();
-        let mut ops_unused_text: String = String::new();
-        let mut no_frops_used_text: String = String::new();
-        let mut no_frops_unused_text: String = String::new();
-        let mut frops_used_text: String = String::new();
-
-        for i in 0..256_usize {
-            if let Ok(inst) = ZiskOp::try_from_code(i as u8) {
-                ops_total_counter += 1;
-                if ops[i] > 0 {
-                    ops_used_counter += 1;
-                    ops_used_text.push_str(&format!("{}, ", inst.name()));
-                } else {
-                    ops_unused_text.push_str(&format!("{}, ", inst.name()));
-                }
-                if no_frops[i] > 0 {
-                    no_frops_used_counter += 1;
-                    no_frops_used_text.push_str(&format!("{}, ", inst.name()));
-                } else {
-                    no_frops_unused_text.push_str(&format!("{}, ", inst.name()));
-                }
-                if frops[i] > 0 {
-                    frops_used_counter += 1;
-                    frops_used_text.push_str(&format!("{}, ", inst.name()));
-                }
-            }
-        }
-        let r = format!(
-            "\n{}:\nAVAILABLE: {}\nUSED: {}\nUSED NO FROPS: {} ({:.2}%) [{}]\nUNUSED NO FROPS: {} ({:.2}%) [{}]\nUSED FROPS: {} ({:.2}%) [{}]\n",
-            title,
-            ops_total_counter,
-            ops_used_counter,
-            no_frops_used_counter,
-            (no_frops_used_counter as f64 * 100.0) / (ops_total_counter as f64),
-            no_frops_used_text,
-            ops_total_counter - no_frops_used_counter,
-            ((ops_total_counter - no_frops_used_counter) as f64 * 100.0) / (ops_total_counter as f64),
-            no_frops_unused_text,
-            frops_used_counter,
-            (frops_used_counter as f64 * 100.0) / (ops_total_counter as f64),
-            frops_used_text
-        );
-
-        report.add(&r);
-
-        // Create a RISC-V instruction string histogram
-        let mut riscv_histogram: HashMap<String, u64> = HashMap::new();
-
-        // Fill it with the supported RISC-V instructions
-        for riscv_inst in RISCV_IMACFD_ZICSR_INSTRUCTIONS.iter() {
-            riscv_histogram.insert(String::from_str(riscv_inst).unwrap(), 0);
-        }
-
-        // For each executed Zisk instruction, get its RISC-V instruction and update the histogram
-        let mut unsupported_riscv_instructions: Vec<String> = Vec::new();
-        for pc in self.pc_histogram.keys() {
-            // Get the RISC-V instruction at this pc from rom
-            let zisk_inst = rom.get_instruction(*pc);
-
-            // If the Zisk instruction did not come from a RISC-V instruction, skip it
-            if zisk_inst.riscv_inst.is_none() {
-                continue;
-            }
-
-            // Get the RISC-V instruction string
-            let riscv_inst = zisk_inst.riscv_inst.as_ref().unwrap();
-
-            // Get the count of times this Zisk instruction was executed
-            let count = self.pc_histogram.get(pc).unwrap();
-
-            // Update the RISC-V histogram
-            let total_count = riscv_histogram.get_mut(riscv_inst);
-            if total_count.is_none() {
-                unsupported_riscv_instructions
-                    .push(zisk_inst.riscv_inst.as_ref().unwrap().to_string());
-                continue;
-            }
-
-            // Update the count
-            let total_count = total_count.unwrap();
-            *total_count += count;
-        }
-
-        // Calculate RISC-V instruction coverage
-        let used_riscv_instructions_counter: u64 =
-            riscv_histogram.values().filter(|&&count| count > 0).count() as u64;
-        let riscv_coverage = used_riscv_instructions_counter as f64
-            / RISCV_IMACFD_ZICSR_INSTRUCTIONS.len() as f64
-            * 100.0;
-        let r = format!(
-            "\nRISC-V INSTRUCTION COVERAGE: {:.2}% ({} out of {})\n",
-            riscv_coverage,
-            used_riscv_instructions_counter,
-            RISCV_IMACFD_ZICSR_INSTRUCTIONS.len()
-        );
-        report.add(&r);
-
-        // Report unsupported RISC-V instructions, in alphabetical order
-        if !unsupported_riscv_instructions.is_empty() {
-            let mut r = String::from("UNSUPPORTED RISC-V INSTRUCTIONS EXECUTED: ");
-            for inst in unsupported_riscv_instructions.iter() {
-                r += &format!("{} ", inst);
-            }
-            r += "\n";
-            report.add(&r);
-        }
-        let mut r = String::from("EXECUTED RISC-V INSTRUCTIONS: ");
-        let mut executed_riscv_instructions: Vec<String> = Vec::new();
-        for (inst, count) in riscv_histogram.iter() {
-            if *count > 0 {
-                executed_riscv_instructions.push(inst.to_string());
-            }
-        }
-        executed_riscv_instructions.sort();
-        for inst in executed_riscv_instructions.iter() {
-            r += &format!("{} ", inst);
-        }
-        r += "\n";
-        report.add(&r);
-
-        // Report non-executed RISC-V instructions, in alphabetical order
-        let mut non_executed_riscv_instructions: Vec<String> = Vec::new();
-        let mut r = String::from("NON_EXECUTED RISC-V INSTRUCTIONS: ");
-        for (inst, count) in riscv_histogram.iter() {
-            if *count == 0 {
-                non_executed_riscv_instructions.push(inst.to_string());
-            }
-        }
-        non_executed_riscv_instructions.sort();
-        for inst in non_executed_riscv_instructions.iter() {
-            r += &format!("{} ", inst);
-        }
-        r += "\n";
-        report.add(&r);
-    }
-
     fn legacy_report(&self) -> String {
         let ops_cost = self.ops_cost;
         let precompiled_cost = self.precompiled_cost;
-        let total_steps = self.steps;
-        let mem_cost = self.mops.get_cost();
+        let total_steps = self.costs.steps;
+        let mem_cost = self.costs.mops.get_cost();
         let main_cost = total_steps * MAIN_COST;
         let base_cost = BASE_COST as u64;
         let total_cost = base_cost + mem_cost + main_cost + ops_cost + precompiled_cost;
@@ -480,19 +514,20 @@ impl Stats {
     }
     /// Returns a string containing a human-readable text showing all counters
     pub fn report(&self, rom: &ZiskRom) -> String {
+        println!("CALL_STACK:{}", self.call_stack.len());
         if self.legacy_stats {
             return self.legacy_report();
         }
         let ops_cost = self.ops_cost;
         let precompiled_cost = self.precompiled_cost;
-        let total_steps = self.steps;
-        let mem_cost = self.mops.get_cost();
+        let total_steps = self.costs.steps;
+        let mem_cost = self.costs.mops.get_cost();
         let main_cost = total_steps * MAIN_COST;
         let base_cost = BASE_COST as u64;
         let total_cost = base_cost + mem_cost + main_cost + ops_cost + precompiled_cost;
         let mut report = StatsReport::new();
         report.set_total_cost(total_cost);
-        report.set_steps(self.steps);
+        report.set_steps(self.costs.steps);
         report.title_cost("REPORT", "");
         report.add_cost("STEPS", total_steps);
 
@@ -503,14 +538,25 @@ impl Stats {
         report.add_cost_perc("PRECOMPILES", precompiled_cost);
         report.add_cost_perc("MEMORY", mem_cost);
         report.ln();
+        report.add_cost_perc("TOTAL", total_cost);
+        report.ln();
         report.add_cost_perc("FROPS", self.frops_cost);
-        report.add_perc("RAM USAGE", self.mops.get_max_ram_address() - RAM_ADDR + 1, 1 << 29);
+        report.add_perc("RAM USAGE", self.costs.mops.get_max_ram_address() - RAM_ADDR + 1, 1 << 29);
         report.title_count_cost_perc("COST BY OPCODE", "COUNT", "COST", " RANK");
-        self.report_opcodes(&mut report, &self.ops, "OP");
+        self.report_opcodes(&mut report, &self.costs.ops, "OP");
 
         report.title_count_perc_cost_perc("FROPS BY OPCODE", "COUNT", "HIT", "COST", " RANK");
-        self.report_opcodes_hit(&mut report, &self.frops_ops, &self.ops, "FROP");
-        self.report_opcodes_coverage(&mut report, &self.ops, &self.frops_ops, "OPS_COVERAGE", rom);
+        self.report_opcodes_hit(&mut report, &self.costs.frops_ops, &self.costs.ops, "FROP");
+        if self.coverage {
+            StatsCoverageReport::report_opcodes_coverage(
+                &self.pc_histogram,
+                &mut report,
+                &self.costs.ops,
+                &self.costs.frops_ops,
+                "OPS_COVERAGE",
+                rom,
+            );
+        }
 
         if !self.rois.is_empty() {
             report.title_top_perc("TOP STEP FUNCTIONS");
@@ -518,7 +564,11 @@ impl Stats {
             let top_step_rois = self.get_top_rois(true);
             for (index, _) in top_step_rois.iter() {
                 let roi = &self.rois[*index];
-                report.add_top_step_perc(&roi.name, roi.get_steps());
+                report.add_top_step_depth_perc(
+                    &roi.name,
+                    roi.get_steps(),
+                    roi.get_call_stack_depth(),
+                );
             }
 
             report.title_top_perc("TOP COST FUNCTIONS");
@@ -528,7 +578,11 @@ impl Stats {
 
             for (index, _) in top_cost_rois.iter() {
                 let roi = &self.rois[*index];
-                report.add_top_cost_perc(&roi.name, roi.get_cost());
+                report.add_top_cost_depth_perc(
+                    &roi.name,
+                    roi.get_cost(),
+                    roi.get_call_stack_depth(),
+                );
             }
 
             if self.top_rois_detail {
@@ -536,14 +590,14 @@ impl Stats {
                     let roi = &self.rois[*index];
                     let mut roi_report = StatsReport::new();
                     roi_report.set_total_cost(roi.get_cost());
-                    roi_report.set_steps(roi.steps);
+                    roi_report.set_steps(roi.get_steps());
                     roi_report.title(&format!("DETAIL FUNCTION {}", roi.name));
                     roi_report.add_perc("STEPS", roi.get_steps(), total_steps);
                     roi_report.add_perc("COST", roi.get_cost(), total_cost);
 
                     roi_report.set_identation(1);
                     roi_report.title_count_cost_perc("COST BY OPCODE", "COUNT", "COST", " RANK");
-                    self.report_opcodes(&mut roi_report, &roi.ops, "OP");
+                    self.report_opcodes(&mut roi_report, roi.get_ops_costs(), "OP");
 
                     roi_report.title_top_count_perc("TOP STEP CALLERS (calls, steps)");
                     let mut callers: Vec<_> = roi.get_callers().collect();
@@ -563,7 +617,7 @@ impl Stats {
         report.output
     }
     pub fn add_roi(&mut self, from_pc: u32, to_pc: u32, name: &str) {
-        let roi = RegionsOfInterest::new(from_pc, to_pc, name);
+        let roi = RegionsOfInterest::new(self.rois.len(), from_pc, to_pc, name);
         let index = self.rois.len() as u32;
         self.rois.push(roi);
         self.rois_by_address.insert(from_pc, index);
@@ -580,6 +634,9 @@ impl Stats {
     pub fn set_top_roi_detail(&mut self, value: bool) {
         self.top_rois_detail = value;
     }
+    pub fn set_coverage(&mut self, value: bool) {
+        self.coverage = value;
+    }
 }
 
 impl OpStats for Stats {
@@ -594,253 +651,3 @@ impl OpStats for Stats {
         }
     }
 }
-
-pub const RISCV_IMACFD_ZICSR_INSTRUCTIONS: [&str; 193] = [
-    // ============================================
-    // I Extension - Base Integer Instruction Set
-    // ============================================
-    // RV32I/RV64I Base Instructions
-    "lui",
-    "auipc",
-    "jal",
-    "jalr",
-    "beq",
-    "bne",
-    "blt",
-    "bge",
-    "bltu",
-    "bgeu",
-    "lb",
-    "lh",
-    "lw",
-    "lbu",
-    "lhu",
-    "lwu",
-    "sb",
-    "sh",
-    "sw",
-    "addi",
-    "slti",
-    "sltiu",
-    "xori",
-    "ori",
-    "andi",
-    "slli",
-    "srli",
-    "srai",
-    "add",
-    "sub",
-    "sll",
-    "slt",
-    "sltu",
-    "xor",
-    "srl",
-    "sra",
-    "or",
-    "and",
-    "fence",
-    "fence.i",
-    "ecall",
-    "ebreak",
-    // RV64I-specific instructions
-    "lw",
-    "ld",
-    "sd", // Note: lw/sw exist in RV32I, but have different behavior in RV64I
-    "addiw",
-    "slliw",
-    "srliw",
-    "sraiw",
-    "addw",
-    "subw",
-    "sllw",
-    "srlw",
-    "sraw",
-    // ============================================
-    // M Extension - Integer Multiplication/Division
-    // ============================================
-    "mul",
-    "mulh",
-    "mulhsu",
-    "mulhu",
-    "div",
-    "divu",
-    "rem",
-    "remu",
-    // RV64M-specific
-    "mulw",
-    "divw",
-    "divuw",
-    "remw",
-    "remuw",
-    // ============================================
-    // A Extension - Atomic Instructions
-    // ============================================
-    // Atomic Memory Operations
-    "lr.w",
-    "sc.w",
-    "amoswap.w",
-    "amoadd.w",
-    "amoxor.w",
-    "amoand.w",
-    "amoor.w",
-    "amomin.w",
-    "amomax.w",
-    "amominu.w",
-    "amomaxu.w",
-    // RV64A-specific
-    "lr.d",
-    "sc.d",
-    "amoswap.d",
-    "amoadd.d",
-    "amoxor.d",
-    "amoand.d",
-    "amoor.d",
-    "amomin.d",
-    "amomax.d",
-    "amominu.d",
-    "amomaxu.d",
-    // ============================================
-    // C Extension - Compressed Instructions
-    // ============================================
-    // RV32C/RV64C Compressed Instructions
-    "c.addi4spn",
-    "c.fld",
-    "c.lw",
-    "c.flw",
-    "c.ld",
-    "c.fsd",
-    "c.sw",
-    "c.fsw",
-    "c.sd",
-    "c.addi",
-    "c.jal",
-    "c.li",
-    "c.addi16sp",
-    "c.lui",
-    "c.srli",
-    "c.srai",
-    "c.andi",
-    "c.sub",
-    "c.xor",
-    "c.or",
-    "c.and",
-    "c.j",
-    "c.beqz",
-    "c.bnez",
-    "c.slli",
-    "c.fldsp",
-    "c.lwsp",
-    "c.flwsp",
-    "c.ldsp",
-    "c.jr",
-    "c.mv",
-    "c.ebreak",
-    "c.jalr",
-    "c.add",
-    "c.fsdsp",
-    "c.swsp",
-    "c.fswsp",
-    "c.sdsp",
-    // ============================================
-    // F Extension - Single-Precision Floating-Point
-    // ============================================
-    "flw",
-    "fsw",
-    "fmadd.s",
-    "fmsub.s",
-    "fnmsub.s",
-    "fnmadd.s",
-    "fadd.s",
-    "fsub.s",
-    "fmul.s",
-    "fdiv.s",
-    "fsqrt.s",
-    "fsgnj.s",
-    "fsgnjn.s",
-    "fsgnjx.s",
-    "fmin.s",
-    "fmax.s",
-    "fcvt.w.s",
-    "fcvt.wu.s",
-    "fcvt.s.w",
-    "fcvt.s.wu",
-    "fmv.x.w",
-    "fmv.w.x",
-    "feq.s",
-    "flt.s",
-    "fle.s",
-    "fclass.s",
-    // RV64F-specific
-    "fcvt.l.s",
-    "fcvt.lu.s",
-    "fcvt.s.l",
-    "fcvt.s.lu",
-    // ============================================
-    // D Extension - Double-Precision Floating-Point
-    // ============================================
-    "fld",
-    "fsd",
-    "fmadd.d",
-    "fmsub.d",
-    "fnmsub.d",
-    "fnmadd.d",
-    "fadd.d",
-    "fsub.d",
-    "fmul.d",
-    "fdiv.d",
-    "fsqrt.d",
-    "fsgnj.d",
-    "fsgnjn.d",
-    "fsgnjx.d",
-    "fmin.d",
-    "fmax.d",
-    "fcvt.s.d",
-    "fcvt.d.s",
-    "fcvt.w.d",
-    "fcvt.wu.d",
-    "fcvt.d.w",
-    "fcvt.d.wu",
-    "feq.d",
-    "flt.d",
-    "fle.d",
-    "fclass.d",
-    "fcvt.l.d",
-    "fcvt.lu.d",
-    "fcvt.d.l",
-    "fcvt.d.lu",
-    // ============================================
-    // Zicsr Extension - Control and Status Registers
-    // ============================================
-    // CSR Read/Write
-    "csrrw",
-    "csrrs",
-    "csrrc",
-    "csrrwi",
-    "csrrsi",
-    "csrrci",
-    // CSR Read & Set/Clear (pseudo-instructions, but important for compilers)
-    // "csrr",
-    // "csrw",
-    // "csrs",
-    // "csrc",
-    // "csrwi",
-    // "csrsi",
-    // "csrci",
-    // Privileged Instructions (often grouped with Zicsr)
-    // "mret",
-    // "sret",
-    // "wfi",
-    // Timer and Counter Instructions
-    // "rdcycle",
-    // "rdtime",
-    // "rdinstret",
-    // "rdcycleh",
-    // "rdtimeh",
-    // "rdinstreth", // RV32 only
-    // Machine Mode CSR Access
-    // "mrs",
-    // "msr", // Common aliases
-    // Hypervisor CSRs (when H extension is present)
-    // "hfv",
-    // "hsv",
-];

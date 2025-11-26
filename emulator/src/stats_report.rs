@@ -131,9 +131,45 @@ impl StatsReport {
         );
     }
 
+    pub fn add_top_cost_depth_perc(&mut self, label: &str, cost: u64, depth: Option<usize>) {
+        if let Some(depth) = depth {
+            self.output += &format!(
+                "{}{:>15} {:6.2}% {depth:2} {label}\n",
+                self.identation,
+                cost.to_formatted_string(&Locale::en),
+                cost as f64 / self.cost_divisor
+            );
+            return;
+        }
+        self.output += &format!(
+            "{}{:>15} {:6.2}%    {label}\n",
+            self.identation,
+            cost.to_formatted_string(&Locale::en),
+            cost as f64 / self.cost_divisor
+        );
+    }
+
     pub fn add_top_step_perc(&mut self, label: &str, cost: u64) {
         self.output += &format!(
             "{}{:>15} {:6.2}% {label}\n",
+            self.identation,
+            cost.to_formatted_string(&Locale::en),
+            cost as f64 / self.step_divisor
+        );
+    }
+
+    pub fn add_top_step_depth_perc(&mut self, label: &str, cost: u64, depth: Option<usize>) {
+        if let Some(depth) = depth {
+            self.output += &format!(
+                "{}{:>15} {:6.2}% {depth:2} {label}\n",
+                self.identation,
+                cost.to_formatted_string(&Locale::en),
+                cost as f64 / self.step_divisor
+            );
+            return;
+        }
+        self.output += &format!(
+            "{}{:>15} {:6.2}%    {label}\n",
             self.identation,
             cost.to_formatted_string(&Locale::en),
             cost as f64 / self.step_divisor

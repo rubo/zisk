@@ -5713,6 +5713,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zisk-hints"
+version = "0.15.0"
+dependencies = [
+ "lib-c",
+ "precompiles-helpers",
+ "ziskos",
+]
+
+[[package]]
 name = "zisk-pil"
 version = "0.15.0"
 dependencies = [

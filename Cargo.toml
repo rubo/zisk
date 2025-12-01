@@ -47,6 +47,7 @@ members = [
     "distributed/crates/worker",
     "sdk",
     "ziskbuild",
+    "hints",
 ]
 
 resolver = "2"
@@ -95,6 +96,7 @@ ziskos = { path = "ziskos/entrypoint" }
 circuit = { path = "tools/circuit" }
 zisk-sdk = { path = "sdk" }
 zisk-build = { path = "ziskbuild" }
+zisk-hints = { path = "hints" }
 
 # Distributed crates
 zisk-distributed-common = { path = "distributed/crates/common" }

@@ -321,7 +321,7 @@ const SHA256_COST: u64 = 72 * 121;
 const ARITH_EQ_COST: u64 = 85 * 16;
 const FCALL_COST: u64 = INTERNAL_COST;
 const ARITH_EQ_384_COST: u64 = 79 * 24;
-const BIG_INT_COST: u64 = 104;
+const ADD256_COST: u64 = 104;
 
 /// Table of Zisk opcode definitions: enum, name, type, cost, code and implementation functions
 /// This table is the backbone of the Zisk processor, it determines what functionality is supported,
@@ -390,8 +390,7 @@ define_ops! {
     (Bls12_381ComplexAdd, "bls12_381_complex_add", ArithEq384, ARITH_EQ_384_COST, 0xe5, 208, 96, opc_bls12_381_complex_add, op_bls12_381_complex_add, ops_bls12_381_complex_add),
     (Bls12_381ComplexSub, "bls12_381_complex_sub", ArithEq384, ARITH_EQ_384_COST, 0xe6, 208, 96, opc_bls12_381_complex_sub, op_bls12_381_complex_sub, ops_bls12_381_complex_sub),
     (Bls12_381ComplexMul, "bls12_381_complex_mul", ArithEq384, ARITH_EQ_384_COST, 0xe7, 208, 96, opc_bls12_381_complex_mul, op_bls12_381_complex_mul, ops_bls12_381_complex_mul),
-    (Add256, "add256", BigInt, BIG_INT_COST, 0xf0, 104, 32, opc_add256, op_add256, ops_add256),
-    (Adc256, "adc256", BigInt, BIG_INT_COST, 0xe9, 96, 32, opc_adc256, op_adc256, ops_adc256),
+    (Add256, "add256", BigInt, ADD256_COST, 0xf0, 104, 32, opc_add256, op_add256, ops_add256),
     (Keccak, "keccak", Keccak, KECCAK_COST, 0xf1, 200, 200, opc_keccak, op_keccak, ops_none),
     (Arith256, "arith256", ArithEq, ARITH_EQ_COST, 0xf2, 136, 64, opc_arith256, op_arith256, ops_arith256),
     (Arith256Mod, "arith256_mod", ArithEq, ARITH_EQ_COST, 0xf3, 168, 32, opc_arith256_mod, op_arith256_mod, ops_arith256_mod),
@@ -1505,48 +1504,6 @@ pub fn op_add256(_a: u64, _b: u64) -> (u64, bool) {
 
 #[inline(always)]
 pub fn ops_add256(ctx: &InstContext, stats: &mut dyn OpStats) {
-    precompiled_stats_data(ctx, stats, &[4, 4, 0], &[4], 0);
-}
-
-#[inline(always)]
-pub fn opc_adc256(ctx: &mut InstContext) {
-    const WORDS: usize = 4 + 2 * 4;
-    let mut data = [0u64; WORDS];
-
-    precompiled_load_data(ctx, 4, 2, 4, 0, &mut data, "adc256");
-
-    if ctx.emulation_mode != EmulationMode::ConsumeMemReads {
-        // ignore 4 indirections
-        let (_, rest) = data.split_at(4);
-        let (a, rest) = rest.split_at(4);
-        let (b, c) = rest.split_at(4);
-
-        let a: &[u64; 4] = a.try_into().expect("opc_adc256: a.len != 4");
-        let b: &[u64; 4] = b.try_into().expect("opc_adc256: b.len != 4");
-
-        let mut dl = [0u64; 4];
-        let mut dh = 0u64;
-
-        precompiles_helpers::adc256(a, b, &mut dl, &mut dh);
-
-        // [a,b,2:dl,3:dh]
-        for (i, dl_item) in dl.iter().enumerate() {
-            ctx.mem.write(data[2] + (8 * i as u64), *dl_item, 8);
-        }
-        ctx.mem.write(data[3], dh, 8);
-    }
-
-    ctx.c = 0;
-    ctx.flag = false;
-}
-
-#[inline(always)]
-pub fn op_adc256(_a: u64, _b: u64) -> (u64, bool) {
-    unimplemented!("op_adc256() is not implemented");
-}
-
-#[inline(always)]
-pub fn ops_adc256(ctx: &InstContext, stats: &mut dyn OpStats) {
     precompiled_stats_data(ctx, stats, &[4, 4, 0], &[4], 0);
 }
 

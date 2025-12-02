@@ -1,29 +1,30 @@
-use crate::{
-    adc256::{syscall_adc256, SyscallAdc256Params},
-    add256::{syscall_add256, SyscallAdd256Params},
-    arith256::{syscall_arith256, SyscallArith256Params},
+use crate::syscalls::{
+    syscall_add256, syscall_arith256, SyscallAdd256Params, SyscallArith256Params,
 };
 
 use super::U256;
 
 /// Multiplication of two large numbers (represented as arrays of U256)
 ///
-/// It assumes that len(a),len(b) > 0 and len(out) >= len(a) + len(b)
-pub fn mul_long(a: &[U256], b: &[U256], out: &mut [U256]) {
+/// It assumes that a,b > 0 and len(b) > 1
+pub fn mul_long(a: &[U256], b: &[U256]) -> Vec<U256> {
     let len_a = a.len();
     let len_b = b.len();
     #[cfg(debug_assertions)]
     {
         assert_ne!(len_a, 0, "Input 'a' must have at least one limb");
-        assert_ne!(len_b, 0, "Input 'b' must have at least one limb");
-        assert!(out.len() >= len_a + len_b, "Output 'out' must have at least len(a) + len(b) limbs");
+        assert!(len_b > 1, "Input 'b' must have more than one limb");
+        assert_ne!(a.last().unwrap(), &U256::ZERO, "Input 'a' must not have leading zeros");
+        assert_ne!(b.last().unwrap(), &U256::ZERO, "Input 'b' must not have leading zeros");
     }
+
+    let mut out = vec![U256::ZERO; len_a + len_b];
 
     // Start with a[0]·b[0]
     let mut params = SyscallArith256Params {
         a: &a[0],
         b: &b[0],
-        c: &[0, 0, 0, 0],
+        c: &U256::ZERO,
         dl: &mut out[0],
         dh: &mut [0, 0, 0, 0],
     };
@@ -66,25 +67,25 @@ pub fn mul_long(a: &[U256], b: &[U256], out: &mut [U256]) {
             out[i + j] = U256::from_u64s(params_arith.dl);
 
             if carry_flag == 1 {
-                let mut params_adc = SyscallAdc256Params {
+                let mut params_add = SyscallAdd256Params {
                     a: &params_arith.dh.clone(),
-                    b: &[0, 0, 0, 0],
-                    dl: params_arith.dh,
-                    dh: &mut 0,
+                    b: &U256::ZERO,
+                    cin: 1,
+                    c: params_arith.dh,
                 };
-                syscall_adc256(&mut params_adc);
+                let _carry = syscall_add256(&mut params_add);
 
-                debug_assert!(*params_adc.dh == 0, "Unexpected carry in intermediate addition");
+                debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
             }
 
             // Update out[i+j+1] with carry
             let mut params_add = SyscallAdd256Params {
                 a: &out[i + j + 1].clone(),
                 b: params_arith.dh,
-                dl: &mut out[i + j + 1],
-                dh: &mut carry_flag,
+                cin: 0,
+                c: &mut out[i + j + 1],
             };
-            syscall_add256(&mut params_add);
+            carry_flag = syscall_add256(&mut params_add);
         }
 
         // Last chunk isolated
@@ -100,18 +101,24 @@ pub fn mul_long(a: &[U256], b: &[U256], out: &mut [U256]) {
         syscall_arith256(&mut params_arith);
 
         if carry_flag == 1 {
-            let mut params_add = SyscallAdc256Params {
+            let mut params_add = SyscallAdd256Params {
                 a: &params_arith.dh.clone(),
-                b: &[0, 0, 0, 0],
-                dl: params_arith.dh,
-                dh: &mut 0,
+                b: &U256::ZERO,
+                cin: 1,
+                c: params_arith.dh,
             };
-            syscall_adc256(&mut params_add);
+            let _carry = syscall_add256(&mut params_add);
 
-            debug_assert!(*params_add.dh == 0, "Unexpected carry in intermediate addition");
+            debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
         }
 
         // Set out[i+j+1] = carry
         out[i + len_b] = U256::from_u64s(params_arith.dh);
     }
+
+    if out[len_a + len_b - 1] == U256::ZERO {
+        out.pop();
+    }
+
+    out
 }

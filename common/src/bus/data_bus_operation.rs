@@ -71,8 +71,6 @@ pub const OPERATION_BUS_BLS12_381_COMPLEX_MUL_DATA_SIZE: usize =
 // bus_data_size + 4 params (&a, &b, cin, &c, a, b)
 pub const OPERATION_BUS_ADD_256_DATA_SIZE: usize =
     OPERATION_BUS_DATA_SIZE + 4 * PARAMS_SIZE + 2 * DATA_256_BITS_SIZE + SINGLE_RESULT_SIZE;
-pub const OPERATION_BUS_ADC_256_DATA_SIZE: usize =
-    OPERATION_BUS_DATA_SIZE + 5 * PARAMS_SIZE + 2 * DATA_256_BITS_SIZE + DATA_64_BITS_SIZE;
 
 // 4 bus_data + 5 addr + 4 x 384 = 4 + 5 + 4 * 6 = 33
 pub const MAX_OPERATION_DATA_SIZE: usize = OPERATION_BUS_ARITH_384_MOD_DATA_SIZE;
@@ -111,7 +109,6 @@ pub type OperationBls12_381ComplexAddData<D> = [D; OPERATION_BUS_BLS12_381_COMPL
 pub type OperationBls12_381ComplexSubData<D> = [D; OPERATION_BUS_BLS12_381_COMPLEX_SUB_DATA_SIZE];
 pub type OperationBls12_381ComplexMulData<D> = [D; OPERATION_BUS_BLS12_381_COMPLEX_MUL_DATA_SIZE];
 pub type OperationAdd256Data<D> = [D; OPERATION_BUS_ADD_256_DATA_SIZE];
-pub type OperationAdc256Data<D> = [D; OPERATION_BUS_ADC_256_DATA_SIZE];
 
 pub enum ExtOperationData<D> {
     OperationData(OperationData<D>),
@@ -133,7 +130,6 @@ pub enum ExtOperationData<D> {
     OperationBls12_381ComplexSubData(OperationBls12_381ComplexSubData<D>),
     OperationBls12_381ComplexMulData(OperationBls12_381ComplexMulData<D>),
     OperationAdd256Data(OperationAdd256Data<D>),
-    OperationAdc256Data(OperationAdc256Data<D>),
 }
 
 const KECCAK_OP: u8 = ZiskOp::Keccak.code();
@@ -154,7 +150,6 @@ const BLS12_381_COMPLEX_ADD_OP: u8 = ZiskOp::Bls12_381ComplexAdd.code();
 const BLS12_381_COMPLEX_SUB_OP: u8 = ZiskOp::Bls12_381ComplexSub.code();
 const BLS12_381_COMPLEX_MUL_OP: u8 = ZiskOp::Bls12_381ComplexMul.code();
 const ADD256_OP: u8 = ZiskOp::Add256.code();
-const ADC256_OP: u8 = ZiskOp::Adc256.code();
 
 // impl<D: Copy + Into<u8>> TryFrom<&[D]> for ExtOperationData<D> {
 impl<D: Copy + Into<u64>> TryFrom<&[D]> for ExtOperationData<D> {
@@ -255,11 +250,6 @@ impl<D: Copy + Into<u64>> TryFrom<&[D]> for ExtOperationData<D> {
                 let array: OperationAdd256Data<D> =
                     data.try_into().map_err(|_| "Invalid OperationAdd256Data size")?;
                 Ok(ExtOperationData::OperationAdd256Data(array))
-            }
-            ADC256_OP => {
-                let array: OperationAdc256Data<D> =
-                    data.try_into().map_err(|_| "Invalid OperationAdc256Data size")?;
-                Ok(ExtOperationData::OperationAdc256Data(array))
             }
             _ => {
                 let array: OperationData<D> =
@@ -470,13 +460,6 @@ impl OperationBusData<u64> {
                     data[OPERATION_BUS_DATA_SIZE..].copy_from_slice(&ctx.precompiled.input_data);
                     ExtOperationData::OperationAdd256Data(data)
                 }
-                ADC256_OP => {
-                    let mut data =
-                        unsafe { uninit_array::<OPERATION_BUS_ADC_256_DATA_SIZE>().assume_init() };
-                    data[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
-                    data[OPERATION_BUS_DATA_SIZE..].copy_from_slice(&ctx.precompiled.input_data);
-                    ExtOperationData::OperationAdc256Data(data)
-                }
                 _ => ExtOperationData::OperationData([op, op_type, a, b]),
             },
 
@@ -638,13 +621,6 @@ impl OperationBusData<u64> {
                         .copy_from_slice(&ctx.precompiled.input_data);
                     &buffer[..len]
                 }
-                ADC256_OP => {
-                    let len = OPERATION_BUS_DATA_SIZE + ctx.precompiled.input_data.len();
-                    buffer[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
-                    buffer[OPERATION_BUS_DATA_SIZE..len]
-                        .copy_from_slice(&ctx.precompiled.input_data);
-                    &buffer[..len]
-                }
                 _ => {
                     buffer[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
                     &buffer[..OPERATION_BUS_DATA_SIZE]
@@ -687,7 +663,6 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[OP] as u8,
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[OP] as u8,
             ExtOperationData::OperationAdd256Data(d) => d[OP] as u8,
-            ExtOperationData::OperationAdc256Data(d) => d[OP] as u8,
         }
     }
 
@@ -720,7 +695,6 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[OP_TYPE],
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[OP_TYPE],
             ExtOperationData::OperationAdd256Data(d) => d[OP_TYPE],
-            ExtOperationData::OperationAdc256Data(d) => d[OP_TYPE],
         }
     }
 
@@ -753,7 +727,6 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[A],
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[A],
             ExtOperationData::OperationAdd256Data(d) => d[A],
-            ExtOperationData::OperationAdc256Data(d) => d[A],
         }
     }
 
@@ -786,7 +759,6 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[B],
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[B],
             ExtOperationData::OperationAdd256Data(d) => d[B],
-            ExtOperationData::OperationAdc256Data(d) => d[B],
         }
     }
 }

@@ -5,7 +5,7 @@ use super::{add_short, mul_short, U256};
 /// Division of a large number (represented as an array of U256) by a short U256 number
 ///
 /// It assumes that len(a) > 0, b > 1
-pub fn rem_short(a: &[U256], b: &U256) -> U256 {
+pub fn div_short(a: &[U256], b: &U256) -> (Vec<U256>, U256) {
     let len_a = a.len();
     #[cfg(debug_assertions)]
     {
@@ -16,28 +16,28 @@ pub fn rem_short(a: &[U256], b: &U256) -> U256 {
     if len_a == 1 {
         let a = a[0];
         if a == U256::ZERO {
-            // Return r = 0
-            return U256::ZERO;
+            // Return q = 0, r = 0
+            return (vec![U256::ZERO], U256::ZERO);
         }
 
         // Check whether a < b or a == b
         if a < *b {
-            // Return r = a
-            return a;
+            // Return q = 0, r = a
+            return (vec![U256::ZERO], a);
         } else if a == *b {
-            // Return r = 0
-            return U256::ZERO;
+            // Return q = 1, r = 0
+            return (vec![U256::ONE], U256::ZERO);
         }
     }
 
     // Check if a = b, a < b or a > b
     let comp = U256::compare_slices(a, &[*b]);
     if comp == std::cmp::Ordering::Less {
-        // a < b. Return r = a
-        return a[0];
+        // a < b. Return q = 0, r = a
+        return (vec![U256::ZERO], a[0]);
     } else if comp == std::cmp::Ordering::Equal {
-        // a == b. Return r = 0
-        return U256::ZERO;
+        // a == b. Return q = 1, r = 0
+        return (vec![U256::ONE], U256::ZERO);
     }
 
     // We can assume a > b from here on
@@ -68,5 +68,5 @@ pub fn rem_short(a: &[U256], b: &U256) -> U256 {
         assert!(U256::eq_slices(a, &q_b_r), "a != q·b + r");
     }
 
-    rem
+    (quo, rem)
 }

@@ -1,10 +1,8 @@
-use crate::{
-    adc256::{syscall_adc256, SyscallAdc256Params},
-    add256::{syscall_add256, SyscallAdd256Params},
-    arith256::{syscall_arith256, SyscallArith256Params},
+use crate::syscalls::{
+    syscall_add256, syscall_arith256, SyscallAdd256Params, SyscallArith256Params,
 };
 
-use super::{U256, rem_short, rem_long};
+use super::{rem_long, rem_short, U256};
 
 /// Squaring of a large number (represented as an array of U256)
 //                                        a3    a2    a1      a0
@@ -19,13 +17,15 @@ use super::{U256, rem_short, rem_long};
 //    a3*a3     X        X          X           0      0      0
 //         ------------------------------------------------------- 4
 //                          RESULT
-pub fn square(a: &[U256], out: &mut [U256]) {
+pub fn square(a: &[U256]) -> Vec<U256> {
     let len_a = a.len();
     #[cfg(debug_assertions)]
     {
         assert_ne!(len_a, 0, "Input 'a' must have at least one limb");
-        assert!(out.len() >= 2 * len_a, "Output 'out' must have at least 2 * len(a) limbs");
+        assert_ne!(a.last().unwrap(), &U256::ZERO, "Input 'a' must not have leading zeros");
     }
+
+    let mut out = vec![U256::ZERO; 2 * len_a];
 
     // Step 1: Compute all diagonal terms a[i] * a[i]
     for i in 0..len_a {
@@ -35,7 +35,7 @@ pub fn square(a: &[U256], out: &mut [U256]) {
         let mut ai_ai = SyscallArith256Params {
             a: &a[i],
             b: &a[i],
-            c: &[0, 0, 0, 0],
+            c: &U256::ZERO,
             dl: &mut out[2 * i],
             dh: &mut [0, 0, 0, 0],
         };
@@ -51,7 +51,7 @@ pub fn square(a: &[U256], out: &mut [U256]) {
             let mut ai_aj = SyscallArith256Params {
                 a: &a[i],
                 b: &a[j],
-                c: &[0, 0, 0, 0],
+                c: &U256::ZERO,
                 dl: &mut [0, 0, 0, 0],
                 dh: &mut [0, 0, 0, 0],
             };
@@ -63,31 +63,31 @@ pub fn square(a: &[U256], out: &mut [U256]) {
             let mut dbl_low = SyscallAdd256Params {
                 a: &ai_aj.dl.clone(),
                 b: &ai_aj.dl.clone(),
-                dl: &mut [0, 0, 0, 0],
-                dh: &mut 0,
+                cin: 0,
+                c: &mut [0, 0, 0, 0],
             };
-            syscall_add256(&mut dbl_low);
+            let dbl_low_carry = syscall_add256(&mut dbl_low);
 
             // Next, double the higher chunk: 2·h₁·B = [1/0]·B² + h₂·B
             let mut dbl_high = SyscallAdd256Params {
                 a: &ai_aj.dh.clone(),
                 b: &ai_aj.dh.clone(),
-                dl: &mut [0, 0, 0, 0],
-                dh: &mut 0,
+                cin: 0,
+                c: &mut [0, 0, 0, 0],
             };
-            syscall_add256(&mut dbl_high);
+            let dbl_high_carry = syscall_add256(&mut dbl_high);
 
             // If there's a carry from doubling the low part, add it to the high part
-            if *dbl_low.dh != 0 {
-                let mut adc = SyscallAdc256Params {
-                    a: &dbl_high.dl.clone(),
-                    b: &[0, 0, 0, 0],
-                    dl: dbl_high.dl,
-                    dh: &mut 0,
+            if dbl_low_carry != 0 {
+                let mut add = SyscallAdd256Params {
+                    a: &dbl_high.c.clone(),
+                    b: &U256::ZERO,
+                    cin: 1,
+                    c: dbl_high.c,
                 };
-                syscall_adc256(&mut adc);
+                let _carry = syscall_add256(&mut add);
 
-                debug_assert!(*adc.dh == 0, "Unexpected carry in intermediate addition");
+                debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
             }
 
             // The result is expressed as: dbl_high.dh·B² + dbl_high.dl·B + dbl_low.dl
@@ -97,98 +97,106 @@ pub fn square(a: &[U256], out: &mut [U256]) {
             // Update out[i+j]
             let mut add_low = SyscallAdd256Params {
                 a: &out[i + j].clone(),
-                b: dbl_low.dl,
-                dl: &mut [0, 0, 0, 0],
-                dh: &mut 0,
+                b: dbl_low.c,
+                cin: 0,
+                c: &mut [0, 0, 0, 0],
             };
-            syscall_add256(&mut add_low);
-            out[i + j] = U256::from_u64s(add_low.dl);
+            let add_low_carry = syscall_add256(&mut add_low);
+            out[i + j] = U256::from_u64s(add_low.c);
 
-            if *add_low.dh != 0 {
-                let mut adc = SyscallAdc256Params {
+            if add_low_carry != 0 {
+                let mut add = SyscallAdd256Params {
                     a: &out[i + j + 1].clone(),
-                    b: &[0, 0, 0, 0],
-                    dl: &mut out[i + j + 1],
-                    dh: &mut 0,
+                    b: &U256::ZERO,
+                    cin: 1,
+                    c: &mut out[i + j + 1],
                 };
-                syscall_adc256(&mut adc);
+                let add_carry = syscall_add256(&mut add);
 
-                if adc.dh != &0 {
-                    let mut adc2 = SyscallAdc256Params {
+                if add_carry != 0 {
+                    let mut add2 = SyscallAdd256Params {
                         a: &out[i + j + 2].clone(),
-                        b: &[0, 0, 0, 0],
-                        dl: &mut out[i + j + 2],
-                        dh: &mut 0,
+                        b: &U256::ZERO,
+                        cin: 1,
+                        c: &mut out[i + j + 2],
                     };
-                    syscall_adc256(&mut adc2);
+                    let _carry = syscall_add256(&mut add2);
 
-                    debug_assert!(*adc2.dh == 0, "Unexpected carry in intermediate addition");
+                    debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
                 }
             }
 
             // Update out[i+j+1]
             let mut add_mid = SyscallAdd256Params {
                 a: &out[i + j + 1].clone(),
-                b: dbl_high.dl,
-                dl: &mut [0, 0, 0, 0],
-                dh: &mut 0,
+                b: dbl_high.c,
+                cin: 0,
+                c: &mut [0, 0, 0, 0],
             };
-            syscall_add256(&mut add_mid);
-            out[i + j + 1] = U256::from_u64s(add_mid.dl);
+            let add_mid_carry = syscall_add256(&mut add_mid);
+            out[i + j + 1] = U256::from_u64s(add_mid.c);
 
-            if *add_mid.dh != 0 {
-                let mut adc = SyscallAdc256Params {
+            if add_mid_carry != 0 {
+                let mut add = SyscallAdd256Params {
                     a: &out[i + j + 2].clone(),
-                    b: &[0, 0, 0, 0],
-                    dl: &mut out[i + j + 2],
-                    dh: &mut 0,
+                    b: &U256::ZERO,
+                    cin: 1,
+                    c: &mut out[i + j + 2],
                 };
-                syscall_adc256(&mut adc);
+                let _carry = syscall_add256(&mut add);
 
-                debug_assert!(*adc.dh == 0, "Unexpected carry in intermediate addition");
+                debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
             }
 
             // Update out[i+j+2]
-            if *dbl_high.dh != 0 {
-                let mut adc = SyscallAdc256Params {
+            if dbl_high_carry != 0 {
+                let mut add = SyscallAdd256Params {
                     a: &out[i + j + 2].clone(),
-                    b: &[0, 0, 0, 0],
-                    dl: &mut out[i + j + 2],
-                    dh: &mut 0,
+                    b: &U256::ZERO,
+                    cin: 1,
+                    c: &mut out[i + j + 2],
                 };
-                syscall_adc256(&mut adc);
+                let _carry = syscall_add256(&mut add);
 
-                debug_assert!(*adc.dh == 0, "Unexpected carry in intermediate addition");
+                debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
             }
         }
     }
+
+    if out.last() == Some(&U256::ZERO) {
+        out.pop();
+    }
+
+    out
 }
 
-pub fn square_and_reduce(a: &[U256], modulus: &[U256], out: &mut [U256]) {
+/// Squaring of a large number (represented as an array of U256) followed by reduction modulo a second large number
+///
+/// It assumes that modulus > 0
+pub fn square_and_reduce(a: &[U256], modulus: &[U256]) -> Vec<U256> {
     let len_m = modulus.len();
     #[cfg(debug_assertions)]
     {
         assert_ne!(len_m, 0, "Input 'modulus' must have at least one limb");
-        assert_ne!(modulus.last().unwrap(), &U256::ZERO, "Input 'modulus' must not have leading zeros");
-        assert!(out.len() >= len_m, "Output 'out' must have at least len(modulus) limbs");
+        assert_ne!(
+            modulus.last().unwrap(),
+            &U256::ZERO,
+            "Input 'modulus' must not have leading zeros"
+        );
     }
 
-    let len_sq = a.len() * 2;
-    let mut sq = vec![U256::ZERO; len_sq];
-    square(a, &mut sq);
-    
+    let sq = square(a);
+
     // If a·b < modulus, then the result is just a·b
     if U256::lt_slices(&sq, modulus) {
-        out[..len_sq].copy_from_slice(&sq);
-        return;
+        return sq;
     }
 
     if len_m == 1 {
         // If modulus has only one limb, we can use short division
-        out[0] = rem_short(&sq, &modulus[0]);
+        vec![rem_short(&sq, &modulus[0])]
     } else {
         // Otherwise, use long division
-        let r = rem_long(&sq, modulus);
-        out[..r.len()].copy_from_slice(&r);
+        rem_long(&sq, modulus)
     }
 }

@@ -26,6 +26,8 @@ impl U256 {
 
     /// Compare two slices of U256 as big integers for equality
     pub fn eq_slices(a: &[U256], b: &[U256]) -> bool {
+        // TODO: Do with hint and instructions?
+
         let len_a = a.len();
         let len_b = b.len();
 
@@ -44,9 +46,11 @@ impl U256 {
     }
 
     /// Compare two slices of U256 as big integers
-    /// 
+    ///
     /// It assumes b has no leading zeros
     pub fn lt_slices(a: &[U256], b: &[U256]) -> bool {
+        // TODO: Do with hint and instructions?
+
         let len_a = a.len();
         let len_b = b.len();
 
@@ -69,6 +73,8 @@ impl U256 {
 
     /// Compare two slices of U256 as big integers without any checks
     pub fn lt_slices_unchecked(a: &[U256], b: &[U256]) -> bool {
+        // TODO: Do with hint and instructions?
+
         let len_a = a.len();
         let len_b = b.len();
         if len_a != len_b {
@@ -83,9 +89,11 @@ impl U256 {
     }
 
     /// Compare two slices of U256 as big integers
-    /// 
+    ///
     /// It assumes b has no leading zeros
     pub fn compare_slices(a: &[U256], b: &[U256]) -> Ordering {
+        // TODO: Do with hint and instructions?
+
         let len_a = a.len();
         let len_b = b.len();
 

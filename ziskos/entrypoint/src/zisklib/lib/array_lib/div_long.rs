@@ -5,7 +5,7 @@ use super::{add_agtb, mul_long, U256};
 /// Division of two large numbers (represented as arrays of U256)
 ///
 /// It assumes that len(a) > 0 and len(b) > 1
-pub fn rem_long(a: &[U256], b: &[U256]) -> Vec<U256> {
+pub fn div_long(a: &[U256], b: &[U256]) -> (Vec<U256>, Vec<U256>) {
     let len_a = a.len();
     let len_b = b.len();
     #[cfg(debug_assertions)]
@@ -17,25 +17,25 @@ pub fn rem_long(a: &[U256], b: &[U256]) -> Vec<U256> {
     if len_a == 1 {
         let a0 = a[0];
         if a0 == U256::ZERO {
-            // Return r = 0
-            return vec![U256::ZERO];
+            // Return q = 0, r = 0
+            return (vec![U256::ZERO], vec![U256::ZERO]);
         }
 
-        // As len(b) > 1, we have a < b. Return r = a
-        return a.to_vec();
+        // As len(b) > 1, we have a < b. Return q = 0, r = a
+        return (vec![U256::ZERO], vec![a0]);
     } else if len_a < len_b {
-        // We have a < b. Return r = a
-        return a.to_vec();
+        // We have a < b. Return q = 0, r = a
+        return (vec![U256::ZERO], a.to_vec());
     }
 
     // Check if a = b, a < b or a > b
     let comp = U256::compare_slices(a, b);
     if comp == std::cmp::Ordering::Less {
-        // a < b. Return r = a
-        return a.to_vec();
+        // a < b. . Return q = 0, r = a
+        return (vec![U256::ZERO], a.to_vec());
     } else if comp == std::cmp::Ordering::Equal {
-        // a == b. Return r = 0
-        return vec![U256::ZERO];
+        // a == b. Return q = 1, r = 0
+        return (vec![U256::ONE], vec![U256::ZERO]);
     }
 
     // We can assume a > b from here on
@@ -82,5 +82,5 @@ pub fn rem_long(a: &[U256], b: &[U256]) -> Vec<U256> {
         assert!(U256::eq_slices(a, &q_b_r), "a != q·b + r");
     }
 
-    rem
+    (quo, rem)
 }

@@ -13,11 +13,3 @@ pub fn add256(a: &[u64; 4], b: &[u64; 4], cin: u64, c: &mut [u64; 4]) -> u64 {
     }
     bigint_to_4_u64_with_cout(&res, c)
 }
-
-pub fn adc256(a: &[u64; 4], b: &[u64; 4], dl: &mut [u64; 4], dh: &mut u64) {
-    let a = bigint_from_u64s(a);
-    let b = bigint_from_u64s(b);
-
-    let res = &a + &b + 1;
-    *dh = bigint_to_4_u64_with_cout(&res, dl);
-}

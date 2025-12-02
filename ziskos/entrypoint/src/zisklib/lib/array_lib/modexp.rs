@@ -3,7 +3,9 @@
 
 use std::vec;
 
-use super::{rem_long, rem_short, mul_and_reduce, square_and_reduce, U256};
+use crate::zisklib::fcall_bin_decomp;
+
+use super::{mul_and_reduce, rem_long, rem_short, square_and_reduce, U256};
 
 /// Modular exponentiation of three large numbers
 ///
@@ -55,10 +57,6 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
 
     // We can assume from now on that base,modulus > 1 and exp > 0
 
-    // Initialize out = 1
-    let mut out = vec![U256::ZERO; len_m];
-    out[0] = U256::ONE;
-
     // Compute base = base (mod modulus)
     let base = if U256::lt_slices_unchecked(base, modulus) {
         base.to_vec()
@@ -68,30 +66,41 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
         rem_long(base, modulus)
     };
 
-    // scratch space for intermediate computations
-    let mut scratch = vec![U256::ZERO; 2 * len_m];
-    for e in exp.iter().rev() {
-        let mut mask: u64 = 1 << 63;
-        while mask > 0 {
-            // Compute out = out² (mod modulus);
-            square_and_reduce(&out, modulus, &mut scratch);
-            out.copy_from_slice(&scratch[..len_m]);
-            scratch.fill(U256::ZERO);
+    // Hint exponent bits
+    let (len, bits) = fcall_bin_decomp(exp);
 
-            if e & mask != 0 {
-                // Compute out = (out * base) (mod modulus);
-                mul_and_reduce(&out, &base, modulus, &mut scratch);
-                out.copy_from_slice(&scratch[..len_m]);
-                scratch.fill(U256::ZERO);
-            }
-            mask >>= 1;
+    // We should recompose the exponent from bits to verify correctness
+    let mut rec_exp = vec![0u64; len_e];
+
+    // Recompose the MSB
+    let bits_pos = len - 1;
+    let limb_idx = bits_pos / 64;
+    let bit_in_limb = bits_pos % 64;
+    rec_exp[limb_idx] = 1u64 << bit_in_limb;
+
+    // Initialize out = base
+    let mut out = base.clone();
+    for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
+        if out.len() == 1 && out[0] == U256::ZERO {
+            return vec![U256::ZERO];
+        }
+
+        // Compute out = out² (mod modulus)
+        out = square_and_reduce(&out, modulus);
+
+        if bit == 1 {
+            // Compute out = (out * base) (mod modulus);
+            out = mul_and_reduce(&out, &base, modulus);
+
+            // Recompose the exponent
+            let bits_pos = len - 1 - bit_idx;
+            let limb_idx = bits_pos / 64;
+            let bit_in_limb = bits_pos % 64;
+            rec_exp[limb_idx] |= 1u64 << bit_in_limb;
         }
     }
 
-    // Strip any leading zeros at the end
-    while out.len() > 1 && out.last() == Some(&U256::ZERO) {
-        out.pop();
-    }
+    assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
 
     out
 }
@@ -115,7 +124,7 @@ pub fn modexp_u64(base: &[u64], exp: &[u64], modulus: &[u64]) -> Vec<u64> {
     let modulus_u256 = U256::slice_from_flat(&padded_modulus);
 
     // Call the main modexp function
-    let result_u256 = modexp(&base_u256, &exp, &modulus_u256);
+    let result_u256 = modexp(&base_u256, exp, &modulus_u256);
 
     // Convert result back to u64 array
     U256::slice_to_flat(&result_u256).to_vec()

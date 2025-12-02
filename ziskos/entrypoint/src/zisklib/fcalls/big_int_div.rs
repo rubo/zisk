@@ -4,7 +4,7 @@ cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
         use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
-        use crate::FCALL_DIVISION_ID;
+        use super::FCALL_BIG_INT_DIV_ID;
     }
 }
 
@@ -34,7 +34,7 @@ pub fn fcall_division(a_value: &[u64], b_value: &[u64]) -> (Vec<u64>, Vec<u64>) 
             ziskos_fcall_param!(b_value[i], 1);
         }
 
-        ziskos_fcall!(FCALL_DIVISION_ID);
+        ziskos_fcall!(FCALL_BIG_INT_DIV_ID);
 
         let len_quo = ziskos_fcall_get() as usize;
         let mut quotient = vec![0u64; len_quo];

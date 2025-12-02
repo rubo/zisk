@@ -1,5 +1,4 @@
 mod add256;
-mod adc256;
 mod arith256;
 mod arith256_mod;
 mod arith384_mod;
@@ -22,7 +21,6 @@ mod sha256f;
 mod syscall;
 
 pub use add256::*;
-pub use adc256::*;
 pub use arith256::*;
 pub use arith256_mod::*;
 pub use arith384_mod::*;
@@ -65,7 +63,7 @@ macro_rules! ziskos_syscall_ret_u64 {
                 concat!("csrrs {0}, ", stringify!($csr_addr), ", {1}"),
                 out(reg) v,
                 in(reg) $addr,
-                options(nostack, nomem)
+                options(nostack)
             );
         }
         v

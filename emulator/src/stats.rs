@@ -8,7 +8,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fs::File,
-    hash::Hash,
     io::{BufWriter, Write},
 };
 
@@ -17,7 +16,6 @@ use sm_binary::{BinaryBasicFrops, BinaryExtensionFrops};
 use zisk_core::{
     zisk_ops::{OpStats, ZiskOp},
     ZiskInst, ZiskOperationType, ZiskRom, RAM_ADDR, REGS_IN_MAIN_TOTAL_NUMBER, SRC_IMM, SRC_REG,
-    STORE_REG,
 };
 
 use crate::{
@@ -74,6 +72,7 @@ pub struct Stats {
     is_return: bool,
     cost_marks: HashMap<u16, StatsCostMark>,
     individual_cost_marks: bool,
+    main_name: String,
 }
 
 impl Default for Stats {
@@ -88,7 +87,7 @@ impl Default for Stats {
             rois: Vec::new(),
             rois_by_address: BTreeMap::new(),
             current_roi: None,
-            top_rois: 10,
+            top_rois: 25,
             roi_callers: 10,
             ops_cost: 0,
             precompiled_cost: 0,
@@ -104,6 +103,7 @@ impl Default for Stats {
             is_return: false,
             cost_marks: HashMap::new(),
             individual_cost_marks: false,
+            main_name: "main".to_string(),
         }
     }
 }
@@ -138,7 +138,7 @@ impl Stats {
     }
 
     /// Called at every step with the current number of executed steps, if statistics are enabled
-    pub fn on_steps(&mut self, steps: u64) {
+    pub fn on_steps(&mut self, _steps: u64) {
         // Store the number of executed steps
         // assert_eq!(self.costs.steps, steps);
     }
@@ -221,14 +221,13 @@ impl Stats {
 
                 self.rois[roi_index].return_call(self.call_stack.len());
 
-                let steps_added = if return_call.called_roi_index == self.current_roi {
-                    0
-                } else {
+                if return_call.called_roi_index != self.current_roi {
                     let _steps = self.rois[roi_index].get_steps();
                     assert!(_steps <= self.costs.steps);
-                    let res = self.rois[roi_index].add_delta_costs(&return_call.costs, &self.costs);
+                    let _res =
+                        self.rois[roi_index].add_delta_costs(&return_call.costs, &self.costs);
                     #[cfg(feature = "debug_stats")]
-                    if res.is_none() {
+                    if _res.is_none() {
                         println!(
                             "\x1B[1;31mIGNORE ADD_DELTA_COSTS #{} ROI[{}]:{} S:{}+0 GS:{}",
                             self.rois[roi_index].get_callstack_rc(),
@@ -264,8 +263,7 @@ impl Stats {
                             self.call_stack.len()
                         );
                     }
-                    res.unwrap_or(0)
-                };
+                }
                 #[cfg(feature = "debug_stats")]
                 println!(
                     "#{} STEPS {} + {steps_added} = {} STEPS:{}",
@@ -340,6 +338,7 @@ impl Stats {
             }
             mark.costs[0].add_delta(start_costs, &self.costs);
         }
+        mark.count += 1;
         mark.start = None;
     }
     fn on_absolute_mark(&mut self, id: u64) {
@@ -503,6 +502,16 @@ impl Stats {
             .map(|(index, roi)| (index, if by_step { roi.get_steps() } else { roi.get_cost() }))
             .collect();
         top_rois.sort_by(|a, b| b.1.cmp(&a.1));
+
+        // If there is an ROI whose name contains main_func_name, remove all entries from the
+        // beginning up to and including it.
+        if let Some(pos) = top_rois
+            .iter()
+            .position(|(index, _)| self.rois[*index].name.to_lowercase().contains("main"))
+        {
+            top_rois.drain(0..=pos);
+        }
+
         top_rois.truncate(self.top_rois);
         top_rois
     }
@@ -634,30 +643,32 @@ impl Stats {
         }
 
         if !self.rois.is_empty() {
-            report.title_top_perc("TOP STEP FUNCTIONS");
+            report.title_autowidth("TOP STEP FUNCTIONS (STEPS, % STEPS, CALLS, FUNCTION)");
 
             let top_step_rois = self.get_top_rois(true);
             for (index, _) in top_step_rois.iter() {
                 let roi = &self.rois[*index];
-                report.add_top_step_depth_perc(
-                    &roi.name,
-                    roi.get_steps(),
-                    roi.get_call_stack_depth(),
-                );
+                // report.add_top_step_depth_perc(
+                //     &roi.name,
+                //     roi.get_steps(),
+                //     roi.get_call_stack_depth(),
+                // );
+                report.add_top_step_calls_perc(&roi.name, roi.get_steps(), roi.calls);
             }
 
-            report.title_top_perc("TOP COST FUNCTIONS");
+            report.title_autowidth("TOP COST FUNCTIONS (COST, % COST, CALLS, FUNCTION)");
 
             // Create a vector with ROI indices and their steps for sorting
             let top_cost_rois = self.get_top_rois(false);
 
             for (index, _) in top_cost_rois.iter() {
                 let roi = &self.rois[*index];
-                report.add_top_cost_depth_perc(
-                    &roi.name,
-                    roi.get_cost(),
-                    roi.get_call_stack_depth(),
-                );
+                // report.add_top_cost_depth_perc(
+                //     &roi.name,
+                //     roi.get_cost(),
+                //     roi.get_call_stack_depth(),
+                // );
+                report.add_top_cost_calls_perc(&roi.name, roi.get_cost(), roi.calls);
             }
 
             if self.top_rois_detail {
@@ -690,18 +701,31 @@ impl Stats {
             }
         }
         if !self.cost_marks.is_empty() {
-            report.title("COST MARKS");
             let mut keys = self.cost_marks.keys().cloned().collect::<Vec<u16>>();
             keys.sort_by_key(|k| *k);
-
+            report.ln();
+            report.title_step_cost_detail_cost(
+                "MARKS",
+                "COUNT",
+                "STEPS",
+                "TOTAL COST",
+                "MAIN COST",
+                "OPCODE COST",
+                "PRECOMPILE COST",
+                "MEMORY COST",
+            );
+            report.add_separator_width(134);
             for id in keys {
                 let mark = &self.cost_marks[&id];
                 for (i, costs) in mark.costs.iter().enumerate() {
                     let costs = costs.summary();
+                    let main_cost = costs.0 * MAIN_COST;
                     report.add_step_cost_detail_cost(
                         &format!("{id:>4}.{i}"),
+                        mark.count,
                         costs.0,
-                        costs.1 + costs.2 + costs.3,
+                        main_cost + costs.1 + costs.2 + costs.3,
+                        main_cost,
                         costs.1,
                         costs.2,
                         costs.3,
@@ -732,6 +756,9 @@ impl Stats {
     }
     pub fn set_coverage(&mut self, value: bool) {
         self.coverage = value;
+    }
+    pub fn set_main_name(&mut self, value: String) {
+        self.main_name = value;
     }
 }
 

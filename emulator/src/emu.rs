@@ -1546,6 +1546,7 @@ impl<'a> Emu<'a> {
                 self.ctx.stats.set_roi_callers(options.roi_callers);
                 self.ctx.stats.set_top_roi_detail(options.top_roi_detail);
                 self.ctx.stats.set_coverage(options.coverage);
+                self.ctx.stats.set_main_name(options.main_name.clone());
             }
         }
 

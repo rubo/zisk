@@ -1,23 +1,8 @@
 //! Emulator coverage information
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs::File,
-    io::{BufWriter, Write},
-    str::FromStr,
-};
-
-use sm_arith::ArithFrops;
-use sm_binary::{BinaryBasicFrops, BinaryExtensionFrops};
-use zisk_core::{
-    zisk_ops::{OpStats, ZiskOp},
-    ZiskInst, ZiskOperationType, ZiskRom, RAM_ADDR, REGS_IN_MAIN_TOTAL_NUMBER,
-};
-
-use crate::{
-    get_ops_costs, get_ops_ranks, MemoryOperationsStats, RegionsOfInterest, StatsReport, BASE_COST,
-    MAIN_COST,
-};
+use crate::StatsReport;
+use std::{collections::HashMap, str::FromStr};
+use zisk_core::{zisk_ops::ZiskOp, ZiskRom};
 
 /// Keeps statistics of the emulator operations
 #[derive(Debug, Clone, Default)]

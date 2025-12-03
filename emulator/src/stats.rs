@@ -8,6 +8,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fs::File,
+    hash::Hash,
     io::{BufWriter, Write},
 };
 
@@ -15,11 +16,12 @@ use sm_arith::ArithFrops;
 use sm_binary::{BinaryBasicFrops, BinaryExtensionFrops};
 use zisk_core::{
     zisk_ops::{OpStats, ZiskOp},
-    ZiskInst, ZiskOperationType, ZiskRom, RAM_ADDR, REGS_IN_MAIN_TOTAL_NUMBER, SRC_REG, STORE_REG,
+    ZiskInst, ZiskOperationType, ZiskRom, RAM_ADDR, REGS_IN_MAIN_TOTAL_NUMBER, SRC_IMM, SRC_REG,
+    STORE_REG,
 };
 
 use crate::{
-    get_ops_costs, get_ops_ranks, MemoryOperationsStats, RegionsOfInterest, StatsCosts,
+    get_ops_costs, get_ops_ranks, RegionsOfInterest, StatsCostMark, StatsCosts,
     StatsCoverageReport, StatsReport, BASE_COST, MAIN_COST,
 };
 
@@ -36,7 +38,6 @@ pub struct CallStackEntry {
 const OP_DATA_BUFFER_DEFAULT_CAPACITY: usize = 128 * 1024 * 1024;
 
 const REG_RA_IDX: usize = 1;
-const REG_A0_IDX: usize = 10;
 
 /// Keeps statistics of the emulator operations
 #[derive(Debug, Clone)]
@@ -71,6 +72,8 @@ pub struct Stats {
     previous_verbose: String,
     is_call: bool,
     is_return: bool,
+    cost_marks: HashMap<u16, StatsCostMark>,
+    individual_cost_marks: bool,
 }
 
 impl Default for Stats {
@@ -99,6 +102,8 @@ impl Default for Stats {
             previous_verbose: String::default(),
             is_call: false,
             is_return: false,
+            cost_marks: HashMap::new(),
+            individual_cost_marks: false,
         }
     }
 }
@@ -202,6 +207,7 @@ impl Stats {
             // let roi = &mut self.rois[*index as usize];
             // If return after call, need to add delta costs
             if let Some(return_call) = return_call {
+                #[cfg(feature = "debug_stats")]
                 println!(
                     "#{} RETURN 0x{pc:08X} {} {}",
                     self.call_stack.len(),
@@ -221,6 +227,7 @@ impl Stats {
                     let _steps = self.rois[roi_index].get_steps();
                     assert!(_steps <= self.costs.steps);
                     let res = self.rois[roi_index].add_delta_costs(&return_call.costs, &self.costs);
+                    #[cfg(feature = "debug_stats")]
                     if res.is_none() {
                         println!(
                             "\x1B[1;31mIGNORE ADD_DELTA_COSTS #{} ROI[{}]:{} S:{}+0 GS:{}",
@@ -247,20 +254,19 @@ impl Stats {
                         print!("\x1B[0m");
                     }
                     let roi_steps = self.rois[roi_index].get_steps();
-                    let self_steps = self.costs.steps;
-                    let ref_steps = return_call.costs.steps;
-                    let call_stack_len = self.call_stack.len();
-                    if roi_steps > self_steps {
+                    if roi_steps > self.costs.steps {
                         self.print_call_stack();
                         panic!(
                             "roi.costs.steps({}) > self.costs.steps({}) ref.steps: {} on #{}",
-                            roi_steps, self_steps, ref_steps, call_stack_len
+                            roi_steps,
+                            self.costs.steps,
+                            return_call.costs.steps,
+                            self.call_stack.len()
                         );
                     }
-                    assert!(self.rois[roi_index].get_steps() <= self.costs.steps);
                     res.unwrap_or(0)
                 };
-
+                #[cfg(feature = "debug_stats")]
                 println!(
                     "#{} STEPS {} + {steps_added} = {} STEPS:{}",
                     self.call_stack.len(),
@@ -283,6 +289,8 @@ impl Stats {
                         costs: self.costs.clone(),
                         func_name: self.rois[roi_index].name.clone(),
                     });
+
+                    #[cfg(feature = "debug_stats")]
                     println!(
                         "#{} CALL 0x{pc:08X} {} {} STEPS:{}",
                         self.call_stack.len() - 1,
@@ -304,11 +312,76 @@ impl Stats {
             }
         }
     }
+
+    fn on_start_mark(&mut self, id: u64) {
+        assert!(id < u16::MAX as u64);
+        let mark = self.cost_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        mark.start = Some(self.costs.clone());
+    }
+
+    fn on_end_mark(&mut self, id: u64) {
+        assert!(id < u16::MAX as u64);
+        let mark = self.cost_marks.get_mut(&(id as u16)).unwrap_or_else(|| {
+            panic!("Cost mark with id {} does not exist. Must call on_start_mark first.", id)
+        });
+
+        let start_costs = mark.start.as_ref().unwrap_or_else(|| {
+            panic!("Cost mark with id {} has no start point. Must call on_start_mark before on_end_mark.", id)
+        });
+
+        // Create a new StatsCosts with the delta
+        let mut delta_costs = StatsCosts::new();
+        if self.individual_cost_marks {
+            delta_costs.add_delta(start_costs, &self.costs);
+            mark.costs.push(delta_costs);
+        } else {
+            if mark.costs.is_empty() {
+                mark.costs.push(StatsCosts::new());
+            }
+            mark.costs[0].add_delta(start_costs, &self.costs);
+        }
+        mark.start = None;
+    }
+    fn on_absolute_mark(&mut self, id: u64) {
+        assert!(id < u16::MAX as u64);
+        let mark = self.cost_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        mark.costs.push(self.costs.clone());
+    }
+    fn on_relative_mark(&mut self, id: u64) {
+        assert!(id < u16::MAX as u64);
+        let mark = self.cost_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+
+        if let Some(start) = &mark.start {
+            let mut delta_costs = StatsCosts::new();
+            delta_costs.add_delta(start, &self.costs);
+            mark.costs.push(delta_costs);
+        } else {
+            mark.costs.push(self.costs.clone());
+        }
+
+        mark.start = Some(self.costs.clone());
+    }
+    fn on_reset_relative_mark(&mut self, id: u64) {
+        assert!(id < u16::MAX as u64);
+        let mark = self.cost_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        mark.start = Some(self.costs.clone());
+    }
     /// Called every time an operation is executed, if statistics are enabled
     pub fn on_op(&mut self, instruction: &ZiskInst, a: u64, b: u64, pc: u64, regs: &[u64]) {
         self.costs.steps += 1;
         self.check_roi(pc as u32, regs);
         // If the operation is a usual operation, then increase the usual counter
+
+        if instruction.op == 0 && instruction.a_src == SRC_REG && instruction.b_src == SRC_IMM {
+            match instruction.a_offset_imm0 {
+                1 => self.on_start_mark(instruction.b_offset_imm0),
+                2 => self.on_end_mark(instruction.b_offset_imm0),
+                3 => self.on_absolute_mark(instruction.b_offset_imm0),
+                4 => self.on_relative_mark(instruction.b_offset_imm0),
+                5 => self.on_reset_relative_mark(instruction.b_offset_imm0),
+                _ => (),
+            }
+        }
 
         if self.store_ops
             && (instruction.op_type == ZiskOperationType::Arith
@@ -348,7 +421,7 @@ impl Stats {
 
             if is_jalr_ra && !self.call_stack.is_empty() {
                 // Check if we're jumping to the expected return address
-                if let Some(top) = self.call_stack.last() {
+                if let Some(_top) = self.call_stack.last() {
                     // The new PC should match the RA from the call stack
                     // Note: we can't check the future PC here, so we rely on the pattern
                     self.is_return = true;
@@ -514,7 +587,9 @@ impl Stats {
     }
     /// Returns a string containing a human-readable text showing all counters
     pub fn report(&self, rom: &ZiskRom) -> String {
+        #[cfg(feature = "debug_stats")]
         println!("CALL_STACK:{}", self.call_stack.len());
+
         if self.legacy_stats {
             return self.legacy_report();
         }
@@ -611,6 +686,27 @@ impl Stats {
                         );
                     }
                     report.add(&roi_report.output);
+                }
+            }
+        }
+        if !self.cost_marks.is_empty() {
+            report.title("COST MARKS");
+            let mut keys = self.cost_marks.keys().cloned().collect::<Vec<u16>>();
+            keys.sort_by_key(|k| *k);
+
+            for id in keys {
+                let mark = &self.cost_marks[&id];
+                for (i, costs) in mark.costs.iter().enumerate() {
+                    let costs = costs.summary();
+                    report.add_step_cost_detail_cost(
+                        &format!("{id:>4}.{i}"),
+                        costs.0,
+                        costs.1 + costs.2 + costs.3,
+                        costs.1,
+                        costs.2,
+                        costs.3,
+                        "",
+                    );
                 }
             }
         }

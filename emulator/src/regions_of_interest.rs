@@ -41,6 +41,7 @@ impl RegionsOfInterest {
         pc >= self.from_pc && pc <= self.to_pc
     }
     pub fn caller_call(&mut self) {
+        #[cfg(feature = "debug_stats")]
         println!(
             "\x1B[1;34mCALL_CALLER ROI[{}]:{} RC:{} => {}\x1B[0m",
             self.id,
@@ -78,6 +79,7 @@ impl RegionsOfInterest {
             self.call_stack_rc -= 1;
         }
         self.update_call_depth(call_stack_depth);
+        #[cfg(feature = "debug_stats")]
         println!(
             "\x1B[1;33mRETURN_CALL ROI:[{}]:{} RC:{} => {}\x1B[0m",
             self.id, self.name, _rc, self.call_stack_rc

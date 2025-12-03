@@ -106,12 +106,13 @@ impl Riscv2ZiskContext<'_> {
 
             // I.2. Integer Computational (Register-Immediate)
             "addi" => {
-                if riscv_instruction.rd == 0
-                    && riscv_instruction.rs1 == 0
-                    && riscv_instruction.rs2 == 0
-                {
-                    // r0 = r0 + imm(0) = 0
-                    self.nop(riscv_instruction, 4);
+                if riscv_instruction.rd == 0 {
+                    if riscv_instruction.rs1 == 0 && riscv_instruction.rs2 == 0 {
+                        // r0 = r0 + imm(0) = 0
+                        self.nop(riscv_instruction, 4);
+                    } else {
+                        self.hint(riscv_instruction, 4);
+                    }
                 } else if riscv_instruction.imm == 0 && riscv_instruction.rs1 != 0 {
                     // rd = rs1 + imm(0) = rs1
                     self.copyb(riscv_instruction, 4, 1);
@@ -606,6 +607,20 @@ impl Riscv2ZiskContext<'_> {
         } else {
             zib.j(i.imm as i64, inst_size as i64);
         }
+        zib.build();
+        self.insts.insert(i.rom_address, zib);
+    }
+
+    /// Creates a Zisk flag operation that simply sets the flag to true and continues the execution
+    /// to the next operation
+    pub fn hint(&mut self, i: &RiscvInstruction, inst_size: u64) {
+        assert!(inst_size == 2 || inst_size == 4);
+        let mut zib = ZiskInstBuilder::new_from_riscv(i.rom_address, i.inst.clone());
+        zib.src_a("reg", i.rs1 as u64, false);
+        zib.src_b("imm", i.imm as u64, false);
+        zib.op("flag").unwrap();
+        zib.j(inst_size as i64, inst_size as i64);
+        zib.verbose(&i.inst.to_string());
         zib.build();
         self.insts.insert(i.rom_address, zib);
     }

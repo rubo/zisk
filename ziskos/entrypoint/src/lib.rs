@@ -1,8 +1,10 @@
 #![allow(unexpected_cfgs)]
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 use core::arch::asm;
+mod costs;
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 mod fcall;
+pub use costs::*;
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 pub use fcall::*;
 

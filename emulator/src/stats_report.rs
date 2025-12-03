@@ -6,6 +6,7 @@ pub struct StatsReport {
     pub step_divisor: f64,
     pub identation: String,
     pub label_width: usize,
+    pub short_label_width: usize,
     pub label_width_stack: Vec<usize>,
 }
 impl Default for StatsReport {
@@ -22,6 +23,7 @@ impl StatsReport {
             step_divisor: 1.0,
             identation: String::new(),
             label_width: 20,
+            short_label_width: 10,
             label_width_stack: Vec::new(),
         }
     }
@@ -250,6 +252,31 @@ impl StatsReport {
             cost.to_formatted_string(&Locale::en),
             cost as f64 / self.cost_divisor,
             label_width = self.label_width,
+        );
+    }
+
+    pub fn add_step_cost_detail_cost(
+        &mut self,
+        short_label: &str,
+        step: u64,
+        cost: u64,
+        cost_ops: u64,
+        cost_precomp: u64,
+        cost_mem: u64,
+        comment: &str,
+    ) {
+        self.output += &format!(
+            "{}{:<label_width$} {:>15} {:6.2}% {:>15} {:6.2}% {:>15} {:>15} {:>15}{comment}\n",
+            self.identation,
+            short_label,
+            step.to_formatted_string(&Locale::en),
+            step as f64 / self.step_divisor,
+            cost.to_formatted_string(&Locale::en),
+            cost as f64 / self.cost_divisor,
+            cost_ops.to_formatted_string(&Locale::en),
+            cost_precomp.to_formatted_string(&Locale::en),
+            cost_mem.to_formatted_string(&Locale::en),
+            label_width = self.short_label_width,
         );
     }
 

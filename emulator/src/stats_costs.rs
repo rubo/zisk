@@ -1,5 +1,4 @@
-use crate::MemoryOperationsStats;
-
+use crate::{get_ops_costs, MemoryOperationsStats};
 #[derive(Clone, Debug)]
 pub struct StatsCosts {
     pub steps: u64,
@@ -34,6 +33,11 @@ impl StatsCosts {
         }
         self.mops.add_delta(&reference.mops, &current.mops);
         current.steps - reference.steps
+    }
+    // steps, ops costs, precompiles costs, memory costs
+    pub fn summary(&self) -> (u64, u64, u64, u64) {
+        let ops_costs = get_ops_costs(&self.ops);
+        (self.steps, ops_costs.0, ops_costs.1, self.mops.get_cost())
     }
 }
 

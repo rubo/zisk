@@ -3002,7 +3002,9 @@ dependencies = [
 name = "precompiles-common"
 version = "0.15.0"
 dependencies = [
+ "anyhow",
  "fields",
+ "rayon",
  "zisk-common",
  "zisk-core",
 ]

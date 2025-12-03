@@ -2,7 +2,7 @@ use crate::syscalls::{
     syscall_add256, syscall_arith256, SyscallAdd256Params, SyscallArith256Params,
 };
 
-use super::{rem_long, rem_short, U256};
+use super::{rem_long, U256};
 
 /// Squaring of a large number (represented as an array of U256)
 //                                        a3    a2    a1      a0
@@ -17,7 +17,7 @@ use super::{rem_long, rem_short, U256};
 //    a3*a3     X        X          X           0      0      0
 //         ------------------------------------------------------- 4
 //                          RESULT
-pub fn square(a: &[U256]) -> Vec<U256> {
+pub fn square_long(a: &[U256]) -> Vec<U256> {
     let len_a = a.len();
     #[cfg(debug_assertions)]
     {
@@ -170,26 +170,15 @@ pub fn square(a: &[U256]) -> Vec<U256> {
 /// Squaring of a large number (represented as an array of U256) followed by reduction modulo a second large number
 ///
 /// It assumes that modulus > 0
-pub fn square_and_reduce(a: &[U256], modulus: &[U256]) -> Vec<U256> {
-    let len_m = modulus.len();
+pub fn square_and_reduce_long(a: &[U256], modulus: &[U256]) -> Vec<U256> {
     #[cfg(debug_assertions)]
     {
+        let len_m = modulus.len();
         assert_ne!(len_m, 0, "Input 'modulus' must have at least one limb");
         assert!(!modulus[len_m - 1].is_zero(), "Input 'modulus' must not have leading zeros");
     }
 
-    let sq = square(a);
+    let sq = square_long(a);
 
-    // If a·b < modulus, then the result is just a·b
-    if U256::lt_slices(&sq, modulus) {
-        return sq;
-    }
-
-    if len_m == 1 {
-        // If modulus has only one limb, we can use short division
-        vec![rem_short(&sq, &modulus[0])]
-    } else {
-        // Otherwise, use long division
-        rem_long(&sq, modulus)
-    }
+    rem_long(&sq, modulus)
 }

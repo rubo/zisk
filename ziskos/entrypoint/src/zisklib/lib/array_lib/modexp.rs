@@ -5,7 +5,10 @@ use std::vec;
 
 use crate::zisklib::fcall_bin_decomp;
 
-use super::{mul_and_reduce, rem_long, rem_short, square_and_reduce, U256};
+use super::{
+    mul_and_reduce_long, mul_and_reduce_short, rem_long, rem_short, square_and_reduce_long,
+    square_and_reduce_short, U256,
+};
 
 /// Modular exponentiation of three large numbers
 ///
@@ -57,52 +60,94 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
 
     // We can assume from now on that base,modulus > 1 and exp > 0
 
-    // Compute base = base (mod modulus)
-    let base = if U256::lt_slices(base, modulus) {
-        base.to_vec()
-    } else if len_m == 1 {
-        vec![rem_short(base, &modulus[0])]
+    // There are two versions:
+    //   - If len(modulus) == 1, we can use short reductions
+    //   - If len(modulus) > 1, we must use long reductions
+    if len_m == 1 {
+        let modulus = &modulus[0];
+
+        // Compute base = base (mod modulus)
+        let base = rem_short(base, modulus);
+
+        // Hint exponent bits
+        let (len, bits) = fcall_bin_decomp(exp);
+
+        // We should recompose the exponent from bits to verify correctness
+        let mut rec_exp = vec![0u64; len_e];
+
+        // Recompose the MSB
+        let bits_pos = len - 1;
+        let limb_idx = bits_pos / 64;
+        let bit_in_limb = bits_pos % 64;
+        rec_exp[limb_idx] = 1u64 << bit_in_limb;
+
+        // Initialize out = base
+        let mut out = base;
+        for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
+            if out.is_zero() {
+                return vec![U256::ZERO];
+            }
+
+            // Compute out = out² (mod modulus)
+            out = square_and_reduce_short(&out, modulus);
+
+            if bit == 1 {
+                // Compute out = (out * base) (mod modulus);
+                out = mul_and_reduce_short(&out, &base, modulus);
+
+                // Recompose the exponent
+                let bits_pos = len - 1 - bit_idx;
+                let limb_idx = bits_pos / 64;
+                let bit_in_limb = bits_pos % 64;
+                rec_exp[limb_idx] |= 1u64 << bit_in_limb;
+            }
+        }
+
+        assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
+
+        vec![out]
     } else {
-        rem_long(base, modulus)
-    };
+        // Compute base = base (mod modulus)
+        let base = rem_long(base, modulus);
 
-    // Hint exponent bits
-    let (len, bits) = fcall_bin_decomp(exp);
+        // Hint exponent bits
+        let (len, bits) = fcall_bin_decomp(exp);
 
-    // We should recompose the exponent from bits to verify correctness
-    let mut rec_exp = vec![0u64; len_e];
+        // We should recompose the exponent from bits to verify correctness
+        let mut rec_exp = vec![0u64; len_e];
 
-    // Recompose the MSB
-    let bits_pos = len - 1;
-    let limb_idx = bits_pos / 64;
-    let bit_in_limb = bits_pos % 64;
-    rec_exp[limb_idx] = 1u64 << bit_in_limb;
+        // Recompose the MSB
+        let bits_pos = len - 1;
+        let limb_idx = bits_pos / 64;
+        let bit_in_limb = bits_pos % 64;
+        rec_exp[limb_idx] = 1u64 << bit_in_limb;
 
-    // Initialize out = base
-    let mut out = base.clone();
-    for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
-        if out.len() == 1 && out[0].is_zero() {
-            return vec![U256::ZERO];
+        // Initialize out = base
+        let mut out = base.clone();
+        for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
+            if out.len() == 1 && out[0].is_zero() {
+                return vec![U256::ZERO];
+            }
+
+            // Compute out = out² (mod modulus)
+            out = square_and_reduce_long(&out, modulus);
+
+            if bit == 1 {
+                // Compute out = (out * base) (mod modulus);
+                out = mul_and_reduce_long(&out, &base, modulus);
+
+                // Recompose the exponent
+                let bits_pos = len - 1 - bit_idx;
+                let limb_idx = bits_pos / 64;
+                let bit_in_limb = bits_pos % 64;
+                rec_exp[limb_idx] |= 1u64 << bit_in_limb;
+            }
         }
 
-        // Compute out = out² (mod modulus)
-        out = square_and_reduce(&out, modulus);
+        assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
 
-        if bit == 1 {
-            // Compute out = (out * base) (mod modulus);
-            out = mul_and_reduce(&out, &base, modulus);
-
-            // Recompose the exponent
-            let bits_pos = len - 1 - bit_idx;
-            let limb_idx = bits_pos / 64;
-            let bit_in_limb = bits_pos % 64;
-            rec_exp[limb_idx] |= 1u64 << bit_in_limb;
-        }
+        out
     }
-
-    assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
-
-    out
 }
 
 pub fn modexp_u64(base: &[u64], exp: &[u64], modulus: &[u64]) -> Vec<u64> {

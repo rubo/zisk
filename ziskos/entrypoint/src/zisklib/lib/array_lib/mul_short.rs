@@ -1,6 +1,6 @@
 use crate::syscalls::{syscall_arith256, SyscallArith256Params};
 
-use super::U256;
+use super::{rem_short, U256};
 
 /// Multiplication of a large number (represented as an array of U256) by a short U256 number
 ///
@@ -37,4 +37,46 @@ pub fn mul_short(a: &[U256], b: &U256) -> Vec<U256> {
     }
 
     out
+}
+
+pub fn mul_short_short(a: &U256, b: &U256) -> ([U256; 2], usize) {
+    #[cfg(debug_assertions)]
+    {
+        assert!(!a.is_zero(), "Input 'a' must not have leading zeros");
+        assert!(!b.is_zero(), "Input 'b' must not be zero");
+    }
+
+    let mut out = [U256::ZERO; 2];
+
+    // Compute a * b
+    let mut dh = [0u64; 4];
+    let mut mul_params = SyscallArith256Params {
+        a: a.as_limbs(),
+        b: b.as_limbs(),
+        c: U256::ZERO.as_limbs(),
+        dl: out[0].as_limbs_mut(),
+        dh: &mut dh,
+    };
+    syscall_arith256(&mut mul_params);
+
+    let len = if dh == [0u64; 4] {
+        1
+    } else {
+        out[1] = U256::from_u64s(&dh);
+        2
+    };
+
+    (out, len)
+}
+
+pub fn mul_and_reduce_short(a: &U256, b: &U256, modulus: &U256) -> U256 {
+    #[cfg(debug_assertions)]
+    {
+        assert!(!modulus.is_zero(), "Input 'modulus' must not be zero");
+    }
+
+    let (mul, len) = mul_short_short(a, b);
+
+    // Use short division
+    rem_short(&mul[..len], modulus)
 }

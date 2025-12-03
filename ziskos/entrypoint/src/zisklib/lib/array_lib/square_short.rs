@@ -31,7 +31,12 @@ pub fn square_short(a: &U256) -> ([U256; 2], usize) {
     (out, len)
 }
 
-pub fn square_and_reduce_short(a: &U256, modulus: &U256) -> U256 {
+pub fn square_and_reduce_short(
+    a: &U256,
+    modulus: &U256,
+    quo: &mut [u64; 8],
+    rem: &mut [u64; 4],
+) -> U256 {
     #[cfg(debug_assertions)]
     {
         assert!(!modulus.is_zero(), "Input 'modulus' must not be zero");
@@ -39,5 +44,5 @@ pub fn square_and_reduce_short(a: &U256, modulus: &U256) -> U256 {
 
     let (sq, len) = square_short(a);
 
-    rem_short(&sq[..len], modulus)
+    rem_short(&sq[..len], modulus, quo, rem)
 }

@@ -69,7 +69,13 @@ pub fn mul_short_short(a: &U256, b: &U256) -> ([U256; 2], usize) {
     (out, len)
 }
 
-pub fn mul_and_reduce_short(a: &U256, b: &U256, modulus: &U256) -> U256 {
+pub fn mul_and_reduce_short(
+    a: &U256,
+    b: &U256,
+    modulus: &U256,
+    quo: &mut [u64; 8],
+    rem: &mut [u64; 4],
+) -> U256 {
     #[cfg(debug_assertions)]
     {
         assert!(!modulus.is_zero(), "Input 'modulus' must not be zero");
@@ -78,5 +84,5 @@ pub fn mul_and_reduce_short(a: &U256, b: &U256, modulus: &U256) -> U256 {
     let (mul, len) = mul_short_short(a, b);
 
     // Use short division
-    rem_short(&mul[..len], modulus)
+    rem_short(&mul[..len], modulus, quo, rem)
 }

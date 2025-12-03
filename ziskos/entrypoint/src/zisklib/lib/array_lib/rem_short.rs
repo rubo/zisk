@@ -1,18 +1,17 @@
-use std::cmp::Ordering;
-
 use crate::zisklib::fcall_division;
 
 use super::{add_short, mul_short, U256};
 
 /// Division of a large number (represented as an array of U256) by a short U256 number
 ///
-/// It assumes that len(a) > 0, b > 1
-pub fn rem_short(a: &[U256], b: &U256) -> U256 {
+/// It assumes that len(a) > 0, b > 0
+pub fn rem_short(a: &[U256], b: &U256, quo: &mut [u64; 8], rem: &mut [u64; 4]) -> U256 {
     let len_a = a.len();
     #[cfg(debug_assertions)]
     {
         assert_ne!(len_a, 0, "Input 'a' must have at least one limb");
-        assert!(b.gt(&U256::ONE), "Input 'b' must be greater than one");
+        assert!(len_a <= 2, "Input 'a' must have at most two limbs");
+        assert!(!b.is_zero(), "Input 'b' must be greater than zero");
     }
 
     if len_a == 1 {
@@ -20,10 +19,7 @@ pub fn rem_short(a: &[U256], b: &U256) -> U256 {
         if a.is_zero() {
             // Return r = 0
             return U256::ZERO;
-        }
-
-        // Check whether a < b or a == b
-        if a.lt(b) {
+        } else if a.lt(b) {
             // Return r = a
             return a;
         } else if a.eq(b) {
@@ -31,28 +27,16 @@ pub fn rem_short(a: &[U256], b: &U256) -> U256 {
             return U256::ZERO;
         }
     }
-
-    // Check if a = b, a < b or a > b
-    let comp = U256::compare_slices(a, &[*b]);
-    if comp == Ordering::Less {
-        // a < b. Return r = a
-        return a[0];
-    } else if comp == Ordering::Equal {
-        // a == b. Return r = 0
-        return U256::ZERO;
-    }
-
     // We can assume a > b from here on
 
     // Strategy: Hint the out of the division and then verify it is satisfied
     let a_flat = U256::slice_to_flat(a);
+    quo.fill(0);
+    rem.fill(0);
 
-    let max_quo_len = len_a * 4;
-    let mut quo_flat = vec![0u64; max_quo_len];
-    let mut rem_flat = vec![0u64; 4];
-    let (len_quo, len_rem) = fcall_division(a_flat, b.as_limbs(), &mut quo_flat, &mut rem_flat);
-    let quo = U256::slice_from_flat(&quo_flat[..len_quo]);
-    let rem = U256::slice_from_flat(&rem_flat[..len_rem])[0];
+    let (len_quo, _) = fcall_division(a_flat, b.as_limbs(), quo, rem);
+    let quo = U256::slice_from_flat(&quo[..len_quo]);
+    let rem = U256::from_u64s(rem);
 
     // The quotient must satisfy 1 <= len(Q) <= len(inA)
     let len_quo = quo.len();

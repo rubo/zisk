@@ -66,8 +66,12 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
     if len_m == 1 {
         let modulus = &modulus[0];
 
+        // Scratch space
+        let mut scratch_quo = [0u64; 8];
+        let mut scratch_rem = [0u64; 4];
+
         // Compute base = base (mod modulus)
-        let base = rem_short(base, modulus);
+        let base = rem_short(base, modulus, &mut scratch_quo, &mut scratch_rem);
 
         // Hint exponent bits
         let (len, bits) = fcall_bin_decomp(exp);
@@ -89,11 +93,12 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
             }
 
             // Compute out = out² (mod modulus)
-            out = square_and_reduce_short(&out, modulus);
+            out = square_and_reduce_short(&out, modulus, &mut scratch_quo, &mut scratch_rem);
 
             if bit == 1 {
                 // Compute out = (out * base) (mod modulus);
-                out = mul_and_reduce_short(&out, &base, modulus);
+                out =
+                    mul_and_reduce_short(&out, &base, modulus, &mut scratch_quo, &mut scratch_rem);
 
                 // Recompose the exponent
                 let bits_pos = len - 1 - bit_idx;
@@ -107,6 +112,8 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
 
         vec![out]
     } else {
+        // TODO: Optimize scratch space allocation
+
         // Compute base = base (mod modulus)
         let base = rem_long(base, modulus);
 
@@ -151,26 +158,23 @@ pub fn modexp(base: &[U256], exp: &[u64], modulus: &[U256]) -> Vec<U256> {
 }
 
 pub fn modexp_u64(base: &[u64], exp: &[u64], modulus: &[u64]) -> Vec<u64> {
-    // Pad all inputs
-    let padded_base = pad_to_multiple_of_4(base);
-    let padded_modulus = pad_to_multiple_of_4(modulus);
+    // Round up to multiple of 4
+    let base_len = (base.len() + 3) & !3;
+    let modulus_len = (modulus.len() + 3) & !3;
+
+    let mut base_padded = vec![0u64; base_len];
+    let mut modulus_padded = vec![0u64; modulus_len];
+
+    base_padded[..base.len()].copy_from_slice(base);
+    modulus_padded[..modulus.len()].copy_from_slice(modulus);
 
     // Convert u64 arrays to U256 chunks
-    let base_u256 = U256::slice_from_flat(&padded_base);
-    let modulus_u256 = U256::slice_from_flat(&padded_modulus);
+    let base_u256 = U256::slice_from_flat(&base_padded);
+    let modulus_u256 = U256::slice_from_flat(&modulus_padded);
 
     // Call the main modexp function
     let result_u256 = modexp(base_u256, exp, modulus_u256);
 
     // Convert result back to u64 array
     U256::slice_to_flat(&result_u256).to_vec()
-}
-
-fn pad_to_multiple_of_4(input: &[u64]) -> Vec<u64> {
-    let mut padded = input.to_vec();
-    let remainder = input.len() % 4;
-    if remainder != 0 {
-        padded.resize(input.len() + (4 - remainder), 0u64);
-    }
-    padded
 }

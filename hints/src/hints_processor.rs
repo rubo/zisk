@@ -47,6 +47,7 @@
 
 use anyhow::Result;
 use rayon::{ThreadPool, ThreadPoolBuilder};
+use ziskos::syscalls::SyscallPoint256;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -471,13 +472,14 @@ impl PrecompileHintsProcessor {
     }
 
     /// Processes a [`HINTS_TYPE_ECRECOVER`] hint.
-    fn process_hint_ecrecover(_hint: &PrecompileHint) -> Result<Vec<u64>> {
-        // TODO!
-        // assert!(
-        //     hint_length == 8 + 4 + 4 + 4,
-        //     "process_hints() Invalid ECRECOVER hint length: {}",
-        //     hint_length
-        // );
+    fn process_hint_ecrecover(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        if hint.data.len() != 8 + 4 + 4 + 4 {
+            return Err(anyhow::anyhow!(
+                "Invalid ECRECOVER hint length: expected 20, got {}",
+                hint.data.len()
+            ));
+        }
+
         // let pk: &SyscallPoint256 = unsafe { &(hint.data[i] as const SyscallPoint256) };
         // let z: &[u64; 4] = unsafe { &(hints[i + 8] as const [u64; 4]) };
         // let r: &[u64; 4] = unsafe { &(hints[i + 8 + 4] as const [u64; 4]) };

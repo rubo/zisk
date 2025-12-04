@@ -1,10 +1,6 @@
 mod goldilocks_constants;
-mod precompiles_hints;
 
 pub use goldilocks_constants::{get_ks, GOLDILOCKS_GEN, GOLDILOCKS_K};
-pub use precompiles_hints::{
-    PrecompileHint, PrecompileHintsProcessor, HINTS_TYPE_ECRECOVER, HINTS_TYPE_RESULT,
-};
 
 use std::collections::VecDeque;
 use zisk_common::{BusId, MEM_BUS_ID};

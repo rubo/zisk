@@ -6,10 +6,10 @@
 
 use anyhow::Result;
 use asm_runner::SharedMemoryWriter;
-use precompiles_common::PrecompileHintsProcessor;
 use std::sync::Mutex;
 use tracing::{debug, info, warn};
 use zisk_common::io::{ZiskHintin, ZiskIO};
+use zisk_hints::PrecompileHintsProcessor;
 
 /// HintsPipeline struct manages the processing of precompile hints and writing them to shared memory.
 pub struct HintsPipeline {

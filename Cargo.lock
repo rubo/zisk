@@ -1348,7 +1348,6 @@ dependencies = [
  "precomp-big-int",
  "precomp-keccakf",
  "precomp-sha256f",
- "precompiles-common",
  "proofman",
  "proofman-common",
  "proofman-util",
@@ -1364,6 +1363,7 @@ dependencies = [
  "witness",
  "zisk-common",
  "zisk-core",
+ "zisk-hints",
  "zisk-pil",
  "ziskemu",
 ]
@@ -3004,10 +3004,7 @@ dependencies = [
 name = "precompiles-common"
 version = "0.15.0"
 dependencies = [
- "anyhow",
  "fields",
- "rayon",
- "tracing",
  "zisk-common",
  "zisk-core",
 ]
@@ -5721,8 +5718,10 @@ dependencies = [
 name = "zisk-hints"
 version = "0.15.0"
 dependencies = [
+ "anyhow",
  "lib-c",
  "precompiles-helpers",
+ "rayon",
  "ziskos",
 ]
 

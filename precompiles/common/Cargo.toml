@@ -10,9 +10,5 @@ categories = { workspace = true }
 [dependencies]
 zisk-core = { workspace = true }
 zisk-common = { workspace = true }
-tracing = { workspace = true }
 
 fields = { workspace = true }
-
-anyhow = { workspace = true }
-rayon = { workspace = true }

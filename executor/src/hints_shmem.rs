@@ -150,8 +150,6 @@ impl HintsSink for HintsShmem {
         let mut full_input = Vec::with_capacity(shmem_input_size);
         full_input.extend_from_slice(&processed);
 
-        println!("full_input size: {}", full_input.len());
-
         let shmem_writers = self.shmem_writers.lock().unwrap();
         for shmem_writer in shmem_writers.iter() {
             shmem_writer.1.write_input(&full_input)?;

@@ -14,7 +14,6 @@ path = "src/lib.rs"
 [dependencies]
 zisk-common = { workspace = true }
 zisk-core = { workspace = true }
-precompiles-common = { workspace = true }
 mem-planner-cpp = { workspace = true }
 mem-common = { workspace = true }
 

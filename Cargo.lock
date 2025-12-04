@@ -300,7 +300,6 @@ dependencies = [
  "mem-common",
  "mem-planner-cpp",
  "named-sem",
- "precompiles-common",
  "rayon",
  "thiserror 2.0.17",
  "tracing",
@@ -1335,6 +1334,7 @@ dependencies = [
 name = "executor"
 version = "0.15.0"
 dependencies = [
+ "anyhow",
  "asm-runner",
  "crossbeam",
  "data-bus",
@@ -1348,6 +1348,7 @@ dependencies = [
  "precomp-big-int",
  "precomp-keccakf",
  "precomp-sha256f",
+ "precompiles-common",
  "proofman",
  "proofman-common",
  "proofman-util",

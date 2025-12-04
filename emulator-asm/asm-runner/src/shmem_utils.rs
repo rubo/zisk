@@ -2,7 +2,6 @@ use libc::{
     c_uint, close, mmap, munmap, shm_open, shm_unlink, MAP_FAILED, MAP_SHARED, PROT_READ, S_IRUSR,
     S_IWUSR,
 };
-use precompiles_common::PrecompileHintsProcessor;
 use std::{
     ffi::CString,
     fmt::Debug,
@@ -11,8 +10,8 @@ use std::{
     ptr,
     sync::atomic::{fence, Ordering},
 };
-use tracing::{debug, info};
-use zisk_common::io::{ZiskHintin, ZiskIO, ZiskStdin};
+use tracing::debug;
+use zisk_common::io::{ZiskIO, ZiskStdin};
 
 use anyhow::anyhow;
 use anyhow::Result;
@@ -368,58 +367,4 @@ pub fn write_input(stdin: &mut ZiskStdin, shmem_input_writer: &SharedMemoryWrite
     }
 
     shmem_input_writer.write_input(&full_input).expect("Failed to write input to shared memory");
-}
-
-pub fn write_precompile(
-    hintin: &mut ZiskHintin,
-    shmem_input_writer: &SharedMemoryWriter,
-) -> Result<()> {
-    let hints = reinterpret_vec(hintin.read());
-
-    let processor = PrecompileHintsProcessor::new()?;
-    let processed = processor.process_hints(&hints)?;
-
-    info!("Precompile hints have generated {} u64 values", processed.len());
-
-    // Input size includes length prefix as u64
-    let shmem_input_size = processed.len() + 1;
-
-    // Save processed hints to a file for debugging
-    let hints_dir = std::path::Path::new("/data/hints");
-    if let Err(e) = std::fs::create_dir_all(hints_dir) {
-        tracing::warn!("Failed to create hints directory: {}", e);
-    } else {
-        let timestamp =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
-        let filename = hints_dir.join(format!("processed_{}.bin", timestamp));
-
-        let bytes = reinterpret_vec(processed.clone());
-        if let Err(e) = std::fs::write(&filename, &bytes) {
-            tracing::warn!("Failed to write processed hints to {:?}: {}", filename, e);
-        } else {
-            tracing::info!("Saved processed hints to {:?}", filename);
-        }
-    }
-
-    let mut full_input = Vec::with_capacity(shmem_input_size * 8);
-    full_input.extend_from_slice(&processed.len().to_le_bytes());
-    full_input.extend_from_slice(&reinterpret_vec(processed));
-
-    shmem_input_writer.write_input(&full_input).expect("Failed to write input to shared memory");
-
-    Ok(())
-}
-
-fn reinterpret_vec<T, U>(v: Vec<T>) -> Vec<U> {
-    let size_t = std::mem::size_of::<T>();
-    let size_u = std::mem::size_of::<U>();
-
-    assert_eq!(v.as_ptr() as usize % std::mem::align_of::<U>(), 0, "Vec is not properly aligned");
-
-    let len = (v.len() * size_t) / size_u;
-    let cap = (v.capacity() * size_t) / size_u;
-    let ptr = v.as_ptr() as *mut U;
-
-    std::mem::forget(v);
-    unsafe { Vec::from_raw_parts(ptr, len, cap) }
 }

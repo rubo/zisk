@@ -232,7 +232,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
             PrecompileHintsProcessor::new().expect("Failed to create PrecompileHintsProcessor");
 
         let hints_shmem =
-            HintsShmem::new(hints_shmem_names, hints_shmem_control_names, unlock_mapped_memory);
+            HintsShmem::new(hints_shmem_control_names, hints_shmem_names, unlock_mapped_memory);
 
         let hints_pipeline =
             Mutex::new(HintsPipeline::new(hints_processor, hints_shmem, ZiskHintin::null()));

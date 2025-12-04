@@ -1,11 +1,11 @@
 //! HintsPipeline is responsible for processing precompile hints and submitting them to a sink.
 //! It uses a ZiskHintin as the source of hints, and writes the processed hints to a HintsSink.
 
+use crate::{HintsProcessor, HintsSink};
 use anyhow::Result;
 use std::sync::Mutex;
 use tracing::info;
 use zisk_common::io::{ZiskHintin, ZiskIO};
-use zisk_hints::{HintsProcessor, HintsSink};
 
 /// HintsPipeline struct manages the processing of precompile hints and writing them to shared memory.
 pub struct HintsPipeline<HP: HintsProcessor, HS: HintsSink> {

@@ -5722,6 +5722,8 @@ dependencies = [
  "lib-c",
  "precompiles-helpers",
  "rayon",
+ "tracing",
+ "zisk-common",
  "ziskos",
 ]
 

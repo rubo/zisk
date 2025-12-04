@@ -36,7 +36,7 @@ use witness::WitnessComponent;
 use zisk_common::io::{ZiskHintin, ZiskIO, ZiskStdin};
 use zisk_hints::PrecompileHintsProcessor;
 
-use crate::{DummyCounter, HintsPipeline, HintsShmem};
+use crate::{DummyCounter, HintsShmem};
 use data_bus::DataBusTrait;
 use sm_main::{MainInstance, MainPlanner, MainSM};
 use zisk_common::{
@@ -44,6 +44,7 @@ use zisk_common::{
     InstanceCtx, InstanceType, Plan, Stats, ZiskExecutionResult,
 };
 use zisk_common::{ChunkId, PayloadType};
+use zisk_hints::HintsPipeline;
 use zisk_pil::{
     RomRomTrace, ZiskPublicValues, INPUT_DATA_AIR_IDS, MAIN_AIR_IDS, MEM_AIR_IDS, ROM_AIR_IDS,
     ROM_DATA_AIR_IDS, ZISK_AIRGROUP_ID,

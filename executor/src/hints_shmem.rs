@@ -11,28 +11,44 @@ use zisk_hints::HintsSink;
 
 /// HintsShmem struct manages the writing of processed precompile hints to shared memory.
 pub struct HintsShmem {
-    /// Names of the shared memories to write hints to.
-    shmem_names: Vec<String>,
+    /// Names of the shared memories to write hints to. 0 for control, 1 for data
+    shmem_names: Vec<(String, String)>,
 
     /// Whether to unlock mapped memory after writing.
     unlock_mapped_memory: bool,
 
-    /// Shared memory writers for writing processed hints.
-    shmem_writers: Mutex<Vec<SharedMemoryWriter>>,
+    /// Shared memory writers for writing processed hints. 0 for control, 1 for data
+    shmem_writers: Mutex<Vec<(SharedMemoryWriter, SharedMemoryWriter)>>,
 }
 
 impl HintsShmem {
+    const CONTROL_PRECOMPILE_SIZE: u64 = 0x1000; // 4KB
     const MAX_PRECOMPILE_SIZE: u64 = 0x10000000; // 256MB
 
     /// Create a new HintsShmem with the given shared memory names and unlock option.
     ///
     /// # Arguments
+    /// * `shmem_control_names` - A vector of shared memory control names to write hints to.
     /// * `shmem_names` - A vector of shared memory names to write hints to.
     /// * `unlock_mapped_memory` - Whether to unlock mapped memory after writing.
     ///
     /// # Returns
     /// A new `HintsShmem` instance with uninitialized writers.
-    pub fn new(shmem_names: Vec<String>, unlock_mapped_memory: bool) -> Self {
+    pub fn new(
+        shmem_control_names: Vec<String>,
+        shmem_names: Vec<String>,
+        unlock_mapped_memory: bool,
+    ) -> Self {
+        assert_eq!(
+            shmem_control_names.len(),
+            shmem_names.len(),
+            "Shared memory names and control names must have the same length"
+        );
+
+        // Map names to tuples
+        let shmem_names: Vec<(String, String)> =
+            shmem_control_names.into_iter().zip(shmem_names.into_iter()).collect();
+
         Self { shmem_names, unlock_mapped_memory, shmem_writers: Mutex::new(Vec::new()) }
     }
 
@@ -41,12 +57,13 @@ impl HintsShmem {
     /// This method must be called before initialization.
     ///
     /// # Arguments
+    /// * `control_name` - The name of the control shared memory to add.
     /// * `name` - The name of the shared memory to add.
     ///
     /// # Returns
     /// * `Ok(())` - If the name was successfully added or already exists
     /// * `Err` - If writers have already been initialized
-    pub fn add_shmem_name(&mut self, name: String) -> Result<()> {
+    pub fn add_shmem_name(&mut self, control_name: String, name: String) -> Result<()> {
         // Check if the writers have already been initialized
         let shmem_writers = self.shmem_writers.lock().unwrap();
         if !shmem_writers.is_empty() {
@@ -57,7 +74,7 @@ impl HintsShmem {
         }
 
         // Check if the name already exists
-        if self.shmem_names.contains(&name) {
+        if self.shmem_names.contains(&(control_name.clone(), name.clone())) {
             warn!(
                 "Shared memory name '{}' already exists in the pipeline. Skipping addition.",
                 name
@@ -65,7 +82,8 @@ impl HintsShmem {
             return Ok(());
         }
 
-        self.shmem_names.push(name);
+        self.shmem_names.push((control_name, name));
+
         Ok(())
     }
 
@@ -83,26 +101,28 @@ impl HintsShmem {
         let mut shmem_writer = self.shmem_writers.lock().unwrap();
 
         if !shmem_writer.is_empty() {
-            warn!(
-                "SharedMemoryWriters for precompile hints is already initialized at '{}'. Skipping",
-                self.shmem_names.join(", ")
-            );
+            warn!("SharedMemoryWriters for precompile hints is already initialized. Skipping");
         } else {
-            debug!(
-                "Initializing SharedMemoryWriter for precompile hints at '{}'",
-                self.shmem_names.join(", ")
-            );
+            debug!("Initializing SharedMemoryWriter for precompile hints",);
 
             *shmem_writer = self
                 .shmem_names
                 .iter()
-                .map(|name| {
-                    SharedMemoryWriter::new(
-                        &name,
-                        Self::MAX_PRECOMPILE_SIZE as usize,
-                        self.unlock_mapped_memory,
+                .map(|(control_name, name)| {
+                    (
+                        SharedMemoryWriter::new(
+                            &control_name,
+                            Self::CONTROL_PRECOMPILE_SIZE as usize,
+                            self.unlock_mapped_memory,
+                        )
+                        .expect("Failed to create SharedMemoryWriter for precompile hints"),
+                        SharedMemoryWriter::new(
+                            &name,
+                            Self::MAX_PRECOMPILE_SIZE as usize,
+                            self.unlock_mapped_memory,
+                        )
+                        .expect("Failed to create SharedMemoryWriter for precompile hints"),
                     )
-                    .expect("Failed to create SharedMemoryWriter for precompile hints")
                 })
                 .collect();
         }
@@ -125,19 +145,17 @@ impl HintsSink for HintsShmem {
         }
 
         // Input size includes length prefix as u64
-        let shmem_input_size = processed.len() + 1;
+        let shmem_input_size = processed.len();
 
         let mut full_input = Vec::with_capacity(shmem_input_size);
-        // Prefix with length as u64
-        full_input.extend_from_slice(&[processed.len() as u64]);
-        // Append processed hints
         full_input.extend_from_slice(&processed);
 
         println!("full_input size: {}", full_input.len());
 
         let shmem_writers = self.shmem_writers.lock().unwrap();
         for shmem_writer in shmem_writers.iter() {
-            shmem_writer.write_input(&full_input)?;
+            shmem_writer.1.write_input(&full_input)?;
+            shmem_writer.0.write_input(&[processed.len() as u64])?;
         }
 
         Ok(())

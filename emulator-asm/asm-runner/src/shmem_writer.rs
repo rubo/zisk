@@ -78,25 +78,35 @@ impl SharedMemoryWriter {
     }
 
     /// Writes data to the shared memory, always from the start
-    pub fn write_input(&self, data: &[u8]) -> Result<()> {
-        if data.len() > self.size {
+    ///
+    /// # Type Parameters
+    /// * `T` - The element type of the slice (e.g., u8, u64)
+    ///
+    /// # Arguments
+    /// * `data` - A slice of data to write to shared memory
+    ///
+    /// # Returns
+    /// * `Ok(())` - If data was successfully written
+    /// * `Err` - If data size exceeds shared memory capacity or msync fails
+    pub fn write_input<T>(&self, data: &[T]) -> Result<()> {
+        let byte_size = data.len() * std::mem::size_of::<T>();
+
+        if byte_size > self.size {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!(
-                    "Data size ({}) exceeds shared memory capacity ({}) for '{}'",
-                    data.len(),
-                    self.size,
-                    self.name
+                    "Data size ({} bytes) exceeds shared memory capacity ({}) for '{}'",
+                    byte_size, self.size, self.name
                 ),
             ));
         }
 
         unsafe {
-            ptr::copy_nonoverlapping(data.as_ptr(), self.ptr, data.len());
+            ptr::copy_nonoverlapping(data.as_ptr() as *const u8, self.ptr, byte_size);
             // Force changes to be flushed to the shared memory
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             if msync(self.ptr as *mut _, self.size, MS_SYNC /*| MS_INVALIDATE*/) != 0 {
-                panic!("msync failed: {}", std::io::Error::last_os_error());
+                return Err(io::Error::last_os_error());
             }
         }
 

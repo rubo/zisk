@@ -158,9 +158,13 @@ impl HintsPipeline {
         // Input size includes length prefix as u64
         let shmem_input_size = processed.len() + 1;
 
-        let mut full_input = Vec::with_capacity(shmem_input_size * 8);
-        full_input.extend_from_slice(&processed.len().to_le_bytes());
-        full_input.extend_from_slice(&Self::reinterpret_vec(processed)?);
+        let mut full_input = Vec::with_capacity(shmem_input_size);
+        // Prefix with length as u64
+        full_input.extend_from_slice(&[processed.len() as u64]);
+        // Append processed hints
+        full_input.extend_from_slice(&processed);
+
+        println!("full_input size: {}", full_input.len());
 
         let shmem_writers = self.shmem_writers.lock().unwrap();
         for shmem_writer in shmem_writers.iter() {

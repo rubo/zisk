@@ -797,25 +797,25 @@ impl ZiskRom2Asm {
                 ctx.mem_chunk_start_step,
                 ctx.comment_str("chunk_start_step = 0")
             );
-            if ctx.precompile_results() {
-                *code += &format!(
-                    "\tmov {}, precompile_results_address {}\n",
-                    REG_AUX,
-                    ctx.comment_str("aux = precompile_results_address")
-                );
-                *code += &format!(
-                    "\tmov {}, {} {}\n",
-                    ctx.mem_precompile_results_address,
-                    REG_AUX,
-                    ctx.comment_str("mem_precompile_results_counter = precompile_results_address")
-                );
+        }
+        if ctx.precompile_results() {
+            *code += &format!(
+                "\tmov {}, precompile_results_address {}\n",
+                REG_AUX,
+                ctx.comment_str("aux = precompile_results_address")
+            );
+            *code += &format!(
+                "\tmov {}, {} {}\n",
+                ctx.mem_precompile_results_address,
+                REG_AUX,
+                ctx.comment_str("mem_precompile_results_counter = precompile_results_address")
+            );
 
-                *code += &format!(
-                    "\tmov {}, 0 {}\n",
-                    ctx.mem_precompile_read_address,
-                    ctx.comment_str("precompile_read = 0")
-                );
-            }
+            *code += &format!(
+                "\tmov {}, 0 {}\n",
+                ctx.mem_precompile_read_address,
+                ctx.comment_str("precompile_read = 0")
+            );
         }
 
         *code += &ctx.full_line_comment("fcall_context initialization".to_string());

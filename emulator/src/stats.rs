@@ -292,7 +292,7 @@ impl Stats {
 
     fn on_start_mark(&mut self, id: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
         mark.start = Some(self.costs.clone());
     }
 
@@ -322,12 +322,12 @@ impl Stats {
     }
     fn on_absolute_mark(&mut self, id: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
         mark.costs.push(self.costs.clone());
     }
     fn on_relative_mark(&mut self, id: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
 
         if let Some(start) = &mark.start {
             let mut delta_costs = StatsCosts::new();
@@ -341,17 +341,17 @@ impl Stats {
     }
     fn on_reset_relative_mark(&mut self, id: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
         mark.start = Some(self.costs.clone());
     }
     fn on_counter_mark(&mut self, id: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
         mark.count += 1;
     }
     fn on_value_mark(&mut self, id: u64, value: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
         if mark.min_value.unwrap_or(u64::MAX) >= value {
             mark.min_value = Some(value);
         }
@@ -363,7 +363,7 @@ impl Stats {
     }
     fn on_argument_mark(&mut self, id: u64, index: u8, value: u64) {
         assert!(id < u16::MAX as u64);
-        let mark = self.profile_marks.entry(id as u16).or_insert_with(StatsCostMark::new);
+        let mark = self.profile_marks.entry(id as u16).or_default();
         if mark.arguments.len() <= index as usize {
             mark.arguments.resize(index as usize + 1, 0);
         }

@@ -5,7 +5,7 @@ use crate::{HintsProcessor, HintsSink};
 use anyhow::Result;
 use std::sync::Mutex;
 use tracing::info;
-use zisk_common::io::{ZiskHintin, ZiskIO};
+use zisk_common::io::{StreamRead, StreamSource};
 
 /// HintsPipeline struct manages the processing of precompile hints and writing them to shared memory.
 pub struct HintsPipeline<HP: HintsProcessor, HS: HintsSink> {
@@ -16,7 +16,7 @@ pub struct HintsPipeline<HP: HintsProcessor, HS: HintsSink> {
     hints_sink: HS,
 
     /// The ZiskHintin source for reading hints.
-    hintin: Mutex<ZiskHintin>,
+    hintin: Mutex<StreamSource>,
 }
 
 impl<HP: HintsProcessor, HS: HintsSink> HintsPipeline<HP, HS> {
@@ -29,7 +29,7 @@ impl<HP: HintsProcessor, HS: HintsSink> HintsPipeline<HP, HS> {
     ///
     /// # Returns
     /// A new `HintsPipeline` instance with uninitialized writers.
-    pub fn new(hints_processor: HP, hints_sink: HS, hintin: ZiskHintin) -> Self {
+    pub fn new(hints_processor: HP, hints_sink: HS, hintin: StreamSource) -> Self {
         Self { hints_processor, hints_sink, hintin: Mutex::new(hintin) }
     }
 
@@ -37,7 +37,7 @@ impl<HP: HintsProcessor, HS: HintsSink> HintsPipeline<HP, HS> {
     ///
     /// # Arguments
     /// * `hintin` - The new ZiskHintin source for reading hints.
-    pub fn set_hintin(&self, hintin: ZiskHintin) {
+    pub fn set_hintin(&self, hintin: StreamSource) {
         let mut guard = self.hintin.lock().unwrap();
         *guard = hintin;
     }
@@ -55,9 +55,18 @@ impl<HP: HintsProcessor, HS: HintsSink> HintsPipeline<HP, HS> {
     pub fn write_hints(&self) -> Result<()> {
         let mut hintin = self.hintin.lock().unwrap();
 
-        let hints = zisk_common::reinterpret_vec(hintin.read())?;
+        let hints = zisk_common::reinterpret_vec(hintin.next()?)?;
 
         let processed = self.hints_processor.process_hints(&hints)?;
+
+        // // STore processed hints in a temp file for debugging
+        // std::fs::write(
+        //     "/data/hints/processed_hints.bin",
+        //     &zisk_common::reinterpret_vec::<u64, u8>(processed.clone())?,
+        // )?;
+        // // // read processed into a /data/hints/precompile_cache.bin
+        // // let processed = std::fs::read("/data/hints/precompile_cache.bin")?;
+        // // let processed = zisk_common::reinterpret_vec::<u8, u64>(processed)?;
 
         info!("Precompile hints have generated {} u64 values", processed.len());
 

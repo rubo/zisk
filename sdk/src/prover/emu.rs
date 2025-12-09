@@ -7,7 +7,7 @@ use crate::{
 use proofman::{AggProofs, ProofMan, ProvePhase, ProvePhaseInputs};
 use proofman_common::{initialize_logger, ParamsGPU, ProofOptions};
 use std::path::PathBuf;
-use zisk_common::io::{ZiskHintin, ZiskStdin};
+use zisk_common::io::{StreamSource, ZiskStdin};
 use zisk_common::ExecutorStats;
 use zisk_distributed_common::LoggingConfig;
 
@@ -89,7 +89,7 @@ impl ProverEngine for EmuProver {
     fn execute(
         &self,
         stdin: ZiskStdin,
-        hintin: Option<ZiskHintin>,
+        hintin: Option<StreamSource>,
         output_path: Option<PathBuf>,
     ) -> Result<ZiskExecuteResult> {
         if hintin.is_some() {

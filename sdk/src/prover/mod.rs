@@ -12,7 +12,7 @@ use crate::Proof;
 use anyhow::Result;
 use std::{path::PathBuf, time::Duration};
 use zisk_common::{
-    io::{ZiskHintin, ZiskStdin},
+    io::{StreamSource, ZiskStdin},
     ExecutorStats, ZiskExecutionResult,
 };
 
@@ -52,7 +52,7 @@ pub trait ProverEngine {
     fn execute(
         &self,
         stdin: ZiskStdin,
-        hintin: Option<ZiskHintin>,
+        hintin: Option<StreamSource>,
         output_path: Option<PathBuf>,
     ) -> Result<ZiskExecuteResult>;
 
@@ -132,7 +132,7 @@ impl<C: ZiskBackend> ZiskProver<C> {
     pub fn execute(
         &self,
         stdin: ZiskStdin,
-        hintin: Option<ZiskHintin>,
+        hintin: Option<StreamSource>,
     ) -> Result<ZiskExecuteResult> {
         self.prover.execute(stdin, hintin, None)
     }

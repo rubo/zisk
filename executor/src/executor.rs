@@ -33,7 +33,7 @@ use sm_rom::{RomInstance, RomSM};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::debug;
 use witness::WitnessComponent;
-use zisk_common::io::{ZiskHintin, ZiskIO, ZiskStdin};
+use zisk_common::io::{StreamSource, ZiskIO, ZiskStdin};
 use zisk_hints::PrecompileHintsProcessor;
 
 use crate::{DummyCounter, HintsShmem};
@@ -235,7 +235,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
             HintsShmem::new(hints_shmem_control_names, hints_shmem_names, unlock_mapped_memory);
 
         let hints_pipeline =
-            Mutex::new(HintsPipeline::new(hints_processor, hints_shmem, ZiskHintin::null()));
+            Mutex::new(HintsPipeline::new(hints_processor, hints_shmem, StreamSource::null()));
 
         Self {
             stdin: Mutex::new(ZiskStdin::null()),
@@ -271,7 +271,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         *guard = stdin;
     }
 
-    pub fn set_hintin(&self, hintin: ZiskHintin) {
+    pub fn set_hintin(&self, hintin: StreamSource) {
         self.hints_pipeline.lock().unwrap().set_hintin(hintin);
     }
 

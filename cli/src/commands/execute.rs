@@ -9,7 +9,7 @@ use crate::{
     commands::cli_fail_if_gpu_mode,
     ux::{print_banner, print_banner_field},
 };
-use zisk_common::io::{ZiskHintin, ZiskStdin};
+use zisk_common::io::{StreamSource, ZiskStdin};
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, version = ZISK_VERSION_MESSAGE)]
@@ -97,11 +97,8 @@ impl ZiskExecute {
         let hintin = self.create_hintin()?;
 
         let emulator = if cfg!(target_os = "macos") { true } else { self.emulator };
-        let result = if emulator {
-            self.run_emu(stdin, None)?
-        } else {
-            self.run_asm(stdin, Some(hintin))?
-        };
+        let result =
+            if emulator { self.run_emu(stdin, None)? } else { self.run_asm(stdin, Some(hintin))? };
 
         info!(
             "Execution completed in {:.2?}, executed steps: {}",
@@ -123,7 +120,7 @@ impl ZiskExecute {
         Ok(stdin)
     }
 
-    fn create_hintin(&mut self) -> Result<ZiskHintin> {
+    fn create_hintin(&mut self) -> Result<StreamSource> {
         let hintin = if let Some(hints_path) = &self.precompile_hints_path {
             if !hints_path.exists() {
                 return Err(anyhow::anyhow!(
@@ -131,9 +128,9 @@ impl ZiskExecute {
                     hints_path.display()
                 ));
             }
-            ZiskHintin::from_file(hints_path)?
+            StreamSource::from_file(hints_path)?
         } else {
-            ZiskHintin::null()
+            StreamSource::null()
         };
         Ok(hintin)
     }
@@ -141,7 +138,7 @@ impl ZiskExecute {
     pub fn run_emu(
         &mut self,
         stdin: ZiskStdin,
-        hintin: Option<ZiskHintin>,
+        hintin: Option<StreamSource>,
     ) -> Result<ZiskExecuteResult> {
         let prover = ProverClient::builder()
             .emu()
@@ -160,7 +157,7 @@ impl ZiskExecute {
     pub fn run_asm(
         &mut self,
         stdin: ZiskStdin,
-        hintin: Option<ZiskHintin>,
+        hintin: Option<StreamSource>,
     ) -> Result<ZiskExecuteResult> {
         let prover = ProverClient::builder()
             .asm()

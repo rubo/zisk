@@ -5,7 +5,7 @@ use proofman_common::VerboseMode;
 use witness::WitnessLibrary;
 
 use crate::{
-    io::{ZiskHintin, ZiskStdin},
+    io::{StreamSource, ZiskStdin},
     ExecutorStats,
 };
 
@@ -33,7 +33,7 @@ pub struct Stats {
 /// Extension trait that provides execution result access without Any boxing
 pub trait ZiskWitnessLibrary<F: PrimeField64> {
     fn set_stdin(&self, stdin: ZiskStdin);
-    fn set_hintin(&self, hintin: ZiskHintin);
+    fn set_hintin(&self, hintin: StreamSource);
     fn execution_result(&self) -> Option<(ZiskExecutionResult, ExecutorStats)>;
 }
 

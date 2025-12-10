@@ -71,6 +71,10 @@ const F_MEM_WRITE_SHIFT: u64 = 36;
 const F_MEM_WRITE: u64 = 1 << F_MEM_WRITE_SHIFT;
 const F_MEM_WIDTH_SHIFT: u64 = 32;
 
+const PRECOMPILE_BUFFER_SIZE_IN_BYTES: u64 = 0x10000000; // 256MB
+const PRECOMPILE_BUFFER_SIZE_IN_U64: u64 = PRECOMPILE_BUFFER_SIZE_IN_BYTES / 8;
+const PRECOMPILE_BUFFER_SIZE_U64_MASK: u64 = PRECOMPILE_BUFFER_SIZE_IN_U64 - 1;
+
 #[derive(Default, Debug, Clone)]
 pub struct ZiskAsmRegister {
     is_constant: bool,   // register is a constant value known at compilation time
@@ -5695,7 +5699,7 @@ impl ZiskRom2Asm {
 
                     // Get result from precompile results data
                     if ctx.precompile_results_fcall() {
-                        Self::precompile_results_fcall(ctx, code, "rdi");
+                        Self::precompile_results_fcall(ctx, code, unusual_code, "rdi");
                     } else {
                         // Call the fcall function
                         Self::push_internal_registers(ctx, code, false);
@@ -6846,7 +6850,7 @@ impl ZiskRom2Asm {
                     if ctx.precompile_results_add256() {
                         *code += &format!("\tmov rdi, [rdi+3*8]\n");
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 4);
-                        Self::precompile_results_register(ctx, code, REG_C);
+                        Self::precompile_results_register(ctx, code, unusual_code, REG_C);
                     } else {
                         // Call the add256 function
                         Self::push_internal_registers_except_c_and_flag(ctx, code, false);
@@ -7894,19 +7898,30 @@ impl ZiskRom2Asm {
         if ctx.call_wait_for_prec_avail() {
             Self::wait_for_prec_avail(ctx, code, unusual_code);
         }
-
+        *code += &format!(
+            "\tmov {}, {} {}\n",
+            REG_ADDRESS,
+            ctx.mem_precompile_results_address,
+            ctx.comment_str("address = precompile_results_address")
+        );
         *code += &format!(
             "\tmov {}, {} {}\n",
             REG_AUX,
-            ctx.mem_precompile_results_address,
-            ctx.comment_str("aux = precompile_results_address")
+            ctx.mem_precompile_read_address,
+            ctx.comment_str("aux = precompile_read")
         );
         for k in 0..size {
             *code += &format!(
+                "\tand {}, 0x{:x} {}\n",
+                REG_AUX,
+                PRECOMPILE_BUFFER_SIZE_U64_MASK,
+                ctx.comment_str("aux &= buffer mask")
+            );
+            *code += &format!(
                 "\tmov {}, [{} + {}*8] {}\n",
                 REG_VALUE,
+                REG_ADDRESS,
                 REG_AUX,
-                k,
                 ctx.comment(format!("value = precompile_results[{}]", k))
             );
             *code += &format!(
@@ -7916,37 +7931,53 @@ impl ZiskRom2Asm {
                 REG_VALUE,
                 ctx.comment(format!("addr[{}] = value", k))
             );
+            if k != size - 1 {
+                *code += &format!("\tinc {} {}\n", REG_AUX, ctx.comment_str("aux++"));
+            }
         }
         *code += &format!(
-            "\tadd {}, {}*8 {}\n",
-            REG_AUX,
+            "\tadd {}, {} {}\n",
+            ctx.mem_precompile_read_address,
             size,
-            ctx.comment(format!("aux += {}*8", size))
+            ctx.comment(format!("read += {}", size))
         );
-        *code += &format!(
-            "\tmov {}, {} {}\n",
-            ctx.mem_precompile_results_address,
-            REG_AUX,
-            ctx.comment_str("precompile_results_address = aux")
-        );
-        if ctx.call_wait_for_prec_avail() {
-            *code += &format!(
-                "\tadd {}, {}*8 {}\n",
-                ctx.mem_precompile_read_address,
-                size,
-                ctx.comment(format!("read += {}*8", size))
-            );
-        }
     }
 
     // Copies 1 u64 element from precompile_results_address to the register reg,
     // and increments precompile_results_address by 8
-    fn precompile_results_register(ctx: &mut ZiskAsmContext, code: &mut String, reg: &str) {
+    fn precompile_results_register(
+        ctx: &mut ZiskAsmContext,
+        code: &mut String,
+        unusual_code: &mut String,
+        reg: &str,
+    ) {
+        if ctx.call_wait_for_prec_avail() {
+            Self::wait_for_prec_avail(ctx, code, unusual_code);
+        }
+        *code += &format!(
+            "\tmov {}, {} {}\n",
+            REG_ADDRESS,
+            ctx.mem_precompile_results_address,
+            ctx.comment_str("address = precompile_results_address")
+        );
         *code += &format!(
             "\tmov {}, {} {}\n",
             REG_AUX,
-            ctx.mem_precompile_results_address,
-            ctx.comment_str("aux = precompile_results_address")
+            ctx.mem_precompile_read_address,
+            ctx.comment_str("aux = precompile_read")
+        );
+        *code += &format!(
+            "\tand {}, 0x{:x} {}\n",
+            REG_AUX,
+            PRECOMPILE_BUFFER_SIZE_U64_MASK,
+            ctx.comment_str("aux &= buffer mask")
+        );
+        *code += &format!(
+            "\tmov {}, [{} + {}*8] {}\n",
+            REG_AUX,
+            REG_ADDRESS,
+            REG_AUX,
+            ctx.comment_str("value = precompile_results[0]")
         );
         *code += &format!(
             "\tmov {}, [{}] {}\n",
@@ -7954,18 +7985,24 @@ impl ZiskRom2Asm {
             REG_AUX,
             ctx.comment(format!("value = precompile_results[0]"))
         );
-        *code += &format!("\tadd {}, 8 {}\n", REG_AUX, ctx.comment(format!("aux += 8")));
         *code += &format!(
-            "\tmov {}, {} {}\n",
-            ctx.mem_precompile_results_address,
-            REG_AUX,
-            ctx.comment_str("precompile_results_address = aux")
+            "\tinc {} {}\n",
+            ctx.mem_precompile_read_address,
+            ctx.comment_str("precompile_read++")
         );
     }
 
     // Copies the fcall result size and result data to the fcall structure
     // address in reg_address,
-    fn precompile_results_fcall(ctx: &mut ZiskAsmContext, code: &mut String, reg_address: &str) {
+    fn precompile_results_fcall(
+        ctx: &mut ZiskAsmContext,
+        code: &mut String,
+        unusual_code: &mut String,
+        reg_address: &str,
+    ) {
+        if ctx.call_wait_for_prec_avail() {
+            Self::wait_for_prec_avail(ctx, code, unusual_code);
+        }
         *code += &format!(
             "\tmov {}, {} {}\n",
             REG_AUX,
@@ -8034,20 +8071,14 @@ impl ZiskRom2Asm {
         *code += &format!(
             "\tmov {}, {} {}\n",
             REG_AUX,
-            ctx.mem_precompile_written_address,
-            ctx.comment_str("aux = precompile_written")
-        );
-        *code += &format!(
-            "\tmov {}, {} {}\n",
-            REG_VALUE,
             ctx.mem_precompile_read_address,
-            ctx.comment_str("value = precompile_read")
+            ctx.comment_str("aux = precompile_read")
         );
         *code += &format!(
             "\tcmp {}, {} {}\n",
             REG_AUX,
-            ctx.mem_precompile_read_address,
-            ctx.comment_str("written ?= read")
+            ctx.mem_precompile_written_address,
+            ctx.comment_str("read ?= written")
         );
         *code += &format!(
             "\tjz pc_{:x}_wait_for_prec_avail {}\n",

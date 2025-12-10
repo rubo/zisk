@@ -53,7 +53,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use tracing::debug;
 use ziskos::syscalls::SyscallPoint256;
 
-use crate::{secp256k1_ecdsa_verify, HintsProcessor};
+use crate::{secp256k1_ecdsa_verify, HintsProcessor, HintsSink};
 
 // TODO! COnvert Control Code to an enum and HINT TYPE to an enum as well
 
@@ -181,7 +181,7 @@ impl HintProcessorState {
 /// This struct provides methods to parse and process a stream of concatenated
 /// hints, using a dedicated Rayon thread pool for parallel processing while
 /// preserving the original order of results.
-pub struct PrecompileHintsProcessor {
+pub struct PrecompileHintsProcessor<HS: HintsSink + Send + Sync> {
     /// The thread pool used for parallel hint processing.
     pool: ThreadPool,
 
@@ -190,21 +190,24 @@ pub struct PrecompileHintsProcessor {
 
     /// Optional statistics collected during hint processing.
     stats: [AtomicUsize; NUM_HINT_TYPES as usize],
+
+    /// The hints sink used to submit processed hints.
+    hints_sink: Arc<HS>,
 }
 
-impl PrecompileHintsProcessor {
+impl<HS: HintsSink + Send + Sync> PrecompileHintsProcessor<HS> {
     const DEFAULT_NUM_THREADS: usize = 32;
 
     /// Creates a new processor with the default number of threads.
     ///
-    /// The default is the number of available CPU cores.
+    /// The default is 32 threads.
     ///
     /// # Returns
     ///
     /// * `Ok(PrecompileHintsProcessor)` - The configured processor
     /// * `Err` - If the thread pool fails to initialize
-    pub fn new() -> Result<Self> {
-        Self::with_num_threads(Self::DEFAULT_NUM_THREADS)
+    pub fn new(hints_sink: HS) -> Result<Self> {
+        Self::with_num_threads(Self::DEFAULT_NUM_THREADS, hints_sink)
     }
 
     /// Creates a new processor with the specified number of threads.
@@ -212,18 +215,24 @@ impl PrecompileHintsProcessor {
     /// # Arguments
     ///
     /// * `num_threads` - The number of worker threads in the pool
+    /// * `hints_sink` - The sink used to submit processed hints
     ///
     /// # Returns
     ///
     /// * `Ok(PrecompileHintsProcessor)` - The configured processor
     /// * `Err` - If the thread pool fails to initialize
-    pub fn with_num_threads(num_threads: usize) -> Result<Self> {
+    pub fn with_num_threads(num_threads: usize, hints_sink: HS) -> Result<Self> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(num_threads)
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to create thread pool: {}", e))?;
 
-        Ok(Self { pool, state: Arc::new(HintProcessorState::new()), stats: Default::default() })
+        Ok(Self {
+            pool,
+            state: Arc::new(HintProcessorState::new()),
+            stats: Default::default(),
+            hints_sink: Arc::new(hints_sink),
+        })
     }
 
     /// Processes hints in parallel with non-blocking, ordered output.
@@ -246,7 +255,7 @@ impl PrecompileHintsProcessor {
     ///
     /// * `Ok((Vec<u64>, bool))` - Tuple of (processed data, has_ctrl_end) where has_ctrl_end is true if CTRL_END was encountered
     /// * `Err` - If a previous error occurred or hints are malformed
-    pub fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<(Vec<u64>, bool)> {
+    pub fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<bool> {
         let mut processed = Vec::new();
         let mut has_ctrl_end = false;
 
@@ -438,7 +447,11 @@ impl PrecompileHintsProcessor {
             debug!("Hint type {}: {}", i, count.load(Ordering::Relaxed));
         }
 
-        Ok((processed, has_ctrl_end))
+        if !processed.is_empty() {
+            self.hints_sink.submit(processed)?;
+        }
+
+        Ok(has_ctrl_end)
     }
 
     /// Waits for all pending hints to be processed and drained.
@@ -544,8 +557,8 @@ impl PrecompileHintsProcessor {
     }
 }
 
-impl HintsProcessor for PrecompileHintsProcessor {
-    fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<(Vec<u64>, bool)> {
+impl<HS: HintsSink + Send + Sync> HintsProcessor for PrecompileHintsProcessor<HS> {
+    fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<bool> {
         self.process_hints(hints, first_batch)
     }
 }
@@ -553,6 +566,14 @@ impl HintsProcessor for PrecompileHintsProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct NullHints;
+
+    impl HintsSink for NullHints {
+        fn submit(&self, _processed: Vec<u64>) -> Result<()> {
+            Ok(())
+        }
+    }
 
     fn make_header(hint_type: u32, length: u32) -> u64 {
         ((hint_type as u64) << 32) | (length as u64)
@@ -562,8 +583,8 @@ mod tests {
         make_header(ctrl, length)
     }
 
-    fn processor() -> PrecompileHintsProcessor {
-        PrecompileHintsProcessor::with_num_threads(2).unwrap()
+    fn processor() -> PrecompileHintsProcessor<NullHints> {
+        PrecompileHintsProcessor::with_num_threads(2, NullHints).unwrap()
     }
 
     // Positive tests
@@ -772,7 +793,7 @@ mod tests {
     fn test_stress_throughput() {
         use std::time::Instant;
 
-        let p = PrecompileHintsProcessor::with_num_threads(32).unwrap();
+        let p = PrecompileHintsProcessor::with_num_threads(32, NullHints).unwrap();
 
         // Generate a large batch of hints
         const NUM_HINTS: usize = 100_000;
@@ -805,7 +826,7 @@ mod tests {
     fn test_stress_concurrent_batches() {
         use std::time::Instant;
 
-        let p = PrecompileHintsProcessor::with_num_threads(32).unwrap();
+        let p = PrecompileHintsProcessor::with_num_threads(32, NullHints).unwrap();
 
         const NUM_BATCHES: usize = 1_000;
         const HINTS_PER_BATCH: usize = 100;
@@ -844,7 +865,7 @@ mod tests {
     fn test_stress_with_resets() {
         use std::time::Instant;
 
-        let p = PrecompileHintsProcessor::with_num_threads(32).unwrap();
+        let p = PrecompileHintsProcessor::with_num_threads(32, NullHints).unwrap();
 
         const ITERATIONS: usize = 100;
         const HINTS_PER_ITER: usize = 1_000;

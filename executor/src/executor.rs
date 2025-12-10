@@ -80,7 +80,7 @@ enum MinimalTraceExecutionMode {
     AsmWithCounter,
 }
 
-type HintsStreamShmem = HintsStream<PrecompileHintsProcessor, HintsShmem>;
+pub type StreamHintsShmem = HintsStream<PrecompileHintsProcessor<HintsShmem>>;
 
 /// The `ZiskExecutor` struct orchestrates the execution of the ZisK ROM program, managing state
 /// machines, planning, and witness computation.
@@ -89,7 +89,7 @@ pub struct ZiskExecutor<F: PrimeField64> {
     stdin: Mutex<ZiskStdin>,
 
     /// Pipeline for handling precompile hints.
-    hints_stream: Mutex<HintsStreamShmem>,
+    hints_stream: Mutex<StreamHintsShmem>,
 
     /// ZisK ROM, a binary file containing the ZisK program to be executed.
     pub zisk_rom: Arc<ZiskRom>,
@@ -230,13 +230,13 @@ impl<F: PrimeField64> ZiskExecutor<F> {
             .collect::<Vec<_>>();
 
         // Create hints pipeline with null hints stream initially.
-        let hints_processor =
-            PrecompileHintsProcessor::new().expect("Failed to create PrecompileHintsProcessor");
-
         let hints_shmem =
             HintsShmem::new(hints_shmem_control_names, hints_shmem_names, unlock_mapped_memory);
 
-        let hints_stream = Mutex::new(HintsStream::new(hints_processor, hints_shmem));
+        let hints_processor = PrecompileHintsProcessor::new(hints_shmem)
+            .expect("Failed to create PrecompileHintsProcessor");
+
+        let hints_stream = Mutex::new(HintsStream::new(hints_processor));
 
         Self {
             stdin: Mutex::new(ZiskStdin::null()),

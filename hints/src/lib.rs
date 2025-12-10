@@ -20,7 +20,7 @@ pub trait HintsProcessor {
     /// A tuple of (processed_hints, has_ctrl_end) where:
     /// - processed_hints: Vec<u64> - The processed hint data
     /// - has_ctrl_end: bool - True if CTRL_END was found (signals end of batch)
-    fn process_hints(&self, hints: &[u64], first_batch: bool) -> anyhow::Result<(Vec<u64>, bool)>;
+    fn process_hints(&self, hints: &[u64], first_batch: bool) -> anyhow::Result<bool>;
 }
 
 pub trait HintsSink {

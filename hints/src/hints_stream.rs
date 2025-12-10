@@ -1,7 +1,6 @@
-//! HintsStream is responsible for processing precompile hints and submitting them to a sink.
-//! It uses a StreamSource as the source of hints, and writes the processed hints to a HintsSink.
+//! HintsStream is responsible for reading precompile hints from a stream source and sent to a hints processor.
 
-use crate::{HintsProcessor, HintsSink};
+use crate::HintsProcessor;
 use anyhow::Result;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
@@ -15,15 +14,9 @@ enum ThreadCommand {
 }
 
 /// HintsStream struct manages the processing of precompile hints and writing them to shared memory.
-pub struct HintsStream<
-    HP: HintsProcessor + Send + Sync + 'static,
-    HS: HintsSink + Send + Sync + 'static,
-> {
+pub struct HintsStream<HP: HintsProcessor + Send + Sync + 'static> {
     /// The hints processor used to process hints before writing.
     hints_processor: Arc<HP>,
-
-    /// The hints sink used to submit processed hints.
-    hints_sink: Arc<HS>,
 
     /// Channel sender to communicate with the background thread.
     tx: Option<Sender<ThreadCommand>>,
@@ -32,24 +25,16 @@ pub struct HintsStream<
     thread_handle: Option<JoinHandle<()>>,
 }
 
-impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + 'static>
-    HintsStream<HP, HS>
-{
-    /// Create a new HintsStream with the given processor and sink.
+impl<HP: HintsProcessor + Send + Sync + 'static> HintsStream<HP> {
+    /// Create a new HintsStream with the given processor.
     ///
     /// # Arguments
     /// * `hints_processor` - The processor used to process hints.
-    /// * `hints_sink` - The sink used to submit processed hints.
     ///
     /// # Returns
     /// A new `HintsStream` instance without a running thread.
-    pub fn new(hints_processor: HP, hints_sink: HS) -> Self {
-        Self {
-            hints_processor: Arc::new(hints_processor),
-            hints_sink: Arc::new(hints_sink),
-            tx: None,
-            thread_handle: None,
-        }
+    pub fn new(hints_processor: HP) -> Self {
+        Self { hints_processor: Arc::new(hints_processor), tx: None, thread_handle: None }
     }
 
     /// Stop the current background thread if running.
@@ -82,11 +67,10 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
 
         // Clone Arc references for the thread
         let hints_processor = Arc::clone(&self.hints_processor);
-        let hints_sink = Arc::clone(&self.hints_sink);
 
         // Spawn the background thread
         let thread_handle = thread::spawn(move || {
-            Self::background_thread(stream, hints_processor, hints_sink, rx);
+            Self::background_thread(stream, hints_processor, rx);
         });
 
         self.thread_handle = Some(thread_handle);
@@ -98,14 +82,12 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
     fn background_thread(
         mut stream: StreamSource,
         hints_processor: Arc<HP>,
-        hints_sink: Arc<HS>,
         rx: Receiver<ThreadCommand>,
     ) {
         loop {
             match rx.recv() {
                 Ok(ThreadCommand::Process) => {
-                    if let Err(e) = Self::process_stream(&mut stream, &hints_processor, &hints_sink)
-                    {
+                    if let Err(e) = Self::process_stream(&mut stream, &hints_processor) {
                         tracing::error!("Error processing hints in background thread: {:?}", e);
                     }
                 }
@@ -120,23 +102,14 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
     /// Process all hints from the stream.
     ///
     /// Processes hints in batches until CTRL_END is encountered or the stream ends.
-    /// Each batch is submitted to the sink immediately.
-    fn process_stream(
-        stream: &mut StreamSource,
-        hints_processor: &HP,
-        hints_sink: &HS,
-    ) -> Result<()> {
+    fn process_stream(stream: &mut StreamSource, hints_processor: &HP) -> Result<()> {
         let mut first_batch = true;
 
         while let Some(hints) = stream.next()? {
             let hints = zisk_common::reinterpret_vec(hints)?;
-            let (processed, has_ctrl_end) = hints_processor.process_hints(&hints, first_batch)?;
+            let has_ctrl_end = hints_processor.process_hints(&hints, first_batch)?;
 
             first_batch = false;
-
-            if !processed.is_empty() {
-                hints_sink.submit(processed)?;
-            }
 
             // Break if CTRL_END was encountered
             if has_ctrl_end {
@@ -169,7 +142,7 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
     }
 }
 
-impl<HP: HintsProcessor + Send + Sync, HS: HintsSink + Send + Sync> Drop for HintsStream<HP, HS> {
+impl<HP: HintsProcessor + Send + Sync> Drop for HintsStream<HP> {
     fn drop(&mut self) {
         self.stop_thread();
     }

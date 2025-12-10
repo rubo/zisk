@@ -2102,7 +2102,6 @@ pub fn op_bls12_381_complex_mul(_a: u64, _b: u64) -> (u64, bool) {
     unimplemented!("op_bls12_381_complex_mul() is not implemented");
 }
 
-#[inline(always)]
 pub fn ops_bls12_381_complex_mul(ctx: &InstContext, stats: &mut dyn OpStats) {
     precompiled_stats_data(ctx, stats, &[12, 12], &[], 1);
 }

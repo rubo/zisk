@@ -78,7 +78,7 @@ enum MinimalTraceExecutionMode {
     AsmWithCounter,
 }
 
-type HintsProcessorShmem = HintsStream<PrecompileHintsProcessor, HintsShmem>;
+type HintsStreamShmem = HintsStream<PrecompileHintsProcessor, HintsShmem>;
 
 /// The `ZiskExecutor` struct orchestrates the execution of the ZisK ROM program, managing state
 /// machines, planning, and witness computation.
@@ -87,7 +87,7 @@ pub struct ZiskExecutor<F: PrimeField64> {
     stdin: Mutex<ZiskStdin>,
 
     /// Pipeline for handling precompile hints.
-    hints_pipeline: Mutex<HintsProcessorShmem>,
+    hints_stream: Mutex<HintsStreamShmem>,
 
     /// ZisK ROM, a binary file containing the ZisK program to be executed.
     pub zisk_rom: Arc<ZiskRom>,
@@ -234,12 +234,11 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         let hints_shmem =
             HintsShmem::new(hints_shmem_control_names, hints_shmem_names, unlock_mapped_memory);
 
-        let hints_pipeline =
-            Mutex::new(HintsStream::new(StreamSource::null(), hints_processor, hints_shmem));
+        let hints_stream = Mutex::new(HintsStream::new(hints_processor, hints_shmem));
 
         Self {
             stdin: Mutex::new(ZiskStdin::null()),
-            hints_pipeline,
+            hints_stream,
             rom_path,
             asm_runner_path: asm_path,
             asm_rom_path,
@@ -272,7 +271,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
     }
 
     pub fn set_hints_stream(&self, stream: StreamSource) {
-        self.hints_pipeline.lock().unwrap().set_hints_stream(stream);
+        self.hints_stream.lock().unwrap().set_hints_stream(stream);
     }
 
     #[allow(clippy::type_complexity)]
@@ -383,13 +382,6 @@ impl<F: PrimeField64> ZiskExecutor<F> {
                 ExecutorStatsEvent::End,
             );
         });
-
-        // Process and write precompile atomically
-        self.hints_pipeline
-            .lock()
-            .unwrap()
-            .write_hints()
-            .expect("Failed to write hints to shared memory");
 
         let chunk_size = self.chunk_size;
         let (world_rank, local_rank, base_port) =
@@ -1247,6 +1239,13 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
 
         // Set the start time of the current execution
         self.stats.set_start_time(Instant::now());
+
+        // Process and write precompile atomically
+        self.hints_stream
+            .lock()
+            .unwrap()
+            .start_stream()
+            .expect("Failed to write hints to shared memory");
 
         // Process the ROM to collect the Minimal Traces
         timer_start_info!(COMPUTE_MINIMAL_TRACE);

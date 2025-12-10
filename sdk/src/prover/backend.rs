@@ -39,7 +39,9 @@ impl ProverBackend {
     ) -> Result<ZiskExecuteResult> {
         self.witness_lib.set_stdin(stdin);
         if let Some(stream) = hints_stream {
-            self.witness_lib.set_hints_stream(stream);
+            self.witness_lib
+                .set_hints_stream(stream)
+                .map_err(|e| anyhow::anyhow!("Error setting hints stream: {}", e))?;
         }
 
         let start = std::time::Instant::now();

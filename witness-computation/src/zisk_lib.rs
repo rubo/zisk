@@ -32,6 +32,8 @@ use zisk_pil::{
     ZISK_AIRGROUP_ID,
 };
 
+use anyhow::Result;
+
 pub struct WitnessLib<F: PrimeField64> {
     elf_path: PathBuf,
     asm_path: Option<PathBuf>,
@@ -215,9 +217,11 @@ impl ZiskWitnessLibrary<Goldilocks> for WitnessLib<Goldilocks> {
         }
     }
 
-    fn set_hints_stream(&self, hints_stream: zisk_common::io::StreamSource) {
+    fn set_hints_stream(&self, hints_stream: zisk_common::io::StreamSource) -> Result<()> {
         if let Some(executor) = &self.executor {
-            executor.set_hints_stream(hints_stream);
+            executor.set_hints_stream(hints_stream)
+        } else {
+            Err(anyhow::anyhow!("Executor not initialized"))
         }
     }
 

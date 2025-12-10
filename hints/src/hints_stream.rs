@@ -68,9 +68,13 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
     ///
     /// # Arguments
     /// * `stream` - The new StreamSource source for reading hints.
-    pub fn set_hints_stream(&mut self, stream: StreamSource) {
+    pub fn set_hints_stream(&mut self, mut stream: StreamSource) -> Result<()> {
         // Stop the existing thread if running
         self.stop_thread();
+
+        if !stream.is_active() {
+            stream.open()?;
+        }
 
         // Create a new channel for communication with the thread
         let (tx, rx) = std::sync::mpsc::channel();
@@ -86,6 +90,8 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
         });
 
         self.thread_handle = Some(thread_handle);
+
+        Ok(())
     }
 
     /// Background thread function that processes hints when requested.

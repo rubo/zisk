@@ -1,8 +1,8 @@
 //! A file-based implementation of FileStreamReader.
 //! This module provides functionality to read input data from a file.
 
-use std::fs::{self, File};
-use std::io::BufReader;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use super::StreamRead;
@@ -31,6 +31,10 @@ impl FileStreamReader {
 impl StreamRead for FileStreamReader {
     /// Open/initialize the stream for reading
     fn open(&mut self) -> Result<()> {
+        if self.is_active() {
+            return Ok(());
+        }
+
         let file = File::open(&self.path)?;
         self.reader = Some(BufReader::new(file));
         self.has_read = false;
@@ -43,13 +47,24 @@ impl StreamRead for FileStreamReader {
     /// between returning the full file contents and returning `None`, producing the
     /// following repeating sequence: `Some(Vec<u8>), None, Some(Vec<u8>), None, ...`
     fn next(&mut self) -> Result<Option<Vec<u8>>> {
-        self.has_read = !self.has_read;
-
         if self.has_read {
-            Ok(Some(fs::read(&self.path)?))
-        } else {
-            Ok(None)
+            self.has_read = false;
+            return Ok(None);
         }
+
+        self.has_read = true;
+
+        // Open the file if it's not already open
+        self.open()?;
+
+        let reader = self.reader.as_mut().ok_or_else(|| {
+            anyhow::anyhow!("FileStreamReader: Reader is not initialized after opening the file")
+        })?;
+
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+
+        Ok(Some(buffer))
     }
 
     /// Close the stream

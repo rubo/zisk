@@ -68,6 +68,8 @@ use ziskemu::{EmuOptions, ZiskEmulator};
 
 use crate::StaticSMBundle;
 
+use anyhow::Result;
+
 type DeviceMetricsByChunk = (ChunkId, Box<dyn BusDeviceMetrics>); // (chunk_id, metrics)
 type DeviceMetricsList = Vec<DeviceMetricsByChunk>;
 pub type NestedDeviceMetricsList = HashMap<usize, DeviceMetricsList>;
@@ -270,8 +272,8 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         *guard = stdin;
     }
 
-    pub fn set_hints_stream(&self, stream: StreamSource) {
-        self.hints_stream.lock().unwrap().set_hints_stream(stream);
+    pub fn set_hints_stream(&self, stream: StreamSource) -> Result<()> {
+        self.hints_stream.lock().unwrap().set_hints_stream(stream)
     }
 
     #[allow(clippy::type_complexity)]

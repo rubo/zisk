@@ -5764,6 +5764,7 @@ dependencies = [
 name = "zisk-witness"
 version = "0.15.0"
 dependencies = [
+ "anyhow",
  "data-bus",
  "env_logger",
  "executor",

@@ -94,11 +94,11 @@ impl ZiskExecute {
         }
 
         let stdin = self.create_stdin()?;
-        let stream = self.create_hints_stream()?;
+        let hints_stream = self.create_hints_stream()?;
 
         let emulator = if cfg!(target_os = "macos") { true } else { self.emulator };
         let result =
-            if emulator { self.run_emu(stdin)? } else { self.run_asm(stdin, Some(stream))? };
+            if emulator { self.run_emu(stdin)? } else { self.run_asm(stdin, Some(hints_stream))? };
 
         info!(
             "Execution completed in {:.2?}, executed steps: {}",

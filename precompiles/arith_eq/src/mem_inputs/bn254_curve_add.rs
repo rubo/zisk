@@ -18,7 +18,7 @@ pub fn generate_bn254_curve_add_mem_inputs(
     step_main: u64,
     data: &[u64],
     only_counters: bool,
-    pending: &mut VecDeque<(BusId, Vec<u64>)>,
+    pending: &mut VecDeque<(BusId, Vec<u64>, Vec<u64>)>,
 ) {
     // op,op_type,a,b,addr[2],...
     let p1_start = OPERATION_PRECOMPILED_BUS_DATA_SIZE + BN254_CURVE_ADD_MEM_CONFIG.indirect_params;

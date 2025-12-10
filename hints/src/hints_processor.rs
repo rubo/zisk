@@ -50,6 +50,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
+use tracing::debug;
 use ziskos::syscalls::SyscallPoint256;
 
 use crate::{secp256k1_ecdsa_verify, HintsProcessor};
@@ -243,10 +244,11 @@ impl PrecompileHintsProcessor {
     ///
     /// # Returns
     ///
-    /// * `Ok(())` - Hints were successfully dispatched (does not mean processing is complete)
+    /// * `Ok((Vec<u64>, bool))` - Tuple of (processed data, has_ctrl_end) where has_ctrl_end is true if CTRL_END was encountered
     /// * `Err` - If a previous error occurred or hints are malformed
-    pub fn process_hints(&self, hints: &[u64]) -> Result<Vec<u64>> {
+    pub fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<(Vec<u64>, bool)> {
         let mut processed = Vec::new();
+        let mut has_ctrl_end = false;
 
         // Parse hints and dispatch to pool
         let mut idx = 0;
@@ -259,11 +261,28 @@ impl PrecompileHintsProcessor {
             let hint = PrecompileHint::from_u64_slice(hints, idx)?;
             let length = hint.data.len();
 
+            // Validate hint type is in valid range before accessing stats array
+            if hint.hint_type >= NUM_HINT_TYPES {
+                return Err(anyhow::anyhow!("Invalid hint type: {}", hint.hint_type));
+            }
+
             self.stats[hint.hint_type as usize].fetch_add(1, Ordering::Relaxed);
 
             // Check if this is a control code or data hint type
             match hint.hint_type {
                 CTRL_START => {
+                    // CTRL_START must be the first message of the first batch
+                    if !first_batch {
+                        return Err(anyhow::anyhow!(
+                            "CTRL_START can only be sent as the first message in the stream"
+                        ));
+                    }
+                    if idx != 0 {
+                        return Err(anyhow::anyhow!(
+                            "CTRL_START must be the first hint in the batch, but found at index {}",
+                            idx
+                        ));
+                    }
                     // Reset global sequence and buffer at stream start
                     self.reset();
                     // Control hint only; skip processing
@@ -271,10 +290,19 @@ impl PrecompileHintsProcessor {
                     continue;
                 }
                 CTRL_END => {
-                    // Control hint only; wait for completion then skip processing
+                    // Control hint only; wait for completion then set flag
                     self.wait_for_completion()?;
+                    has_ctrl_end = true;
                     idx += length + 1;
-                    continue;
+
+                    // CTRL_END should be the last message - verify and break
+                    if idx < hints.len() {
+                        return Err(anyhow::anyhow!(
+                            "CTRL_END must be the last hint, but {} bytes remain",
+                            hints.len() - idx
+                        ));
+                    }
+                    break;
                 }
                 CTRL_CANCEL => {
                     // Cancel current stream: set error and notify
@@ -405,12 +433,12 @@ impl PrecompileHintsProcessor {
             idx += length + 1;
         }
 
-        println!("Processed hints stats:");
+        debug!("Processed hints stats:");
         for (i, count) in self.stats.iter().enumerate() {
-            println!("Hint type {}: {}", i, count.load(Ordering::Relaxed));
+            debug!("Hint type {}: {}", i, count.load(Ordering::Relaxed));
         }
 
-        Ok(processed)
+        Ok((processed, has_ctrl_end))
     }
 
     /// Waits for all pending hints to be processed and drained.
@@ -517,8 +545,8 @@ impl PrecompileHintsProcessor {
 }
 
 impl HintsProcessor for PrecompileHintsProcessor {
-    fn process_hints(&self, hints: &[u64]) -> Result<Vec<u64>> {
-        self.process_hints(hints)
+    fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<(Vec<u64>, bool)> {
+        self.process_hints(hints, first_batch)
     }
 }
 
@@ -545,7 +573,7 @@ mod tests {
         let data = vec![make_header(HINTS_TYPE_RESULT, 2), 0x111, 0x222];
 
         // Dispatch should succeed and be non-blocking
-        assert!(p.process_hints(&data).is_ok());
+        assert!(p.process_hints(&data, false).is_ok());
         // Wait for completion should succeed
         assert!(p.wait_for_completion().is_ok());
 
@@ -566,7 +594,7 @@ mod tests {
             make_header(HINTS_TYPE_RESULT, 1),
             0x333,
         ];
-        assert!(p.process_hints(&data).is_ok());
+        assert!(p.process_hints(&data, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
         // Verify all hints were processed (buffer empty, next_drain_seq advanced)
@@ -581,8 +609,8 @@ mod tests {
         let data1 = vec![make_header(HINTS_TYPE_RESULT, 1), 0xAAA];
         let data2 = vec![make_header(HINTS_TYPE_RESULT, 1), 0xBBB];
 
-        assert!(p.process_hints(&data1).is_ok());
-        assert!(p.process_hints(&data2).is_ok());
+        assert!(p.process_hints(&data1, false).is_ok());
+        assert!(p.process_hints(&data2, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
         // Verify sequence continued across calls
@@ -595,7 +623,7 @@ mod tests {
     fn test_empty_input_ok() {
         let p = processor();
         let data: Vec<u64> = vec![];
-        assert!(p.process_hints(&data).is_ok());
+        assert!(p.process_hints(&data, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
         // No hints processed
@@ -609,16 +637,10 @@ mod tests {
         let p = processor();
         let data = vec![make_header(999, 1), 0x1234];
 
-        // Dispatch enqueues work
-        assert!(p.process_hints(&data).is_ok());
-
-        // Error surfaces on wait
-        let result = p.wait_for_completion();
+        // Should return error immediately during validation
+        let result = p.process_hints(&data, false);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("error"));
-
-        // Error flag should be set
-        assert!(p.state.error_flag.load(Ordering::Acquire));
+        assert!(result.unwrap_err().to_string().contains("Invalid hint type"));
     }
 
     #[test]
@@ -627,32 +649,29 @@ mod tests {
         // First valid, then invalid type
         let data = vec![make_header(HINTS_TYPE_RESULT, 1), 0x111, make_header(999, 0)];
 
-        let _ = p.process_hints(&data);
-        let result = p.wait_for_completion();
-
+        // Should error immediately when encountering invalid hint type
+        let result = p.process_hints(&data, false);
         assert!(result.is_err());
-        assert!(p.state.error_flag.load(Ordering::Acquire));
+        assert!(result.unwrap_err().to_string().contains("Invalid hint type"));
     }
 
     #[test]
     fn test_reset_clears_error() {
         let p = processor();
         let bad = vec![make_header(999, 0)];
-        let _ = p.process_hints(&bad);
+        let result = p.process_hints(&bad, false);
 
-        // Wait briefly for error to propagate
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        // Should get synchronous error for invalid hint type
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid hint type"));
 
-        // Error should be set
-        assert!(p.state.error_flag.load(Ordering::Acquire));
-
-        // Reset should clear error
+        // Reset should clear any error state
         p.reset();
         assert!(!p.state.error_flag.load(Ordering::Acquire));
 
-        // Should be able to process new hints
+        // Should be able to process new hints after reset
         let good = vec![make_header(HINTS_TYPE_RESULT, 1), 0x42];
-        assert!(p.process_hints(&good).is_ok());
+        assert!(p.process_hints(&good, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
         let queue = p.state.queue.lock().unwrap();
@@ -666,7 +685,7 @@ mod tests {
 
         // First batch increments sequence
         let batch1 = vec![make_header(HINTS_TYPE_RESULT, 1), 0x01];
-        p.process_hints(&batch1).unwrap();
+        p.process_hints(&batch1, false).unwrap();
         p.wait_for_completion().unwrap();
 
         // Sequence should be at 1
@@ -677,7 +696,7 @@ mod tests {
 
         // Send START control - should reset sequence
         let start = vec![make_ctrl_header(CTRL_START, 0)];
-        p.process_hints(&start).unwrap();
+        p.process_hints(&start, true).unwrap();
 
         // Sequence should be reset to 0
         {
@@ -688,10 +707,10 @@ mod tests {
 
         // Process new batch
         let batch2 = vec![make_header(HINTS_TYPE_RESULT, 1), 0x02];
-        p.process_hints(&batch2).unwrap();
+        p.process_hints(&batch2, false).unwrap();
 
         let end = vec![make_ctrl_header(CTRL_END, 0)];
-        p.process_hints(&end).unwrap();
+        p.process_hints(&end, false).unwrap();
 
         // Should have processed 1 hint (starting from 0 again)
         let queue = p.state.queue.lock().unwrap();
@@ -705,11 +724,11 @@ mod tests {
         // Dispatch hints
         let data =
             vec![make_header(HINTS_TYPE_RESULT, 1), 0x10, make_header(HINTS_TYPE_RESULT, 1), 0x20];
-        p.process_hints(&data).unwrap();
+        p.process_hints(&data, false).unwrap();
 
         // END should wait internally
         let end = vec![make_ctrl_header(CTRL_END, 0)];
-        p.process_hints(&end).unwrap();
+        p.process_hints(&end, false).unwrap();
 
         // Buffer should already be empty
         {
@@ -727,7 +746,7 @@ mod tests {
         let p = processor();
         let cancel = vec![make_ctrl_header(CTRL_CANCEL, 0)];
 
-        let result = p.process_hints(&cancel);
+        let result = p.process_hints(&cancel, false);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("cancelled"));
 
@@ -740,7 +759,7 @@ mod tests {
         let p = processor();
         let signal_err = vec![make_ctrl_header(CTRL_ERROR, 0)];
 
-        let result = p.process_hints(&signal_err);
+        let result = p.process_hints(&signal_err, false);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("error"));
 
@@ -765,7 +784,7 @@ mod tests {
         }
 
         let start = Instant::now();
-        p.process_hints(&data).unwrap();
+        p.process_hints(&data, false).unwrap();
         p.wait_for_completion().unwrap();
         let duration = start.elapsed();
 
@@ -800,7 +819,7 @@ mod tests {
                 data.push(make_header(HINTS_TYPE_RESULT, 1));
                 data.push((batch_id * HINTS_PER_BATCH + i) as u64);
             }
-            p.process_hints(&data).unwrap();
+            p.process_hints(&data, false).unwrap();
         }
 
         p.wait_for_completion().unwrap();
@@ -835,7 +854,7 @@ mod tests {
         for _iter in 0..ITERATIONS {
             // Reset at start of each iteration
             let reset = vec![make_ctrl_header(CTRL_START, 0)];
-            p.process_hints(&reset).unwrap();
+            p.process_hints(&reset, true).unwrap();
 
             // Process batch
             let mut data = Vec::with_capacity(HINTS_PER_ITER * 2);
@@ -843,11 +862,11 @@ mod tests {
                 data.push(make_header(HINTS_TYPE_RESULT, 1));
                 data.push(i as u64);
             }
-            p.process_hints(&data).unwrap();
+            p.process_hints(&data, false).unwrap();
 
             // End stream
             let end = vec![make_ctrl_header(CTRL_END, 0)];
-            p.process_hints(&end).unwrap();
+            p.process_hints(&end, false).unwrap();
         }
 
         let duration = start.elapsed();

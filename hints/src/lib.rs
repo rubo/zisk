@@ -14,7 +14,13 @@ pub use hints_stream::HintsStream;
 pub use secp256k1::*;
 
 pub trait HintsProcessor {
-    fn process_hints(&self, hints: &[u64]) -> anyhow::Result<Vec<u64>>;
+    /// Process hints and return the processed data along with a flag indicating if CTRL_END was encountered.
+    ///
+    /// # Returns
+    /// A tuple of (processed_hints, has_ctrl_end) where:
+    /// - processed_hints: Vec<u64> - The processed hint data
+    /// - has_ctrl_end: bool - True if CTRL_END was found (signals end of batch)
+    fn process_hints(&self, hints: &[u64], first_batch: bool) -> anyhow::Result<(Vec<u64>, bool)>;
 }
 
 pub trait HintsSink {

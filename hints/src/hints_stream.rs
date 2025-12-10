@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use tracing::info;
+use tracing::debug;
 use zisk_common::io::{StreamRead, StreamSource};
 
 enum ThreadCommand {
@@ -118,30 +118,34 @@ impl<HP: HintsProcessor + Send + Sync + 'static, HS: HintsSink + Send + Sync + '
     }
 
     /// Process all hints from the stream.
+    ///
+    /// Processes hints in batches until CTRL_END is encountered or the stream ends.
+    /// Each batch is submitted to the sink immediately.
     fn process_stream(
         stream: &mut StreamSource,
         hints_processor: &HP,
         hints_sink: &HS,
     ) -> Result<()> {
-        let mut processed = Vec::new();
+        let mut first_batch = true;
 
         while let Some(hints) = stream.next()? {
             let hints = zisk_common::reinterpret_vec(hints)?;
-            processed.extend(hints_processor.process_hints(&hints)?);
+            let (processed, has_ctrl_end) = hints_processor.process_hints(&hints, first_batch)?;
+
+            first_batch = false;
+
+            if !processed.is_empty() {
+                hints_sink.submit(processed)?;
+            }
+
+            // Break if CTRL_END was encountered
+            if has_ctrl_end {
+                debug!("CTRL_END encountered, stopping hint processing");
+                break;
+            }
         }
 
-        // // STore processed hints in a temp file for debugging
-        // std::fs::write(
-        //     "/data/hints/processed_hints.bin",
-        //     &zisk_common::reinterpret_vec::<u64, u8>(processed.clone())?,
-        // )?;
-        // // // read processed into a /data/hints/precompile_cache.bin
-        // // let processed = std::fs::read("/data/hints/precompile_cache.bin")?;
-        // // let processed = zisk_common::reinterpret_vec::<u8, u64>(processed)?;
-
-        info!("Precompile hints have generated {} u64 values", processed.len());
-
-        hints_sink.submit(processed)
+        Ok(())
     }
 
     /// Trigger the background thread to process hints asynchronously.

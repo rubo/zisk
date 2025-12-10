@@ -1,4 +1,9 @@
 const int OPERATION_BUS_ID = 5000;
+const int MAIN_STEP_BITS = 32;
+const int MAX_STEPS = 1 << MAIN_STEP_BITS;
+const int MEM_STEP_BITS = MAIN_STEP_BITS * 4;
+const int ADDR_BITS = 32;
+const int ADDR_W_BITS = ADDR_BITS - 3;
 
 require "std_direct.pil"
 require "rom/pil/rom.pil"
@@ -21,6 +26,13 @@ require "keccakf/pil/keccakf.pil"
 require "keccakf/pil/keccakf_table.pil"
 require "sha256f/pil/sha256f.pil"
 require "big_int/pil/big_int_add.pil"
+require "dma/pil/dma.pil"
+require "dma/pil/dma_rom.pil"
+require "dma/pil/dma_pre_post_table.pil"
+require "dma/pil/dma_pre_post.pil"
+require "dma/pil/dma_unaligned.pil"
+require "dma/pil/dma_64_aligned.pil"
+// require "dma/pil/dma_32_aligned.pil"
 
 proofval enable_input_data;
 enable_input_data * (1 - enable_input_data);
@@ -41,9 +53,16 @@ airgroup Zisk {
     set_max_std_tables_bits(21);
     set_max_num_rows_virtual(1 << 21); // Set the maximum rows for virtual tables
     set_max_num_virtual_tables(2);
-    set_group_virtual_tables(table_ids: [ARITH_TABLE_ID, ARITH_RANGE_TABLE_ID, ARITH_EQ_LT_TABLE_ID, BINARY_EXTENSION_TABLE_ID, BINARY_TABLE_ID, MEM_ALIGN_ROM_ID, KECCAKF_TABLE_ID]);
+    set_group_virtual_tables(table_ids: [ARITH_TABLE_ID, ARITH_RANGE_TABLE_ID, ARITH_EQ_LT_TABLE_ID, BINARY_EXTENSION_TABLE_ID, BINARY_TABLE_ID, MEM_ALIGN_ROM_ID, KECCAKF_TABLE_ID, DMA_ROM_ID, DMA_PRE_POST_TABLE_ID]);
     set_group_virtual_tables(table_ids: [BINARY_EXTENSION_FROPS_TABLE_ID, BINARY_BASIC_FROPS_TABLE_ID, ARITH_FROPS_TABLE_ID]);
 
+    Dma();
+    virtual DmaRom();
+    Dma64Aligned();
+    // Dma32AlignedOp();
+    DmaUnaligned();
+    DmaPrePost();
+    virtual DmaPrePostTable();
     // Main Program
     Main(N: 2**22);
     Rom(N: 2**21);

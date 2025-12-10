@@ -106,6 +106,42 @@ impl MemBusHelpers {
             ],
         ));
     }
+    pub fn mem_aligned_load_from_slice(
+        addr: u32,
+        step: u64,
+        values: &[u64],
+        pending: &mut VecDeque<(BusId, Vec<u64>)>,
+    ) {
+        assert!(addr % 8 == 0);
+        let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 2;
+        for (i, &value) in values.iter().enumerate() {
+            pending.push_back((
+                MEM_BUS_ID,
+                vec![MEMORY_LOAD_OP, (addr as usize + i * 8) as u64, mem_step, 8, 0, 0, value],
+            ));
+        }
+    }
+    pub fn mem_aligned_write_from_slice(
+        addr: u32,
+        step: u64,
+        values: &[u64],
+        pending: &mut VecDeque<(BusId, Vec<u64>)>,
+    ) {
+        assert!(addr % 8 == 0);
+        let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 3;
+        for (i, &value) in values.iter().enumerate() {
+            pending.push_back((
+                MEM_BUS_ID,
+                vec![MEMORY_STORE_OP, (addr as usize + i * 8) as u64, mem_step, 8, value, 0, 0],
+            ));
+        }
+    }
+    pub fn get_mem_read_step(step: u64) -> u64 {
+        MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 2
+    }
+    pub fn get_mem_write_step(step: u64) -> u64 {
+        MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 3
+    }
 }
 
 pub fn log2(n: usize) -> usize {

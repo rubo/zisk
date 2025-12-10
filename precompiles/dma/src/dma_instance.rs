@@ -1,10 +1,10 @@
-//! The `Add256Instance` module defines an instance to perform the witness computation
-//! for the Add256 State Machine.
+//! The `DmaInstance` module defines an instance to perform the witness computation
+//! for the Dma State Machine.
 //!
-//! It manages collected inputs and interacts with the `Add256SM` to compute witnesses for
+//! It manages collected inputs and interacts with the `DmaSM` to compute witnesses for
 //! execution plans.
 
-use crate::{Add256Input, Add256SM};
+use crate::{DmaMemCpyInput, DmaSM};
 use fields::PrimeField64;
 use proofman_common::{AirInstance, ProofCtx, SetupCtx};
 use std::collections::VecDeque;
@@ -15,54 +15,54 @@ use zisk_common::{
     InstanceType, MemCollectorInfo, PayloadType, OPERATION_BUS_ID, OP_TYPE,
 };
 use zisk_core::ZiskOperationType;
-use zisk_pil::Add256Trace;
+use zisk_pil::DmaTrace;
 
-/// The `Add256Instance` struct represents an instance for the Add256 State Machine.
+/// The `DmaInstance` struct represents an instance for the Dma State Machine.
 ///
-/// It encapsulates the `Add256SM` and its associated context, and it processes input data
-/// to compute witnesses for the Add256 State Machine.
-pub struct Add256Instance<F: PrimeField64> {
-    /// Add256 state machine.
-    add256_sm: Arc<Add256SM<F>>,
+/// It encapsulates the `DmaSM` and its associated context, and it processes input data
+/// to compute witnesses for the Dma State Machine.
+pub struct DmaInstance<F: PrimeField64> {
+    /// Dma state machine.
+    dma_sm: Arc<DmaSM<F>>,
 
     /// Instance context.
     ictx: InstanceCtx,
 }
 
-impl<F: PrimeField64> Add256Instance<F> {
-    /// Creates a new `Add256Instance`.
+impl<F: PrimeField64> DmaInstance<F> {
+    /// Creates a new `DmaInstance`.
     ///
     /// # Arguments
-    /// * `add256_sm` - An `Arc`-wrapped reference to the Add256 State Machine.
+    /// * `dma_sm` - An `Arc`-wrapped reference to the Dma State Machine.
     /// * `ictx` - The `InstanceCtx` associated with this instance, containing the execution plan.
     /// * `bus_id` - The bus ID associated with this instance.
     ///
     /// # Returns
-    /// A new `Add256Instance` instance initialized with the provided state machine and
+    /// A new `DmaInstance` instance initialized with the provided state machine and
     /// context.
-    pub fn new(add256_sm: Arc<Add256SM<F>>, ictx: InstanceCtx) -> Self {
-        Self { add256_sm, ictx }
+    pub fn new(dma_sm: Arc<DmaSM<F>>, ictx: InstanceCtx) -> Self {
+        Self { dma_sm, ictx }
     }
 
-    pub fn build_add256_collector(&self, chunk_id: ChunkId) -> Add256Collector {
+    pub fn build_dma_collector(&self, chunk_id: ChunkId) -> DmaCollector {
         assert_eq!(
             self.ictx.plan.air_id,
-            Add256Trace::<F>::AIR_ID,
-            "Add256Instance: Unsupported air_id: {:?}",
+            DmaTrace::<F>::AIR_ID,
+            "DmaInstance: Unsupported air_id: {:?}",
             self.ictx.plan.air_id
         );
 
         let meta = self.ictx.plan.meta.as_ref().unwrap();
         let collect_info = meta.downcast_ref::<HashMap<ChunkId, (u64, CollectSkipper)>>().unwrap();
         let (num_ops, collect_skipper) = collect_info[&chunk_id];
-        Add256Collector::new(num_ops, collect_skipper)
+        DmaCollector::new(num_ops, collect_skipper)
     }
 }
 
-impl<F: PrimeField64> Instance<F> for Add256Instance<F> {
-    /// Computes the witness for the Add256 execution plan.
+impl<F: PrimeField64> Instance<F> for DmaInstance<F> {
+    /// Computes the witness for the Dma execution plan.
     ///
-    /// This method leverages the `Add256SM` to generate an `AirInstance` using the collected
+    /// This method leverages the `DmaSM` to generate an `AirInstance` using the collected
     /// inputs.
     ///
     /// # Arguments
@@ -79,10 +79,10 @@ impl<F: PrimeField64> Instance<F> for Add256Instance<F> {
     ) -> Option<AirInstance<F>> {
         let inputs: Vec<_> = collectors
             .into_iter()
-            .map(|(_, collector)| collector.as_any().downcast::<Add256Collector>().unwrap().inputs)
+            .map(|(_, collector)| collector.as_any().downcast::<DmaCollector>().unwrap().inputs)
             .collect();
 
-        Some(self.add256_sm.compute_witness(&inputs, trace_buffer))
+        Some(self.dma_sm.compute_witness(&inputs, trace_buffer))
     }
 
     /// Retrieves the checkpoint associated with this instance.
@@ -104,15 +104,15 @@ impl<F: PrimeField64> Instance<F> for Add256Instance<F> {
     fn build_inputs_collector(&self, chunk_id: ChunkId) -> Option<Box<dyn BusDevice<PayloadType>>> {
         assert_eq!(
             self.ictx.plan.air_id,
-            Add256Trace::<F>::AIR_ID,
-            "Add256Instance: Unsupported air_id: {:?}",
+            DmaTrace::<F>::AIR_ID,
+            "DmaInstance: Unsupported air_id: {:?}",
             self.ictx.plan.air_id
         );
 
         let meta = self.ictx.plan.meta.as_ref().unwrap();
         let collect_info = meta.downcast_ref::<HashMap<ChunkId, (u64, CollectSkipper)>>().unwrap();
         let (num_ops, collect_skipper) = collect_info[&chunk_id];
-        Some(Box::new(Add256Collector::new(num_ops, collect_skipper)))
+        Some(Box::new(DmaCollector::new(num_ops, collect_skipper)))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -120,9 +120,9 @@ impl<F: PrimeField64> Instance<F> for Add256Instance<F> {
     }
 }
 
-pub struct Add256Collector {
+pub struct DmaCollector {
     /// Collected inputs for witness computation.
-    inputs: Vec<Add256Input>,
+    inputs: Vec<DmaMemCpyInput>,
 
     /// The number of operations to collect.
     num_operations: u64,
@@ -131,8 +131,8 @@ pub struct Add256Collector {
     collect_skipper: CollectSkipper,
 }
 
-impl Add256Collector {
-    /// Creates a new `Add256Collector`.
+impl DmaCollector {
+    /// Creates a new `DmaCollector`.
     ///
     /// # Arguments
     ///
@@ -151,7 +151,7 @@ impl Add256Collector {
     }
 }
 
-impl BusDevice<PayloadType> for Add256Collector {
+impl BusDevice<PayloadType> for DmaCollector {
     /// Processes data received on the bus, collecting the inputs necessary for witness computation.
     ///
     /// # Arguments
@@ -177,7 +177,7 @@ impl BusDevice<PayloadType> for Add256Collector {
             return false;
         }
 
-        if data[OP_TYPE] as u32 != ZiskOperationType::BigInt as u32 {
+        if data[OP_TYPE] != ZiskOperationType::Dma as u64 {
             return true;
         }
 
@@ -187,10 +187,10 @@ impl BusDevice<PayloadType> for Add256Collector {
 
         let data: ExtOperationData<u64> =
             data.try_into().expect("Regular Metrics: Failed to convert data");
-        if let ExtOperationData::OperationAdd256Data(data) = data {
-            self.inputs.push(Add256Input::from(&data));
+        if let ExtOperationData::OperationDmaMemCpyData(data) = data {
+            self.inputs.push(DmaMemCpyInput::from(&data));
         } else {
-            panic!("Expected ExtOperationData::OperationAdd256Data");
+            panic!("Expected ExtOperationData::OperationDmaData");
         }
 
         self.inputs.len() < self.num_operations as usize

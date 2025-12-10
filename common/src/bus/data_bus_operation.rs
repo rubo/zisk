@@ -69,8 +69,15 @@ pub const OPERATION_BUS_BLS12_381_COMPLEX_MUL_DATA_SIZE: usize =
     OPERATION_PRECOMPILED_BUS_DATA_SIZE + 2 * INDIRECTION_SIZE + 2 * COMPLEX_OVER_384_BITS_SIZE;
 
 // bus_data_size + 4 params (&a, &b, cin, &c, a, b)
-pub const OPERATION_BUS_ADD_256_DATA_SIZE: usize =
-    OPERATION_BUS_DATA_SIZE + 4 * PARAMS_SIZE + 2 * DATA_256_BITS_SIZE + SINGLE_RESULT_SIZE;
+pub const OPERATION_BUS_ADD_256_DATA_SIZE: usize = OPERATION_PRECOMPILED_BUS_DATA_SIZE
+    + 4 * PARAMS_SIZE
+    + 2 * DATA_256_BITS_SIZE
+    + SINGLE_RESULT_SIZE;
+
+// 5 bus_precompiled_data + count
+pub const OPERATION_BUS_DMA_MEMCPY_DATA_SIZE: usize = OPERATION_PRECOMPILED_BUS_DATA_SIZE + 1;
+// 5 bus_precompiled_data + count + count_eq
+pub const OPERATION_BUS_DMA_MEMCMP_DATA_SIZE: usize = OPERATION_PRECOMPILED_BUS_DATA_SIZE + 2;
 
 // 4 bus_data + 5 addr + 4 x 384 = 4 + 5 + 4 * 6 = 33
 pub const MAX_OPERATION_DATA_SIZE: usize = OPERATION_BUS_ARITH_384_MOD_DATA_SIZE;
@@ -112,6 +119,8 @@ pub type OperationBls12_381ComplexAddData<D> = [D; OPERATION_BUS_BLS12_381_COMPL
 pub type OperationBls12_381ComplexSubData<D> = [D; OPERATION_BUS_BLS12_381_COMPLEX_SUB_DATA_SIZE];
 pub type OperationBls12_381ComplexMulData<D> = [D; OPERATION_BUS_BLS12_381_COMPLEX_MUL_DATA_SIZE];
 pub type OperationAdd256Data<D> = [D; OPERATION_BUS_ADD_256_DATA_SIZE];
+pub type OperationDmaMemCpyData<D> = [D; OPERATION_BUS_DMA_MEMCPY_DATA_SIZE];
+pub type OperationDmaMemCmpData<D> = [D; OPERATION_BUS_DMA_MEMCMP_DATA_SIZE];
 
 pub enum ExtOperationData<D> {
     OperationData(OperationData<D>),
@@ -133,6 +142,8 @@ pub enum ExtOperationData<D> {
     OperationBls12_381ComplexSubData(OperationBls12_381ComplexSubData<D>),
     OperationBls12_381ComplexMulData(OperationBls12_381ComplexMulData<D>),
     OperationAdd256Data(OperationAdd256Data<D>),
+    OperationDmaMemCpyData(OperationDmaMemCpyData<D>),
+    OperationDmaMemCmpData(OperationDmaMemCmpData<D>),
 }
 
 const KECCAK_OP: u8 = ZiskOp::Keccak.code();
@@ -153,6 +164,8 @@ const BLS12_381_COMPLEX_ADD_OP: u8 = ZiskOp::Bls12_381ComplexAdd.code();
 const BLS12_381_COMPLEX_SUB_OP: u8 = ZiskOp::Bls12_381ComplexSub.code();
 const BLS12_381_COMPLEX_MUL_OP: u8 = ZiskOp::Bls12_381ComplexMul.code();
 const ADD256_OP: u8 = ZiskOp::Add256.code();
+const DMA_MEMCPY_OP: u8 = ZiskOp::DmaMemCpy.code();
+const DMA_MEMCMP_OP: u8 = ZiskOp::DmaMemCmp.code();
 
 // impl<D: Copy + Into<u8>> TryFrom<&[D]> for ExtOperationData<D> {
 impl<D: Copy + Into<u64>> TryFrom<&[D]> for ExtOperationData<D> {
@@ -253,6 +266,16 @@ impl<D: Copy + Into<u64>> TryFrom<&[D]> for ExtOperationData<D> {
                 let array: OperationAdd256Data<D> =
                     data.try_into().map_err(|_| "Invalid OperationAdd256Data size")?;
                 Ok(ExtOperationData::OperationAdd256Data(array))
+            }
+            DMA_MEMCPY_OP => {
+                let array: OperationDmaMemCpyData<D> =
+                    data.try_into().map_err(|_| "Invalid OperationDmaMemCpyData size")?;
+                Ok(ExtOperationData::OperationDmaMemCpyData(array))
+            }
+            DMA_MEMCMP_OP => {
+                let array: OperationDmaMemCmpData<D> =
+                    data.try_into().map_err(|_| "Invalid OperationDmaMemCmpData size")?;
+                Ok(ExtOperationData::OperationDmaMemCmpData(array))
             }
             _ => {
                 let array: OperationData<D> =
@@ -501,6 +524,29 @@ impl OperationBusData<u64> {
                 }
                 _ => ExtOperationData::OperationData([op, op_type, a, b]),
             },
+            ZiskOperationType::Dma => match inst.op {
+                DMA_MEMCPY_OP => {
+                    let mut data = unsafe {
+                        uninit_array::<OPERATION_BUS_DMA_MEMCPY_DATA_SIZE>().assume_init()
+                    };
+                    data[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    data[OPERATION_PRECOMPILED_BUS_DATA_SIZE..]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    ExtOperationData::OperationDmaMemCpyData(data)
+                }
+                DMA_MEMCMP_OP => {
+                    let mut data = unsafe {
+                        uninit_array::<OPERATION_BUS_DMA_MEMCMP_DATA_SIZE>().assume_init()
+                    };
+                    data[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    data[OPERATION_PRECOMPILED_BUS_DATA_SIZE..]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    ExtOperationData::OperationDmaMemCmpData(data)
+                }
+                _ => ExtOperationData::OperationData([op, op_type, a, b]),
+            },
 
             _ => ExtOperationData::OperationData([op, op_type, a, b]),
         }
@@ -700,6 +746,21 @@ impl OperationBusData<u64> {
                     &buffer[..OPERATION_BUS_DATA_SIZE]
                 }
             },
+            ZiskOperationType::Dma => match inst.op {
+                DMA_MEMCPY_OP | DMA_MEMCMP_OP => {
+                    let len =
+                        OPERATION_PRECOMPILED_BUS_DATA_SIZE + ctx.precompiled.input_data.len();
+                    buffer[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    buffer[OPERATION_PRECOMPILED_BUS_DATA_SIZE..len]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    &buffer[..len]
+                }
+                _ => {
+                    buffer[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
+                    &buffer[..OPERATION_BUS_DATA_SIZE]
+                }
+            },
 
             _ => {
                 buffer[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
@@ -737,6 +798,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[OP] as u8,
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[OP] as u8,
             ExtOperationData::OperationAdd256Data(d) => d[OP] as u8,
+            ExtOperationData::OperationDmaMemCpyData(d) => d[OP] as u8,
+            ExtOperationData::OperationDmaMemCmpData(d) => d[OP] as u8,
         }
     }
 
@@ -769,6 +832,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[OP_TYPE],
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[OP_TYPE],
             ExtOperationData::OperationAdd256Data(d) => d[OP_TYPE],
+            ExtOperationData::OperationDmaMemCpyData(d) => d[OP_TYPE],
+            ExtOperationData::OperationDmaMemCmpData(d) => d[OP_TYPE],
         }
     }
 
@@ -801,6 +866,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[A],
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[A],
             ExtOperationData::OperationAdd256Data(d) => d[A],
+            ExtOperationData::OperationDmaMemCpyData(d) => d[A],
+            ExtOperationData::OperationDmaMemCmpData(d) => d[A],
         }
     }
 
@@ -833,6 +900,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationBls12_381ComplexSubData(d) => d[B],
             ExtOperationData::OperationBls12_381ComplexMulData(d) => d[B],
             ExtOperationData::OperationAdd256Data(d) => d[B],
+            ExtOperationData::OperationDmaMemCpyData(d) => d[B],
+            ExtOperationData::OperationDmaMemCmpData(d) => d[B],
         }
     }
 }

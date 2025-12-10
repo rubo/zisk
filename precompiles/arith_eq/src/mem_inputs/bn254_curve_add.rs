@@ -3,6 +3,7 @@ use crate::executors::Bn254Curve;
 use std::collections::VecDeque;
 use zisk_common::BusId;
 use zisk_common::MemCollectorInfo;
+use zisk_common::OPERATION_PRECOMPILED_BUS_DATA_SIZE;
 
 pub const BN254_CURVE_ADD_MEM_CONFIG: ArithEqMemInputConfig = ArithEqMemInputConfig {
     indirect_params: 2,
@@ -20,8 +21,12 @@ pub fn generate_bn254_curve_add_mem_inputs(
     pending: &mut VecDeque<(BusId, Vec<u64>)>,
 ) {
     // op,op_type,a,b,addr[2],...
-    let p1: &[u64; 8] = &data[7..15].try_into().unwrap();
-    let p2: &[u64; 8] = &data[15..23].try_into().unwrap();
+    let p1_start = OPERATION_PRECOMPILED_BUS_DATA_SIZE + BN254_CURVE_ADD_MEM_CONFIG.indirect_params;
+    let p1: &[u64; 8] =
+        &data[p1_start..p1_start + BN254_CURVE_ADD_MEM_CONFIG.chunks_per_param].try_into().unwrap();
+    let p2_start = p1_start + BN254_CURVE_ADD_MEM_CONFIG.chunks_per_param;
+    let p2: &[u64; 8] =
+        &data[p2_start..p2_start + BN254_CURVE_ADD_MEM_CONFIG.chunks_per_param].try_into().unwrap();
     let mut p3 = [0u64; 8];
 
     Bn254Curve::calculate_add(p1, p2, &mut p3);

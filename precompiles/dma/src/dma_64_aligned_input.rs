@@ -1,21 +1,20 @@
-use crate::add256_constants::*;
-use zisk_common::OperationAdd256Data;
+use crate::dma_constants::*;
+use zisk_common::OperationDmaData;
 use zisk_common::{B, OPERATION_PRECOMPILED_BUS_DATA_SIZE, STEP};
 
 #[derive(Debug)]
-pub struct Add256Input {
+pub struct MemCpyInput {
     pub step_main: u64,
-    pub addr_main: u32,
-    pub addr_a: u32,
-    pub addr_b: u32,
-    pub addr_c: u32,
-    pub cin: u64,
+    pub addr_src: u32,
+    pub addr_dst: u32,
+    pub a,
     pub a: [u64; 4],
     pub b: [u64; 4],
+    pub count: u32,
 }
 
-impl Add256Input {
-    pub fn from(values: &OperationAdd256Data<u64>) -> Self {
+impl MemCpyInput {
+    pub fn from(values: &OperationDmaData<u64>) -> Self {
         Self {
             step_main: values[STEP],
             addr_main: values[B] as u32,

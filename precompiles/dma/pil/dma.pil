@@ -1,127 +1,155 @@
-const int MEMCPY_CONT_ID = 400;
+const int DMA_BUS_ID = 8000;
+const int DMA_ROM_ID = 8001;
 
-airtemplate MemCpy(int N = 2**21, const int RC = 2, const int op_x_row = 4, const int selectors = 1) {
+const int DMA_MEM_CPY = 1;
+const int DMA_MEM_PRE_POST = 2;
+const int DMA_MEM_EQ = 3;
+
+const int MEM_CPY_BYTE_CONT_ID = 8200;
+const int MEM_CPY_CONT_ID = 8201;
+
+
+
+airtemplate Dma(int N = 2**21, const int RC = 2, const int op_x_row = 4, const int selectors = 1) {
 
     assert(selectors == 0 || selectors == 1);
     assert(op_x_row > 1);
 
-    airval segment_id;                 // Id of current segment
-    airval segment_previous_reset;     // Last value of `reset` in previous segment.
-    airval segment_previous_src_addr;  // Last value of `src_addr` in previous segment.
-    airval segment_previous_dst_addr;  // Last value of `dst_addr` in previous segment.
-    airval segment_previous_main_step; // Last value of `main_step` in previous segment.
-    airval segment_previous_count;     // Last value of `count` in previous segment.
-
-    airval segment_last_reset;     // Last value of `reset` in current segment.
-    airval segment_last_src_addr;  // Last value of `src_addr` in current segment.
-    airval segment_last_dst_addr;  // Last value of `dst_addr` in current segment.
-    airval segment_last_main_step; // Last value of `main_step` in current segment.
-    airval segment_last_count;     // Last value of `count` in current segment.
-
-    airval is_last_segment;        // 1 if this is the last segment, 0 otherwise.
-    col witness main_step;
-    col witness src_addr;
-    col witness dst_addr;
-    col witness count;
-    col witness value[op_x_row][RC];
-
-    col witness sel_op[selectors ? op_x_row : 0]; // one more for end
-    col witness reset;
-
-    const expr previous_reset = L1 * (segment_previous_reset - 'reset) + 'reset;
-    const expr previous_src_addr = L1 * (segment_previous_src_addr - 'src_addr) + 'src_addr;
-    const expr previous_dst_addr = L1 * (segment_previous_dst_addr - 'dst_addr) + 'dst_addr;
-    const expr previous_main_step = L1 * (segment_previous_main_step - 'main_step) + 'main_step;
-    const expr previous_count = L1 * (segment_previous_count - 'count) + 'count;
-
-    LAST * (reset - segment_last_reset) === 0;
-    LAST * (src_addr - segment_last_src_addr) === 0;
-    LAST * (dst_addr - segment_last_dst_addr) === 0;
-    LAST * (main_step - segment_last_main_step) === 0;
-    LAST * (count - segment_last_count) === 0;
-
-    // Continuations
-    // AIR_ID, segment_id, reset, src_addr, dst_addr, count, main_step 
-    const int UNIQ_ID = AIRGROUP_ID * 1000 + AIR_ID;
-    direct_global_update_proves(MEMCPY_CONT_ID, [UNIQ_ID, 0, 1, 0, 0, 0, 0]);
-
-
-    direct_update_assumes(MEMCPY_CONT_ID, [ UNIQ_ID, 
-                                            segment_id, 
-                                            segment_previous_reset, 
-                                            segment_previous_src_addr, 
-                                            segment_previous_dst_addr, 
-                                            segment_previous_count, 
-                                            segment_previous_main_step]);
-
-    direct_update_proves(MEMCPY_CONT_ID, [  UNIQ_ID, 
-                                            segment_id + 1, 
-                                            segment_last_reset, 
-                                            segment_last_src_addr, 
-                                            segment_last_dst_addr, 
-                                            segment_last_count, 
-                                            segment_last_main_step], sel: is_last_segment);
-
-    // This global constraint is sent to the bus to define the initial and final values of
-    // continuations. A global constraint is used to ensure there is only one initial and one final
-    // value, preventing multiple cycles of `main`.
-
-    // In the initial state define the initial `pc` and final  `pc`. Before finish a execution the
-    // value of "c" must be 0.
-
-    const int zeros[RC];
-    for (int index = 0; index < RC; ++index) {
-        zeros[index] = 0;
-    }
-
-    // These constraints define the state at the beginning and end of a main continuation.
-
-        direct_global_update_assumes(MAIN_CONTINUATION_ID, expressions: [0, 1, END_PC_ADDR, ...zeros]);
-
-
-    reset * (1 - reset) === 0;
-
-    expr _ops_in_row = selectors ? sel_op[0] * op_x_row : sel_op[0];
-
-    for (int i = 0; i < op_x_row; i++) {
-        expr sel;
-        if (selectors || i == 0) {
-            sel = sel_op[i];
-            sel_op[i] * (1 - sel_op[i]) === 0;
-        } else {
-            sel = sel_op[0];
-        }
-
-        precompiled_mem_load(
-            sel: sel,
-            main_step: main_step,
-            addr: src_addr * 8 + 8 * i,
-            value: value[i]
-        );
-
-        precompiled_mem_store(
-            sel: sel,
-            main_step: main_step,
-            addr: dst_addr * 8 + 8 * i,
-            value: value[i]
-        );
-        if (selectors && i > 0) {
-            // current selector only can be 1 if previous is 1
-            sel_op[i] * (1 - sel_op[i - 1]) === 0;
-            _ops_in_row += sel_op[i];
-        }
-    }
-    const expr ops_in_row = _ops_in_row;
-    reset * (count - ops_in_row) === 0;
-   
-    range_check(count, min: 0, max: 2**24-1); // cost 1.5
-
-    (count - ('count + op_x_row)) * (1 - reset) === 0;
-    (src_addr - ('src_addr + 8 * op_x_row)) * (1 - reset) === 0;
-    (dst_addr - ('dst_addr + 8 * op_x_row)) * (1 - reset) === 0;
-
-    const expr previous_reset = L1 * (previous_segment_reset - 'reset) + 'reset;
+    // DMA: MEMCPY
+    //
+    // Unlike a CPU memcpy, the DMA memcpy is instantaneous from a temporal point of view all reads 
+    // occur in the same step and all writes in the next step. In the case of reads there are no 
+    // problems in performing the same read several times in the same step because the result is 
+    // always the same in this moment. In the case of writes, this is not the case, because it would 
+    // create an ambiguity to know the written value. Therefore, we must guarantee that each 64-bit 
+    // value is written only once.
+    //
+    // The strategy that DMA follows in the case of memcpy is to divide the operation into 3 phases:
+    //
+    // 1. Pre-copy: initial bytes are copied to achieve at least destination alignment, to avoid
+    //    double writes.
+    //
+    // 2. Fully or partially aligned copy. It's a loop where 64-bit values are copied. There are 
+    //    two variants:
+    //    a) Aligned 64-bit copy: both source and destination addresses are aligned to 8 bytes.
+    //    b) Unaligned 64-bit copy: the source address is not aligned to 8 bytes, but it's read in
+    //       bytes and 64-bit values are reassembled.
+    // 
+    // 3. Post-copy: final bytes that don't complete a 64-bit word are copied.
+    // 
+    // Not all phases are necessary, they depend on the copy parameters.
+    //
+    // Example of fully aligned memcpy operation:
+    //             
+    //                PRE                 MEMCPY                 POST       
+    //           ┌──────────┐ ┌──────────────────────────────┐ ┌──────────┐ 
+    //
+    //               ┌──────┐ ┌────────┬────────┐   ┌────────┐ ┌────┐
+    //    src        │  0   │ │    1   │    2   │...│    n   │ │ n+1│  
+    //               └──────┘ └────────┴────────┘   └────────┘ └────┘
+    //                  ↓          ↓        ↓            ↓        ↓
+    //           ┌───┬──────┐ ┌────────┬────────┐   ┌────────┐ ┌────┬─────┐
+    //    dst    │      0   │ │    1   │    2   │...│    n   │ │ n+1      │
+    //           └───┴──────┘ └────────┴────────┘   └────────┘ └────┴─────┘
+    //           ^dst64       ^dst64+1 ^dst64+2     ^dst64+n   ^dst64+n+1   <-- each dst64 address is 
+    //                                                                          written only once
+    //
+    // 
+    // Example of partially aligned memcpy operation:
+    //              
+    //                PRE                 MEMCPY                            POST       
+    //           ┌──────────┐ ┌────────────────────────────────────────┐ ┌──────────┐ 
+    //               ┌────┐┌─ ┌────────┬────────┐   ┌────────┐┌─┬──────┐ ┌─┬───┐
+    //    src        │  0 ││1 │    1   │    2   │...│    n   ││   n+1  │ │  n+1│  
+    //               └────┘└─ └────────┴────────┘   └────────┘└─┴──────┘ └─┴───┘
+    //                  ↓   ↓      ↓   ↙   ↓    ↙        ↓    ↙              ↙
+    //           ┌───┬──────┐ ┌────────┬────────┐   ┌────────┐           ┌────┬─────┐
+    //    dst    │      0   │ │    1   │    2   │...│    n   │     ↑     │ n+1      │
+    //           └───┴──────┘ └────────┴────────┘   └────────┘     │     └────┴─────┘
+    //           ^dst64       ^dst64+1 ^dst64+2     ^dst64+n       │      ^dst64+n+1   <-- each dst64 address is 
+    //                                                          without                    written only once
+    //                                                           write
+    //
     
-    lookup_proves(op_bus_id, [op, dst_addr * 8, 0, src_addr * 8, 0, 0, 0, 0, step], sel: previous_reset);    
-    lookup_proves(op_bus_id, [op_param, count, 0, 0, 0, 0, 0, 0, step], sel: reset);
+    // read count from register directly
+
+    // assuming max memory of 512Mb (29 bits)
+    // count: 21 bits RC + 5 bits T
+    col witness bits(24) h_count;
+    col witness bits(1) count_ge_32;
+    col witness bits(6) l_count;        // 0..31 + 32 = 6 bits
+    // l_count range verified with dma_rom table
+    const expr count = h_count * 32 + l_count;
+
+    count_ge_32 * (1 - count_ge_32) === 0;
+    (1 - count_ge_32) * h_count === 0;
+
+    range_check(expression: h_count - count_ge_32, min: 0, max: 2**21-1);
+
+
+    // 32 bit address
+    // 21 bits RC +  8 bits RC + 3 bits T
+    col witness bits(21) h_src64;
+    col witness bits(8) l_src64;
+    col witness bits(3) src_offset;
+    const expr src = h_src64 * 2**21 + l_src64 * 2**3 + src_offset;
+    const expr src64 = h_src64 * 2**21 + l_src64 * 2**3;
+    // src_offset range verified with dma_rom table
+
+
+    // 32 bit address
+    // 21 bits RC +  8 bits RC + 3 bits T
+    col witness bits(21) h_dst64;
+    col witness bits(8) l_dst64;
+    col witness bits(3) dst_offset;
+    const expr dst = h_dst64 * 2**21 + l_dst64 * 2**3 + dst_offset;
+    const expr dst64 = h_dst64 * 2**21 + l_dst64 * 2**3;
+    // dst_offset range verified with dma_rom table
+
+    col witness bits(MAIN_STEP_BITS) main_step;
+    col witness bits(1) sel;
+
+    sel * (1 - sel) === 0;
+
+    range_check(expression: h_src64, min: 0, max: 2**21-1);
+    range_check(expression: h_dst64, min: 0, max: 2**21-1);
+    range_dual_byte(l_src64, l_dst64);
+
+    col witness bits(1) use_pre;            // use memcpy_pre operation
+    col witness bits(1) use_memcpy;         // use memcpy operation
+    col witness bits(1) use_post;           // use memcpy_post operation  
+    col witness bits(1) src64_inc_by_pre;   // src64 increment after apply memcpy_pre operation
+
+    use_pre * (1 - use_pre) === 0;
+    use_memcpy * (1 - use_memcpy) === 0;
+    use_post * (1 - use_post) === 0;
+    src64_inc_by_pre * (1 - src64_inc_by_pre) === 0;
+
+    const expr flags = use_pre + use_memcpy * 2 + use_post * 4 + src64_inc_by_pre * 8;
+
+    col witness bits(3) pre_count;  // number of bytes of memcpy_pre operation
+    col witness bits(3) l_count64;  // number of 64 bits in l_count after substract pre_count and post_count
+    col witness bits(3) src_offset_after_pre; // src_offset after apply memcpy_pre operation
+
+    lookup_assumes(DMA_ROM_ID, expressions: [dst_offset, src_offset, l_count, flags, pre_count, src_offset_after_pre, l_count64]);
+
+    col witness bits(1) reg_prev_mem_step; 
+    precompiled_reg_load(reg: REG_A2, prev_mem_step: reg_prev_mem_step, main_step:main_step, value:[count, 0], sel: sel);
+
+
+    permutation_assumes(DMA_BUS_ID, [DMA_MEM_CPY, 
+        dst64 + use_pre + l_count64 + h_count * 4, 
+        src64 + src64_inc_by_pre + l_count64 + h_count * 4, 
+        0, 
+        src_offset_after_pre, 
+        l_count - pre_count - l_count64 * 8, 
+        main_step], sel: use_memcpy);
+
+    // write aligned
+    // read 
+    // value1, value2, key = value 3
+    // (src64, dst64, pre_src_op, dst_offset)
+
+    // verify overlapping
+    // 
 }

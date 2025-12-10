@@ -51,6 +51,7 @@ pub enum OpType {
     Fcall,
     ArithEq384,
     BigInt,
+    Dma,
 }
 
 impl From<OpType> for ZiskOperationType {
@@ -67,6 +68,7 @@ impl From<OpType> for ZiskOperationType {
             OpType::Fcall => ZiskOperationType::Fcall,
             OpType::ArithEq384 => ZiskOperationType::ArithEq384,
             OpType::BigInt => ZiskOperationType::BigInt,
+            OpType::Dma => ZiskOperationType::Dma,
         }
     }
 }
@@ -87,6 +89,7 @@ impl Display for OpType {
             Self::Fcall => write!(f, "Fcall"),
             Self::ArithEq384 => write!(f, "Arith384"),
             Self::BigInt => write!(f, "BigInt"),
+            Self::Dma => write!(f, "Dma"),
         }
     }
 }
@@ -108,6 +111,7 @@ impl FromStr for OpType {
             "fcall" => Ok(Self::Fcall),
             "aeq384" => Ok(Self::ArithEq384),
             "bint" => Ok(Self::BigInt),
+            "dma" => Ok(Self::Dma),
             _ => Err(InvalidOpTypeError),
         }
     }
@@ -401,6 +405,8 @@ define_ops! {
     (Bls12_381ComplexAdd, "bls12_381_complex_add", ArithEq384, ARITH_EQ_384_COST, 0xe5, 208, 96, opc_bls12_381_complex_add, op_bls12_381_complex_add, ops_bls12_381_complex_add),
     (Bls12_381ComplexSub, "bls12_381_complex_sub", ArithEq384, ARITH_EQ_384_COST, 0xe6, 208, 96, opc_bls12_381_complex_sub, op_bls12_381_complex_sub, ops_bls12_381_complex_sub),
     (Bls12_381ComplexMul, "bls12_381_complex_mul", ArithEq384, ARITH_EQ_384_COST, 0xe7, 208, 96, opc_bls12_381_complex_mul, op_bls12_381_complex_mul, ops_bls12_381_complex_mul),
+    (DmaMemCmp, "dma_mem_cmp", Dma, 0, 0xee, 208, 96, opc_dma_memcmp, op_dma_memcmp, ops_dma_memcmp),
+    (DmaMemCpy, "dma_mem_cpy", Dma, 0, 0xef, 208, 96, opc_dma_memcpy, op_dma_memcpy, ops_dma_memcpy),
 }
 
 /* INTERNAL operations */
@@ -2261,4 +2267,70 @@ pub fn opc_halt(ctx: &mut InstContext) {
     ctx.error = true;
     ctx.c = 0;
     ctx.flag = false;
+}
+
+pub fn opc_dma_memcpy(ctx: &mut InstContext) {
+    const WORDS: usize = 4 + 1 + 2 * 4;
+    let mut data = [0u64; WORDS];
+
+    precompiled_load_data_with_result(ctx, 4, 2, 4, 0, &mut data, "add256");
+
+    if ctx.emulation_mode != EmulationMode::ConsumeMemReads {
+        // ignore 3 indirections
+        // 0 - addr_a
+        // 1 - addr_b
+        // 2 - cin
+        // 3 - addr_c
+        let cin = data[2];
+        let (params, rest) = data.split_at(4); // params(4)
+        let (a, rest) = rest.split_at(4);
+        let (b, _) = rest.split_at(4);
+
+        let a: &[u64; 4] = a.try_into().expect("opc_add256: a.len != 4");
+        let b: &[u64; 4] = b.try_into().expect("opc_add256: b.len != 4");
+        let mut c = [0u64; 4];
+        let cout = precompiles_helpers::add256(a, b, cin, &mut c);
+
+        let c_addr = params[3];
+        for (i, c_item) in c.iter().enumerate() {
+            ctx.mem.write(c_addr + (8 * i as u64), *c_item, 8);
+        }
+        if let EmulationMode::GenerateMemReads = ctx.emulation_mode {
+            ctx.precompiled.input_data[4 + 2 * 4] = cout;
+        }
+        ctx.c = cout;
+        ctx.flag = cout != 0;
+    } else {
+        assert!(data[4 + 2 * 4] <= 1, "opc_add256: cout > 1");
+        ctx.c = data[4 + 2 * 4];
+        ctx.flag = data[4 + 2 * 4] != 0;
+    }
+}
+
+/// Unimplemented.  Arith256 can only be called from the system call context via InstContext.
+/// This is provided just for completeness.
+#[inline(always)]
+pub fn op_dma_memcpy(_a: u64, _b: u64) -> (u64, bool) {
+    unimplemented!("op_dma_memcpy() is not implemented");
+}
+
+#[inline(always)]
+pub fn ops_dma_memcpy(ctx: &InstContext, stats: &mut dyn OpStats) {
+    unimplemented!("ops_dma_memcpy() is not implemented");
+}
+
+pub fn opc_dma_memcmp(ctx: &mut InstContext) {
+    unimplemented!("opc_dma_memcmp() is not implemented");
+}
+
+/// Unimplemented.  Arith256 can only be called from the system call context via InstContext.
+/// This is provided just for completeness.
+#[inline(always)]
+pub fn op_dma_memcmp(_a: u64, _b: u64) -> (u64, bool) {
+    unimplemented!("op_dma_memcmp() is not implemented");
+}
+
+#[inline(always)]
+pub fn ops_dma_memcmp(ctx: &InstContext, stats: &mut dyn OpStats) {
+    unimplemented!("ops_dma_memcmp() is not implemented");
 }

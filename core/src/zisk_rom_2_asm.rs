@@ -6629,6 +6629,12 @@ impl ZiskRom2Asm {
                 ctx.c.is_saved = true;
                 ctx.flag_is_always_zero = false;
             }
+            ZiskOp::DmaMemCpy => {
+                unimplemented!();
+            }
+            ZiskOp::DmaMemCmp => {
+                unimplemented!();
+            }
         }
     }
 

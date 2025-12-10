@@ -1,0 +1,27 @@
+require "std_lookup.pil"
+
+const int DMA_PRE_POST_TABLE_ID = 13000;
+const int DMA_PRE_POST_TABLE_SIZE = 280;
+
+airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
+    col fixed FLAGS;
+
+    int index = 0;
+    for (int count = 1; count < 8; ++ count) {
+        for (int src_offset = 0; src_offset < 8; ++src_offset) {
+            for (int dst_offset = 0; dst_offset < (9 - count); ++dst_offset) {
+                const int pre_mask = 0xFF >> (8 - count);
+                const int mask = pre_mask << (8 - (dst_offset + count));
+                assert(mask != 0);
+                assert(mask <= 0xFF);
+
+                const int enabled_second_read = (src_offset + count) > 8 ? 1:0;
+                FLAGS[index] = mask + src_offset * P2_8 + dst_offset * P2_11 + count * P2_14 + enabled_second_read * P2_17;
+                index += 1;
+            }
+        }
+    }
+
+    col witness multiplicity;
+    lookup_proves(DMA_PRE_POST_TABLE_ID, mul: multiplicity, expressions: [FLAGS]);
+}

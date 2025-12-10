@@ -6,30 +6,30 @@ use rayon::prelude::*;
 use pil_std_lib::Std;
 use proofman_common::{AirInstance, FromTrace};
 use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
-use zisk_pil::{Add256Trace, Add256TraceRow};
+use zisk_pil::{DmaTrace, DmaTraceRow};
 
-use super::Add256Input;
+use super::DmaInput;
 
-/// The `Add256SM` struct encapsulates the logic of the Add256 State Machine.
-pub struct Add256SM<F: PrimeField64> {
+/// The `DmaSM` struct encapsulates the logic of the DmaUnaligned State Machine.
+pub struct DmaSM<F: PrimeField64> {
     /// Reference to the PIL2 standard library.
     pub std: Arc<Std<F>>,
 
-    /// Number of available add256s in the trace.
+    /// Number of available dmaunaligneds in the trace.
     pub num_availables: usize,
 
     /// Range checks ID's
     range_id: usize,
 }
 
-impl<F: PrimeField64> Add256SM<F> {
-    /// Creates a new Add256 State Machine instance.
+impl<F: PrimeField64> DmaSM<F> {
+    /// Creates a new Dma State Machine instance.
     ///
     /// # Returns
-    /// A new `Add256SM` instance.
+    /// A new `DmaSM` instance.
     pub fn new(std: Arc<Std<F>>) -> Arc<Self> {
         // Compute some useful values
-        let num_availables = Add256Trace::<usize>::NUM_ROWS;
+        let num_availables = DmaTrace::<usize>::NUM_ROWS;
 
         let range_id = std.get_range_id(0, (1 << 16) - 1, None);
 
@@ -39,13 +39,13 @@ impl<F: PrimeField64> Add256SM<F> {
     /// Processes a slice of operation data, updating the trace.
     ///
     /// # Arguments
-    /// * `trace` - A mutable reference to the Add256 trace.
+    /// * `trace` - A mutable reference to the DmaUnaligned trace.
     /// * `input` - The operation data to process.
     #[inline(always)]
     pub fn process_slice(
         &self,
-        input: &Add256Input,
-        trace: &mut Add256TraceRow<F>,
+        input: &DmaInput,
+        trace: &mut DmaTraceRow<F>,
         multiplicities: &mut [u32],
     ) {
         trace.cin = F::from_bool(input.cin != 0);
@@ -103,10 +103,10 @@ impl<F: PrimeField64> Add256SM<F> {
     /// An `AirInstance` containing the computed witness data.
     pub fn compute_witness(
         &self,
-        inputs: &[Vec<Add256Input>],
+        inputs: &[Vec<DmaUnalignedInput>],
         trace_buffer: Vec<F>,
     ) -> AirInstance<F> {
-        let mut trace = Add256Trace::new_from_vec(trace_buffer);
+        let mut trace = DmaTrace::new_from_vec(trace_buffer);
 
         let num_rows = trace.num_rows();
 
@@ -114,15 +114,15 @@ impl<F: PrimeField64> Add256SM<F> {
         assert!(total_inputs <= num_rows);
 
         tracing::info!(
-            "··· Creating Add256 instance [{} / {} rows filled {:.2}%]",
+            "··· Creating DmaUnaligned instance [{} / {} rows filled {:.2}%]",
             total_inputs,
             num_rows,
             total_inputs as f64 / num_rows as f64 * 100.0
         );
 
-        timer_start_trace!(ADD256_TRACE);
+        timer_start_trace!(DMAUNALIGNED_TRACE);
 
-        // Split the add256_trace.buffer into slices matching each inner vector’s length.
+        // Split the dmaunaligned_trace.buffer into slices matching each inner vector’s length.
         let flat_inputs: Vec<_> = inputs.iter().flatten().collect();
         let trace_rows = trace.row_slice_mut();
 
@@ -158,11 +158,11 @@ impl<F: PrimeField64> Add256SM<F> {
         // Enviar el resultado final al std
         self.std.range_checks(self.range_id, global_multiplicities);
 
-        timer_stop_and_log_trace!(ADD256_TRACE);
+        timer_stop_and_log_trace!(DMAUNALIGNED_TRACE);
 
         trace.row_slice_mut()[total_inputs..num_rows]
             .par_iter_mut()
-            .for_each(|slot| *slot = Add256TraceRow::<F> { ..Default::default() });
+            .for_each(|slot| *slot = DmaUnalignedTraceRow::<F> { ..Default::default() });
 
         AirInstance::<F>::new_from_trace(FromTrace::new(&mut trace))
     }

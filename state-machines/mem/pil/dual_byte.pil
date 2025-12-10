@@ -11,3 +11,8 @@ airtemplate DualByte(int N = 2**16) {
 
     lookup_proves(DUAL_BYTE_TABLE_ID, mul: multiplicity, expressions: [BYTE_A, BYTE_B]);
 }
+
+function range_dual_byte(expr byte_a, expr byte_b, expr sel = 1) {
+    lookup_assumes(DUAL_BYTE_TABLE_ID, expressions: [byte_a, byte_b], sel: sel);
+}
+

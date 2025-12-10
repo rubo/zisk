@@ -1,8 +1,7 @@
-use crate::{DmaHelpers, DmaValues};
-use precompiles_common::MemBusHelpers;
+use crate::DmaHelpers;
 use std::collections::VecDeque;
+use zisk_common::BusId;
 use zisk_common::MemCollectorInfo;
-use zisk_common::{BusId, OPERATION_PRECOMPILED_BUS_DATA_SIZE};
 
 #[derive(Debug)]
 pub struct DmaMemInputConfig {
@@ -36,23 +35,23 @@ pub fn generate_dma_mem_inputs(
     dst: u64,
     src: u64,
     count: usize,
-    step_main: u64,
-    data: &[u64],
-    data_ext: &[u64],
-    only_counters: bool,
-    pending: &mut VecDeque<(BusId, Vec<u64>)>,
+    _step_main: u64,
+    _data: &[u64],
+    _data_ext: &[u64],
+    _only_counters: bool,
+    _pending: &mut VecDeque<(BusId, Vec<u64>)>,
 ) {
     let from_src = src & !0x07;
     let to_src = (src + count as u64 - 1) & MASK_ALIGNED_ADDR;
-    let count_src = (to_src - from_src) >> 3;
+    let _count_src = (to_src - from_src) >> 3;
 
     let first_dst_addr = dst & MASK_ALIGNED_ADDR;
-    let read_first_dst_addr = dst & 0x07 != 0;
+    let _read_first_dst_addr = dst & 0x07 != 0;
 
     let last_dst_addr = (dst + count as u64 - 1) & MASK_ALIGNED_ADDR;
-    let read_last_dst_addr = (dst + count as u64) & 0x07 != 0 && last_dst_addr > first_dst_addr;
+    let _read_last_dst_addr = (dst + count as u64) & 0x07 != 0 && last_dst_addr > first_dst_addr;
 
-    let dma = DmaHelpers::precalculate_dma_values(dst, src, count as usize);
+    let _dma = DmaHelpers::precalculate_dma_values(dst, src, count as usize);
 
     unimplemented!();
     /*

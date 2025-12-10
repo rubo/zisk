@@ -1,6 +1,6 @@
 //! Operations on the twist E': y² = x³ + 4·(1+u) of the BLS12-381 curve
 
-use crate::{fcall_msb_pos_384, zisklib::lib::utils::eq};
+use crate::zisklib::{eq, fcall_msb_pos_384};
 
 use super::{
     constants::{ETWISTED_B, EXT_U, EXT_U_INV, FROBENIUS_GAMMA13, FROBENIUS_GAMMA14, X_ABS_BIN_BE},
@@ -159,20 +159,30 @@ pub fn scalar_mul_twist_bls12_381(p: &[u64; 24], k: &[u64; 6]) -> [u64; 24] {
     // Perform the loop, based on the binary representation of k
 
     // We do the first iteration separately
-    let _max_limb = max_limb as usize;
-    let k_bit = (k[_max_limb] >> max_bit) & 1;
-    assert_eq!(k_bit, 1); // the first received bit should be 1
+    let max_limb = max_limb as usize;
+    let max_bit = max_bit as usize;
+
+    // The first received bit should be 1
+    assert_eq!((k[max_limb] >> max_bit) & 1, 1);
 
     // Start at P
     let mut q = *p;
     let mut k_rec = [0u64; 6];
-    k_rec[_max_limb] |= 1 << max_bit;
+    k_rec[max_limb] |= 1 << max_bit;
+
+    // Determine starting limb/bit for the loop
+    let mut limb = max_limb;
+    let mut bit = if max_bit == 0 {
+        // If max_bit is 0 then limb > 0; otherwise k = 1, which is excluded here
+        limb -= 1;
+        63
+    } else {
+        max_bit - 1
+    };
 
     // Perform the rest of the loop
-    let _max_bit = max_bit as usize;
-    for i in (0..=_max_limb).rev() {
-        let bit_len = if i == _max_limb { _max_bit - 1 } else { 63 };
-        for j in (0..=bit_len).rev() {
+    for i in (0..=limb).rev() {
+        for j in (0..=bit).rev() {
             // Always double
             q = dbl_twist_bls12_381(&q);
 
@@ -185,6 +195,7 @@ pub fn scalar_mul_twist_bls12_381(p: &[u64; 24], k: &[u64; 6]) -> [u64; 24] {
                 k_rec[i] |= 1 << j;
             }
         }
+        bit = 63;
     }
 
     // Check that the reconstructed k is equal to the input k

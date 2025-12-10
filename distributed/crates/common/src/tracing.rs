@@ -1,4 +1,5 @@
 use anyhow::Result;
+use proofman_common::set_global_rank;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 use tracing_subscriber::{
@@ -65,7 +66,10 @@ impl fmt::Display for LogFormat {
 /// buffered logs may be lost.
 ///
 /// Returns `Ok(None)` if only console logging is configured.
-pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard>> {
+pub fn init(
+    logging_config: Option<&LoggingConfig>,
+    rank: Option<i32>,
+) -> Result<Option<WorkerGuard>> {
     // Prioritize logging_config values over environment variables
     let log_level =
         logging_config.map(|config| config.level.clone()).unwrap_or_else(|| "info".to_string());
@@ -92,6 +96,10 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
         }
     }
 
+    if let Some(r) = rank {
+        set_global_rank(r);
+    }
+
     // Apply console logging with optional file logging
     if let Some(config) = logging_config {
         if let Some(file_path) = &config.file_path {
@@ -112,6 +120,7 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                                 .with_current_span(true)
                                 .with_thread_ids(true)
                                 .with_thread_names(true)
+                                .event_format(proofman_common::RankFormatter)
                                 .with_writer(std::io::stdout),
                         )
                         .with(
@@ -121,6 +130,7 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                                 .with_current_span(true)
                                 .with_thread_ids(true)
                                 .with_thread_names(true)
+                                .event_format(proofman_common::RankFormatter)
                                 .with_writer(non_blocking)
                                 .with_ansi(false),
                         )
@@ -135,6 +145,7 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                                 .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                                 .with_target(true)
                                 .with_thread_ids(true)
+                                .event_format(proofman_common::RankFormatter)
                                 .with_writer(std::io::stdout),
                         )
                         .with(
@@ -143,6 +154,7 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                                 .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                                 .with_target(true)
                                 .with_thread_ids(true)
+                                .event_format(proofman_common::RankFormatter)
                                 .with_writer(non_blocking)
                                 .with_ansi(false),
                         )
@@ -154,12 +166,14 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                         .with(
                             tracing_subscriber::fmt::layer()
                                 .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
+                                .event_format(proofman_common::RankFormatter)
                                 .with_writer(std::io::stdout),
                         )
                         .with(
                             tracing_subscriber::fmt::layer()
                                 .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                                 .with_writer(non_blocking)
+                                .event_format(proofman_common::RankFormatter)
                                 .with_ansi(false),
                         )
                         .with(env_filter)
@@ -179,6 +193,7 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                         .with_thread_ids(true)
                         .with_thread_names(true)
                         .with_env_filter(env_filter)
+                        .event_format(proofman_common::RankFormatter)
                         .init();
                 }
                 LogFormat::Compact => {
@@ -188,12 +203,14 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                         .with_target(true)
                         .with_thread_ids(true)
                         .with_env_filter(env_filter)
+                        .event_format(proofman_common::RankFormatter)
                         .init();
                 }
                 LogFormat::Pretty => {
                     tracing_subscriber::fmt()
                         .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                         .with_env_filter(env_filter)
+                        .event_format(proofman_common::RankFormatter)
                         .init();
                 }
             }
@@ -209,6 +226,7 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                     .with_thread_ids(true)
                     .with_thread_names(true)
                     .with_env_filter(env_filter)
+                    .event_format(proofman_common::RankFormatter)
                     .init();
             }
             LogFormat::Compact => {
@@ -218,12 +236,14 @@ pub fn init(logging_config: Option<&LoggingConfig>) -> Result<Option<WorkerGuard
                     .with_target(true)
                     .with_thread_ids(true)
                     .with_env_filter(env_filter)
+                    .event_format(proofman_common::RankFormatter)
                     .init();
             }
             LogFormat::Pretty => {
                 tracing_subscriber::fmt()
                     .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                     .with_env_filter(env_filter)
+                    .event_format(proofman_common::RankFormatter)
                     .init();
             }
         }

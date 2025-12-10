@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "18a904b2d072776febbdc26adef81d5df53c2eadc100d49e2fe1dc659ec6364a";
+pub const PILOUT_HASH: &str = "8fd1a573bca203f3459cd96b0a3b317861a7f8736958da14cc0c8f8314050ad2";
 
 //AIRGROUP CONSTANTS
 
@@ -113,7 +113,7 @@ values!(ZiskPublicValues<F> {
 });
  
 values!(ZiskProofValues<F> {
- enable_input_data: F,
+ enable_input_data: F, enable_rom_data: F,
 });
  
 trace_row!(DmaFixedRow<F> {
@@ -189,12 +189,12 @@ pub type MainTracePacked<F> = GenericTrace<MainTraceRowPacked<F>, 4194304, 0, 4>
 trace_row!(RomFixedRow<F> {
  __L1__: F,
 });
-pub type RomFixed<F> = GenericTrace<RomFixedRow<F>, 2097152, 0, 5>;
+pub type RomFixed<F> = GenericTrace<RomFixedRow<F>, 4194304, 0, 5>;
 
 trace_row!(RomTraceRow<F> {
  multiplicity:F,
 });
-pub type RomTrace<F> = GenericTrace<RomTraceRow<F>, 2097152, 0, 5>;
+pub type RomTrace<F> = GenericTrace<RomTraceRow<F>, 4194304, 0, 5>;
 
 
 trace_row!(MemFixedRow<F> {
@@ -315,7 +315,7 @@ trace_row!(BinaryFixedRow<F> {
 pub type BinaryFixed<F> = GenericTrace<BinaryFixedRow<F>, 4194304, 0, 14>;
 
 trace_row!(BinaryTraceRow<F> {
- m_op:ubit(5), mode32:bit, free_in_a:[u8; 8], free_in_b:[u8; 8], free_in_c:[u8; 8], carry:[bit; 8], use_last_carry:bit, op_is_min_max:bit, has_initial_carry:bit, cout:bit, result_is_a:bit, use_last_carry_mode32:bit, use_last_carry_mode64:bit, m_op_or_ext:ubit(5), free_in_a_or_c:[u8; 4], free_in_b_or_zero:[u8; 4], multiplicity:bit,
+ b_op:ubit(7), free_in_a:[u8; 8], free_in_b:[u8; 8], free_in_c:[u8; 8], carry:[bit; 8], mode32:bit, result_is_a:bit, use_first_byte:bit, c_is_signed:bit, b_op_or_sext:ubit(10), mode32_and_c_is_signed:bit,
 });
 pub type BinaryTrace<F> = GenericTrace<BinaryTraceRow<F>, 4194304, 0, 14>;
 
@@ -329,7 +329,7 @@ trace_row!(BinaryAddFixedRow<F> {
 pub type BinaryAddFixed<F> = GenericTrace<BinaryAddFixedRow<F>, 4194304, 0, 15>;
 
 trace_row!(BinaryAddTraceRow<F> {
- a:[u32; 2], b:[u32; 2], c_chunks:[u16; 4], cout:[bit; 2], multiplicity:bit,
+ a:[u32; 2], b:[u32; 2], c_chunks:[u16; 4], cout:[bit; 2],
 });
 pub type BinaryAddTrace<F> = GenericTrace<BinaryAddTraceRow<F>, 4194304, 0, 15>;
 
@@ -343,7 +343,7 @@ trace_row!(BinaryExtensionFixedRow<F> {
 pub type BinaryExtensionFixed<F> = GenericTrace<BinaryExtensionFixedRow<F>, 4194304, 0, 16>;
 
 trace_row!(BinaryExtensionTraceRow<F> {
- op:ubit(6), in1:[u8; 8], in2_low:u8, out:[[u32; 2]; 8], op_is_shift:bit, in2:[u32; 2], multiplicity:bit,
+ op:ubit(6), free_in_a:[u8; 8], free_in_b:u8, free_in_c:[[u32; 2]; 8], op_is_shift:bit, b:[u32; 2],
 });
 pub type BinaryExtensionTrace<F> = GenericTrace<BinaryExtensionTraceRow<F>, 4194304, 0, 16>;
 
@@ -422,42 +422,42 @@ pub type Sha256fTracePacked<F> = GenericTrace<Sha256fTraceRowPacked<F>, 262144, 
 
 
 trace_row!(SpecifiedRangesFixedRow<F> {
- RANGE: [F; 20], __L1__: F,
+ RANGE: [F; 35], __L1__: F,
 });
-pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 2097152, 0, 22>;
+pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 1048576, 0, 22>;
 
 trace_row!(SpecifiedRangesTraceRow<F> {
- mul:[F; 20],
+ mul:[F; 35],
 });
-pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 2097152, 0, 22>;
+pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048576, 0, 22>;
 
 
 trace_row!(VirtualTable0FixedRow<F> {
- UID: [F; 11], column: [F; 63], __L1__: F,
+ UID: [F; 17], column: [F; 91], __L1__: F,
 });
-pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 2097152, 0, 23>;
+pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 1048576, 0, 23>;
 
 trace_row!(VirtualTable0TraceRow<F> {
- multiplicity:[F; 11],
+ multiplicity:[F; 17],
 });
-pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 2097152, 0, 23>;
+pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 1048576, 0, 23>;
 
 
 trace_row!(VirtualTable1FixedRow<F> {
- UID: [F; 8], column: [F; 72], __L1__: F,
+ UID: [F; 16], column: [F; 144], __L1__: F,
 });
-pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 2097152, 0, 24>;
+pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 1048576, 0, 24>;
 
 trace_row!(VirtualTable1TraceRow<F> {
- multiplicity:[F; 8],
+ multiplicity:[F; 16],
 });
-pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 2097152, 0, 24>;
+pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 1048576, 0, 24>;
 
 
 trace_row!(RomRomTraceRow<F> {
  line: F, a_offset_imm0: F, a_imm1: F, b_offset_imm0: F, b_imm1: F, ind_width: F, op: F, store_offset: F, jmp_offset1: F, jmp_offset2: F, flags: F,
 });
-pub type RomRomTrace<F> = GenericTrace<RomRomTraceRow<F>, 2097152, 0, 5, 0>;
+pub type RomRomTrace<F> = GenericTrace<RomRomTraceRow<F>, 4194304, 0, 5, 0>;
 
 
 values!(Dma64AlignedAirValues<F> {
@@ -494,6 +494,18 @@ values!(MemAlignReadByteAirValues<F> {
 
 values!(MemAlignWriteByteAirValues<F> {
  padding_size: F, im_direct: [FieldExtension<F>; 3],
+});
+
+values!(BinaryAirValues<F> {
+ padding_size: F, im_direct: [FieldExtension<F>; 1],
+});
+
+values!(BinaryAddAirValues<F> {
+ padding_size: F, im_direct: [FieldExtension<F>; 1],
+});
+
+values!(BinaryExtensionAirValues<F> {
+ padding_size: F, im_direct: [FieldExtension<F>; 1],
 });
 
 values!(DmaAirGroupValues<F> {
@@ -664,18 +676,18 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
     }),
     (0, 14, PackedInfoConst {
         is_packed: true,
-        num_packed_words: 5,
-        unpack_info: &[5, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 8, 8, 8, 8, 8, 8, 8, 8, 1],
+        num_packed_words: 4,
+        unpack_info: &[7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 10, 1],
     }),
     (0, 15, PackedInfoConst {
         is_packed: true,
         num_packed_words: 4,
-        unpack_info: &[32, 32, 32, 32, 16, 16, 16, 16, 1, 1, 1],
+        unpack_info: &[32, 32, 32, 32, 16, 16, 16, 16, 1, 1],
     }),
     (0, 16, PackedInfoConst {
         is_packed: true,
         num_packed_words: 11,
-        unpack_info: &[6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 1, 32, 32, 1],
+        unpack_info: &[6, 8, 8, 8, 8, 8, 8, 8, 8, 8, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 1, 32, 32],
     }),
     (0, 17, PackedInfoConst {
         is_packed: true,

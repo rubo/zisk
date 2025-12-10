@@ -1,6 +1,4 @@
-use zisk_common::{
-    OperationDmaMemCmpData, OperationDmaMemCpyData, A, B, OPERATION_PRECOMPILED_BUS_DATA_SIZE, STEP,
-};
+use zisk_common::{OperationDmaMemCpyData, A, B, OPERATION_PRECOMPILED_BUS_DATA_SIZE, STEP};
 
 #[derive(Debug)]
 pub struct DmaMemCpyInput {

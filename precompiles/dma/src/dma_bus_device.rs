@@ -4,10 +4,7 @@
 
 use std::{collections::VecDeque, ops::Add};
 
-use zisk_common::{
-    BusDevice, BusDeviceMode, BusId, Counter, Metrics, B, OPERATION_BUS_DMA_MEMCMP_DATA_SIZE,
-    OPERATION_BUS_ID, OP_TYPE, STEP,
-};
+use zisk_common::{BusDevice, BusDeviceMode, BusId, Metrics, B, OPERATION_BUS_ID, OP_TYPE, STEP};
 use zisk_common::{MemCollectorInfo, A, OPERATION_PRECOMPILED_BUS_DATA_SIZE};
 use zisk_core::ZiskOperationType;
 

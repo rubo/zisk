@@ -14,6 +14,9 @@ use std::{
     ops::Range,
     path::PathBuf,
 };
+use tracing::error;
+
+use crate::{InputModeDto, InputSourceDto};
 
 /// Job ID wrapper for type safety
 #[derive(
@@ -55,21 +58,25 @@ impl From<JobId> for String {
 
 impl std::fmt::Display for JobId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "JobId({})", self.0)
+        if self.0.len() > 8 {
+            write!(f, "JobId({:.8}…)", self.0)
+        } else {
+            write!(f, "JobId({})", self.0)
+        }
     }
 }
 
-/// Block ID wrapper for type safety
+/// Data ID wrapper for type safety
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct BlockId(String);
+pub struct DataId(String);
 
-impl Default for BlockId {
+impl Default for DataId {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl BlockId {
+impl DataId {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
@@ -83,21 +90,25 @@ impl BlockId {
     }
 }
 
-impl From<String> for BlockId {
-    fn from(id: String) -> Self {
-        Self(id)
+impl From<String> for DataId {
+    fn from(data_id: String) -> Self {
+        Self(data_id)
     }
 }
 
-impl From<BlockId> for String {
-    fn from(block_id: BlockId) -> Self {
-        block_id.0
+impl From<DataId> for String {
+    fn from(data_id: DataId) -> Self {
+        data_id.0
     }
 }
 
-impl std::fmt::Display for BlockId {
+impl std::fmt::Display for DataId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BlockId({})", self.0)
+        if self.0.len() > 8 {
+            write!(f, "DataId({:.8}…)", self.0)
+        } else {
+            write!(f, "DataId({})", self.0)
+        }
     }
 }
 
@@ -139,7 +150,11 @@ impl From<WorkerId> for String {
 
 impl std::fmt::Display for WorkerId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WorkerId({})", self.0)
+        if self.0.len() > 8 {
+            write!(f, "WorkerId({:.8}…)", self.0)
+        } else {
+            write!(f, "WorkerId({})", self.0)
+        }
     }
 }
 
@@ -179,7 +194,7 @@ impl From<u32> for ComputeCapacity {
 
 impl std::fmt::Display for ComputeCapacity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} CU", self.compute_units)
+        write!(f, "{}CU", self.compute_units)
     }
 }
 
@@ -224,10 +239,11 @@ impl Debug for JobStats {
 #[derive(Debug, Clone)]
 pub struct Job {
     pub job_id: JobId,
-    pub start_time: DateTime<Utc>,
+    pub start_times: HashMap<JobPhase, DateTime<Utc>>,
     pub duration_ms: Option<u64>,
     pub state: JobState,
-    pub block: BlockContext,
+    pub data_id: DataId,
+    pub input_mode: InputModeDto,
     pub compute_capacity: ComputeCapacity,
     pub workers: Vec<WorkerId>,
     pub agg_worker_id: Option<WorkerId>,
@@ -242,8 +258,8 @@ pub struct Job {
 
 impl Job {
     pub fn new(
-        block_id: BlockId,
-        input_path: PathBuf,
+        data_id: DataId,
+        input_mode: InputModeDto,
         compute_capacity: ComputeCapacity,
         selected_workers: Vec<WorkerId>,
         partitions: Vec<Vec<u32>>,
@@ -251,10 +267,11 @@ impl Job {
     ) -> Self {
         Self {
             job_id: JobId::new(),
-            start_time: Utc::now(),
+            start_times: HashMap::new(),
             duration_ms: None,
             state: JobState::Created,
-            block: BlockContext { block_id, input_path },
+            data_id,
+            input_mode,
             compute_capacity,
             workers: selected_workers,
             agg_worker_id: None,
@@ -283,10 +300,21 @@ impl Job {
             self.add_start_time(new_phase.clone());
         }
 
-        if matches!(new_state, JobState::Completed | JobState::Failed) {
-            let end_time = Utc::now();
-            let duration = end_time.signed_duration_since(self.start_time);
-            self.duration_ms = Some(duration.num_milliseconds() as u64);
+        match new_state {
+            JobState::Running(phase) => {
+                let previous = self.start_times.insert(phase.clone(), Utc::now());
+                if previous.is_some() {
+                    error!("Start time for phase {:?} was already set", phase);
+                }
+            }
+            JobState::Completed | JobState::Failed => {
+                let end_time = Utc::now();
+                if let Some(start_time) = self.start_times.get(&JobPhase::Contributions) {
+                    let duration = end_time.signed_duration_since(*start_time);
+                    self.duration_ms = Some(duration.num_milliseconds() as u64);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -316,6 +344,7 @@ impl Job {
     }
 
     pub fn cleanup(&mut self) {
+        self.partitions.clear();
         self.results.clear();
         self.stats.clear();
         self.challenges = None;
@@ -359,12 +388,13 @@ pub enum JobResultData {
 pub struct JobResult {
     pub success: bool,
     pub data: JobResultData,
+    pub end_time: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
-pub struct BlockContext {
-    pub block_id: BlockId,
-    pub input_path: PathBuf,
+pub struct DataCtx {
+    pub data_id: DataId,
+    pub input_source: InputSourceDto,
 }
 
 #[repr(u8)]
@@ -410,6 +440,7 @@ pub struct AggregationParams {
     pub final_proof: bool,
     pub verify_constraints: bool,
     pub aggregation: bool,
+    pub rma: bool,
     pub final_snark: bool,
     pub verify_proofs: bool,
     pub save_proofs: bool,

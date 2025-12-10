@@ -6,7 +6,7 @@
 
 use crate::{DmaMemCpyInput, DmaSM};
 use fields::PrimeField64;
-use proofman_common::{AirInstance, ProofCtx, SetupCtx};
+use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
 use std::collections::VecDeque;
 use std::{any::Any, collections::HashMap, sync::Arc};
 use zisk_common::ChunkId;
@@ -76,13 +76,13 @@ impl<F: PrimeField64> Instance<F> for DmaInstance<F> {
         _sctx: &SetupCtx<F>,
         collectors: Vec<(usize, Box<dyn BusDevice<PayloadType>>)>,
         trace_buffer: Vec<F>,
-    ) -> Option<AirInstance<F>> {
+    ) -> ProofmanResult<Option<AirInstance<F>>> {
         let inputs: Vec<_> = collectors
             .into_iter()
             .map(|(_, collector)| collector.as_any().downcast::<DmaCollector>().unwrap().inputs)
             .collect();
 
-        Some(self.dma_sm.compute_witness(&inputs, trace_buffer))
+        Ok(Some(self.dma_sm.compute_witness(&inputs, trace_buffer)?))
     }
 
     /// Retrieves the checkpoint associated with this instance.

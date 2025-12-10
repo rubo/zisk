@@ -3,8 +3,8 @@ use std::sync::Arc;
 use fields::PrimeField64;
 
 use pil_std_lib::Std;
-use proofman_common::AirInstance;
-use proofman_util::{timer_start_trace, timer_stop_and_log_info, timer_stop_and_log_trace};
+use proofman_common::{AirInstance, ProofmanResult};
+use proofman_util::{timer_start_trace, timer_stop_and_log_info};
 
 use super::DmaMemCpyInput;
 /*
@@ -39,7 +39,7 @@ pub struct DmaSM<F: PrimeField64> {
     pub num_availables: usize,
 
     /// Range checks ID's
-    range_21_bits_id: usize,
+    _range_21_bits_id: usize,
 }
 
 impl<F: PrimeField64> DmaSM<F> {
@@ -51,9 +51,9 @@ impl<F: PrimeField64> DmaSM<F> {
         // Compute some useful values
         let num_availables = DmaTrace::<F>::NUM_ROWS;
 
-        let range_21_bits_id = std.get_range_id(0, (1 << 21) - 1, None);
+        let _range_21_bits_id = std.get_range_id(0, (1 << 21) - 1, None).unwrap();
 
-        Arc::new(Self { std, num_availables, range_21_bits_id })
+        Arc::new(Self { std, num_availables, _range_21_bits_id })
     }
 
     /// Processes a slice of operation data, updating the trace.
@@ -64,9 +64,9 @@ impl<F: PrimeField64> DmaSM<F> {
     #[inline(always)]
     pub fn process_slice(
         &self,
-        input: &DmaMemCpyInput,
-        trace: &mut DmaTraceRow<F>,
-        multiplicities: &mut [u32],
+        _input: &DmaMemCpyInput,
+        _trace: &mut DmaTraceRow<F>,
+        _multiplicities: &mut [u32],
     ) {
         unimplemented!();
     }
@@ -83,8 +83,8 @@ impl<F: PrimeField64> DmaSM<F> {
         &self,
         inputs: &[Vec<DmaMemCpyInput>],
         trace_buffer: Vec<F>,
-    ) -> AirInstance<F> {
-        let mut trace = DmaTrace::<F>::new_from_vec(trace_buffer);
+    ) -> ProofmanResult<AirInstance<F>> {
+        let trace = DmaTrace::<F>::new_from_vec(trace_buffer)?;
 
         let num_rows = trace.num_rows();
 

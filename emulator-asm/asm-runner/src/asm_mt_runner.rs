@@ -60,17 +60,6 @@ pub struct AsmRunnerMT {
     pub vec_chunks: Vec<EmuTrace>,
 }
 
-impl Drop for AsmRunnerMT {
-    fn drop(&mut self) {
-        for chunk in &mut self.vec_chunks {
-            // Ensure that the memory reads are not dropped when the chunk is dropped
-            // This is necessary because the memory reads are stored in a Vec<u64> which is
-            // allocated in the shared memory and we need to avoid double freeing it.
-            std::mem::forget(std::mem::take(&mut chunk.mem_reads));
-        }
-    }
-}
-
 impl AsmRunnerMT {
     pub fn new(vec_chunks: Vec<EmuTrace>) -> Self {
         Self { vec_chunks }
@@ -185,6 +174,11 @@ impl AsmRunnerMT {
                         break 0;
                     }
                     chunk_id.0 += 1;
+                }
+                Err(named_sem::Error::WaitFailed(e))
+                    if e.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    continue
                 }
                 Err(e) => {
                     error!("Semaphore '{}' error: {:?}", sem_chunk_done_name, e);

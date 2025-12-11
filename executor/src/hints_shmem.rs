@@ -4,21 +4,35 @@
 //! using SharedMemoryWriter instances.
 
 use anyhow::Result;
-use asm_runner::{AsmMTHeader, AsmServices, AsmSharedMemory, SharedMemoryWriter};
+use asm_runner::{AsmMTHeader, AsmService, AsmServices, AsmSharedMemory, SharedMemoryWriter};
+use named_sem::NamedSemaphore;
 use std::sync::Mutex;
 use tracing::{debug, warn};
 use zisk_hints::HintsSink;
+
+enum NameType {
+    Control,
+    Data,
+    SemAvail,
+    SemRead,
+}
 
 /// HintsShmem struct manages the writing of processed precompile hints to shared memory.
 pub struct HintsShmem {
     /// Names of the shared memories to write hints to. 0 for control, 1 for data
     shmem_names: Vec<(String, String)>,
 
+    /// Names of the semaphores for synchronization. 0 for available, 1 for read
+    sem_names: Vec<(String, String)>,
+
     /// Whether to unlock mapped memory after writing.
     unlock_mapped_memory: bool,
 
     /// Shared memory writers for writing processed hints. 0 for control, 1 for data
     shmem_writers: Mutex<Vec<(SharedMemoryWriter, SharedMemoryWriter)>>,
+
+    /// Control semaphores for synchronization. 0 for available, 1 for read
+    sem_control: Mutex<Vec<(NamedSemaphore, NamedSemaphore)>>,
 }
 
 impl HintsShmem {
@@ -28,60 +42,73 @@ impl HintsShmem {
     /// Create a new HintsShmem with the given shared memory names and unlock option.
     ///
     /// # Arguments
-    /// * `shmem_control_names` - A vector of shared memory control names to write hints to.
-    /// * `shmem_names` - A vector of shared memory names to write hints to.
+    /// * `base_port` - Optional base port for generating shared memory names.
+    /// * `local_rank` - Local rank for generating shared memory names.
     /// * `unlock_mapped_memory` - Whether to unlock mapped memory after writing.
     ///
     /// # Returns
     /// A new `HintsShmem` instance with uninitialized writers.
-    pub fn new(
-        base_port: Option<u16>,
-        local_rank: i32,
-        unlock_mapped_memory: bool,
-    ) -> Self {
+    pub fn new(base_port: Option<u16>, local_rank: i32, unlock_mapped_memory: bool) -> Self {
         // Generate shared memory names for hints pipeline.
-        let hints_shmem_names = AsmServices::SERVICES
+        let shmem_names = AsmServices::SERVICES
             .iter()
             .map(|service| {
-                AsmSharedMemory::<AsmMTHeader>::shmem_precompile_name(
-                    if let Some(base_port) = base_port {
-                        AsmServices::port_for(service, base_port, local_rank)
-                    } else {
-                        AsmServices::default_port(service, local_rank)
-                    },
-                    *service,
-                    local_rank,
-                )
+                let port = if let Some(base_port) = base_port {
+                    AsmServices::port_for(service, base_port, local_rank)
+                } else {
+                    AsmServices::default_port(service, local_rank)
+                };
+                let control_name =
+                    Self::resource_name(service, port, local_rank, NameType::Control);
+                let data = Self::resource_name(service, port, local_rank, NameType::Data);
+                (control_name, data)
             })
             .collect::<Vec<_>>();
 
-        // Generate shared memory control names for hints pipeline.
-        let hints_shmem_control_names = AsmServices::SERVICES
+        // Generate semaphore names for hints pipeline.
+        let sem_names = AsmServices::SERVICES
             .iter()
             .map(|service| {
-                AsmSharedMemory::<AsmMTHeader>::shmem_control_name(
-                    if let Some(base_port) = base_port {
-                        AsmServices::port_for(service, base_port, local_rank)
-                    } else {
-                        AsmServices::default_port(service, local_rank)
-                    },
-                    *service,
-                    local_rank,
-                )
+                let port = if let Some(base_port) = base_port {
+                    AsmServices::port_for(service, base_port, local_rank)
+                } else {
+                    AsmServices::default_port(service, local_rank)
+                };
+                let sem_avail = Self::resource_name(service, port, local_rank, NameType::SemAvail);
+                let sem_read = Self::resource_name(service, port, local_rank, NameType::SemRead);
+                (sem_avail, sem_read)
             })
             .collect::<Vec<_>>();
 
-        assert_eq!(
-            hints_shmem_control_names.len(),
-            hints_shmem_names.len(),
-            "Shared memory names and control names must have the same length"
-        );
+        Self {
+            shmem_names,
+            sem_names,
+            unlock_mapped_memory,
+            shmem_writers: Mutex::new(Vec::new()),
+            sem_control: Mutex::new(Vec::new()),
+        }
+    }
 
-        // Map names to tuples
-        let shmem_names: Vec<(String, String)> =
-            hints_shmem_control_names.into_iter().zip(hints_shmem_names.into_iter()).collect();
-
-        Self { shmem_names, unlock_mapped_memory, shmem_writers: Mutex::new(Vec::new()) }
+    fn resource_name(
+        service: &AsmService,
+        port: u16,
+        local_rank: i32,
+        name_type: NameType,
+    ) -> String {
+        match name_type {
+            NameType::Control => {
+                AsmSharedMemory::<AsmMTHeader>::shmem_control_name(port, *service, local_rank)
+            }
+            NameType::Data => {
+                AsmSharedMemory::<AsmMTHeader>::shmem_precompile_name(port, *service, local_rank)
+            }
+            NameType::SemAvail => AsmSharedMemory::<AsmMTHeader>::shmem_semaphore_available_name(
+                port, *service, local_rank,
+            ),
+            NameType::SemRead => AsmSharedMemory::<AsmMTHeader>::shmem_semaphore_read_name(
+                port, *service, local_rank,
+            ),
+        }
     }
 
     /// Add a shared memory name to the pipeline.

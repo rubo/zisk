@@ -111,41 +111,6 @@ impl HintsShmem {
         }
     }
 
-    /// Add a shared memory name to the pipeline.
-    ///
-    /// This method must be called before initialization.
-    ///
-    /// # Arguments
-    /// * `control_name` - The name of the control shared memory to add.
-    /// * `name` - The name of the shared memory to add.
-    ///
-    /// # Returns
-    /// * `Ok(())` - If the name was successfully added or already exists
-    /// * `Err` - If writers have already been initialized
-    pub fn add_shmem_name(&mut self, control_name: String, name: String) -> Result<()> {
-        // Check if the writers have already been initialized
-        let shmem_writers = self.shmem_writers.lock().unwrap();
-        if !shmem_writers.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Cannot add shared memory name '{}' after initialization",
-                name
-            ));
-        }
-
-        // Check if the name already exists
-        if self.shmem_names.contains(&(control_name.clone(), name.clone())) {
-            warn!(
-                "Shared memory name '{}' already exists in the pipeline. Skipping addition.",
-                name
-            );
-            return Ok(());
-        }
-
-        self.shmem_names.push((control_name, name));
-
-        Ok(())
-    }
-
     /// Check if the shared memory writers have been initialized.
     fn is_initialized(&self) -> bool {
         let shmem_writers = self.shmem_writers.lock().unwrap();

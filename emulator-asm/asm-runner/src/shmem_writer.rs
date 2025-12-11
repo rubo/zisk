@@ -112,6 +112,24 @@ impl SharedMemoryWriter {
 
         Ok(())
     }
+
+    /// Reads a u64 from shared memory at a specific offset (in bytes)
+    ///
+    /// # Arguments
+    /// * `offset` - Byte offset from the start of shared memory (must be 8-byte aligned)
+    ///
+    /// # Safety
+    /// This method assumes that:
+    /// - The shared memory contains at least `offset + 8` bytes of valid data
+    /// - The offset should be aligned to 8 bytes
+    ///
+    /// # Returns
+    /// * The u64 value read from the specified offset (in native endianness)
+    #[inline]
+    pub fn read_u64_at(&self, offset: usize) -> u64 {
+        debug_assert_eq!(offset % 8, 0, "Offset must be 8-byte aligned");
+        unsafe { (self.ptr.add(offset) as *const u64).read() }
+    }
 }
 
 impl Drop for SharedMemoryWriter {

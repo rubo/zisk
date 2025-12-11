@@ -44,6 +44,9 @@ sm-binary = { workspace = true }
 sm-mem = { workspace = true }
 sm-frequent-ops = { workspace = true }
 
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+named-sem = { workspace = true }
+
 [features]
 default = []
 disable_distributed = ["proofman/disable_distributed", "proofman-common/disable_distributed"]

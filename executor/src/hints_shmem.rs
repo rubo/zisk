@@ -7,7 +7,7 @@ use anyhow::Result;
 use asm_runner::{AsmMTHeader, AsmService, AsmServices, AsmSharedMemory, SharedMemoryWriter};
 use named_sem::NamedSemaphore;
 use std::sync::Mutex;
-use tracing::{debug, warn};
+use tracing::debug;
 use zisk_hints::HintsSink;
 
 enum NameType {
@@ -34,6 +34,9 @@ pub struct HintsShmem {
     /// Control semaphores for synchronization. 0 for available, 1 for read
     sem_control: Mutex<Vec<(NamedSemaphore, NamedSemaphore)>>,
 }
+
+unsafe impl Send for HintsShmem {}
+unsafe impl Sync for HintsShmem {}
 
 impl HintsShmem {
     const CONTROL_PRECOMPILE_SIZE: u64 = 0x1000; // 4KB
@@ -121,35 +124,74 @@ impl HintsShmem {
     ///
     /// This method creates SharedMemoryWriter instances for each shared memory name.
     /// If writers are already initialized it logs a warning and does nothing.
-    fn initialize(&self) {
+    fn initialize(&self) -> Result<()> {
         let mut shmem_writer = self.shmem_writers.lock().unwrap();
+        let mut sem_control = self.sem_control.lock().unwrap();
 
+        // Initialize shared memory writers
         if !shmem_writer.is_empty() {
-            warn!("SharedMemoryWriters for precompile hints is already initialized. Skipping");
-        } else {
-            debug!("Initializing SharedMemoryWriter for precompile hints",);
-
-            *shmem_writer = self
-                .shmem_names
-                .iter()
-                .map(|(control_name, name)| {
-                    (
-                        SharedMemoryWriter::new(
-                            &control_name,
-                            Self::CONTROL_PRECOMPILE_SIZE as usize,
-                            self.unlock_mapped_memory,
-                        )
-                        .expect("Failed to create SharedMemoryWriter for precompile hints"),
-                        SharedMemoryWriter::new(
-                            &name,
-                            Self::MAX_PRECOMPILE_SIZE as usize,
-                            self.unlock_mapped_memory,
-                        )
-                        .expect("Failed to create SharedMemoryWriter for precompile hints"),
-                    )
-                })
-                .collect();
+            return Err(anyhow::anyhow!(
+                "SharedMemoryWriters for precompile hints already initialized."
+            ));
         }
+
+        debug!("Initializing SharedMemoryWriter for precompile hints",);
+        *shmem_writer = self
+            .shmem_names
+            .iter()
+            .map(|(control_name, name)| {
+                (
+                    Self::create_writer(
+                        control_name,
+                        Self::CONTROL_PRECOMPILE_SIZE as usize,
+                        self.unlock_mapped_memory,
+                    ),
+                    Self::create_writer(
+                        name,
+                        Self::MAX_PRECOMPILE_SIZE as usize,
+                        self.unlock_mapped_memory,
+                    ),
+                )
+            })
+            .collect();
+
+        // Initialize semaphores
+        if !sem_control.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Control semaphores for precompile hints already initialized."
+            ));
+        }
+
+        debug!("Initializing control semaphores for precompile hints",);
+        *sem_control = self
+            .sem_names
+            .iter()
+            .map(|(sem_avail_name, sem_read_name)| {
+                (Self::create_semaphore(sem_avail_name), Self::create_semaphore(sem_read_name))
+            })
+            .collect();
+
+        Ok(())
+    }
+
+    /// Create a SharedMemoryWriter with error handling.
+    fn create_writer(name: &str, size: usize, unlock_mapped_memory: bool) -> SharedMemoryWriter {
+        SharedMemoryWriter::new(name, size, unlock_mapped_memory)
+            .expect("Failed to create SharedMemoryWriter for precompile hints")
+    }
+
+    /// Create a NamedSemaphore with error handling.
+    fn create_semaphore(name: &str) -> NamedSemaphore {
+        NamedSemaphore::create(name.to_string(), 0)
+            .expect("Failed to create semaphore for precompile hints")
+    }
+
+    fn write_size(&self, writer: &SharedMemoryWriter) -> u64 {
+        writer.read_u64_at(0)
+    }
+
+    fn read_size(&self, writer: &SharedMemoryWriter) -> u64 {
+        writer.read_u64_at(8)
     }
 }
 
@@ -165,7 +207,7 @@ impl HintsSink for HintsShmem {
     fn submit(&self, processed: Vec<u64>) -> anyhow::Result<()> {
         // TODO! Is it necessary????
         if !self.is_initialized() {
-            self.initialize();
+            self.initialize()?;
         }
 
         // Input size includes length prefix as u64

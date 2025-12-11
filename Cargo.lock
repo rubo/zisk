@@ -1342,6 +1342,7 @@ dependencies = [
  "itertools 0.14.0",
  "mem-common",
  "mem-planner-cpp",
+ "named-sem",
  "pil-std-lib",
  "precomp-arith-eq",
  "precomp-arith-eq-384",

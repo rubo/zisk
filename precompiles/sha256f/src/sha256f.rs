@@ -310,7 +310,7 @@ impl<F: PrimeField64> Sha256fSM<F> {
         }
 
         fn rotate_right(x: u32, n: u32) -> u32 {
-            (x >> n) | (x << (32 - n))
+            x.rotate_right(n)
         }
 
         fn shift_right(x: u32, n: u32) -> u32 {

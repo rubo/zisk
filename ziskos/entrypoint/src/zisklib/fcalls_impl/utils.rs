@@ -11,15 +11,8 @@ pub fn u64_digits_from_biguint(value: &BigUint) -> Vec<u64> {
 
 pub fn n_u64_digits_from_biguint<const N: usize>(value: &BigUint) -> [u64; N] {
     let digits = value.to_u64_digits();
-    #[cfg(debug_assertions)]
-    {
-        assert!(
-            digits.len() <= N,
-            "four_u64_digits_from_biguint: value requires {} limbs > {}",
-            digits.len(),
-            N
-        );
-    }
+    assert!(digits.len() <= N, "Value requires {} limbs > {}", digits.len(), N);
+
     let mut limbs = [0u64; N];
     for (i, d) in digits.iter().enumerate().take(N) {
         limbs[i] = *d;

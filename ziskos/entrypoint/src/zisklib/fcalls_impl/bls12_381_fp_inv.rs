@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
+use num_traits::Zero;
 
 use super::utils::{biguint_from_u64_digits, n_u64_digits_from_biguint};
 
@@ -46,12 +47,15 @@ pub(crate) fn bls12_381_fp_add(a: &[u64; 6], b: &[u64; 6]) -> [u64; 6] {
 
 pub(crate) fn bls12_381_fp_dbl(a: &[u64; 6]) -> [u64; 6] {
     let a_big = biguint_from_u64_digits(a);
-    let double = (a_big.clone() + a_big) % &*P;
+    let double = (a_big << 1) % &*P;
     n_u64_digits_from_biguint::<6>(&double)
 }
 
 pub(crate) fn bls12_381_fp_neg(a: &[u64; 6]) -> [u64; 6] {
     let a_big = biguint_from_u64_digits(a);
+    if a_big.is_zero() {
+        return [0u64; 6];
+    }
     let neg = &*P - a_big;
     n_u64_digits_from_biguint::<6>(&neg)
 }
@@ -59,7 +63,7 @@ pub(crate) fn bls12_381_fp_neg(a: &[u64; 6]) -> [u64; 6] {
 pub(crate) fn bls12_381_fp_sub(a: &[u64; 6], b: &[u64; 6]) -> [u64; 6] {
     let a_big = biguint_from_u64_digits(a);
     let b_big = biguint_from_u64_digits(b);
-    let diff = if a_big >= b_big { (a_big - b_big) % &*P } else { ((a_big + &*P) - b_big) % &*P };
+    let diff = if a_big >= b_big { a_big - b_big } else { (a_big + &*P) - b_big };
     n_u64_digits_from_biguint::<6>(&diff)
 }
 
@@ -72,7 +76,7 @@ pub(crate) fn bls12_381_fp_mul(a: &[u64; 6], b: &[u64; 6]) -> [u64; 6] {
 
 pub(crate) fn bls12_381_fp_square(a: &[u64; 6]) -> [u64; 6] {
     let a_big = biguint_from_u64_digits(a);
-    let square = (a_big.clone() * a_big) % &*P;
+    let square = (&a_big * &a_big) % &*P;
     n_u64_digits_from_biguint::<6>(&square)
 }
 

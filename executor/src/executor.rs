@@ -271,7 +271,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
             panic!("Expected EmuTrace, got something else");
         };
 
-        self.execution_result.lock().unwrap().executed_steps = steps;
+        self.execution_result.lock().unwrap().steps = steps;
 
         min_traces
     }
@@ -407,7 +407,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
             panic!("Expected AsmEmuTrace, got something else");
         };
 
-        self.execution_result.lock().unwrap().executed_steps = steps;
+        self.execution_result.lock().unwrap().steps = steps;
 
         // If the world rank is 0, wait for the ROM Histogram thread to finish and set the handler
         if has_rom_sm {

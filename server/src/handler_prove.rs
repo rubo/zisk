@@ -105,11 +105,7 @@ impl ZiskServiceProveHandler {
                         tracing::info!("      Proof ID: {}", proof_id);
                     }
                     tracing::info!("    ► Statistics");
-                    tracing::info!(
-                        "      time: {} seconds, steps: {}",
-                        elapsed,
-                        result.executed_steps
-                    );
+                    tracing::info!("      time: {} seconds, steps: {}", elapsed, result.steps);
 
                     // Store the stats in stats.json
                     #[cfg(feature = "stats")]
@@ -120,7 +116,7 @@ impl ZiskServiceProveHandler {
                     }
 
                     if let Some(proof_id) = proof_id {
-                        let logs = ProofLog::new(result.executed_steps, proof_id, elapsed);
+                        let logs = ProofLog::new(result.steps, proof_id, elapsed);
                         let log_path =
                             request.folder.join(format!("{}-result.json", request.prefix));
                         println!("Writing proof log to: {}", log_path.display());

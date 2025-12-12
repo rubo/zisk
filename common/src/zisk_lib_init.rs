@@ -13,7 +13,7 @@ use anyhow::Result;
 
 #[derive(Debug, Default, Clone)]
 pub struct ZiskExecutionResult {
-    pub executed_steps: u64,
+    pub steps: u64,
 }
 
 #[derive(Debug, Clone)]

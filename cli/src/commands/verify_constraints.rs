@@ -94,7 +94,7 @@ impl ZiskVerifyConstraints {
         tracing::info!(
             "      time: {:.2} seconds, steps: {}",
             result.duration.as_secs_f32(),
-            result.execution.executed_steps
+            result.execution.steps
         );
 
         Ok(())

@@ -98,7 +98,7 @@ impl ProverEngine for AsmProver {
             .backend
             .witness_lib
             .execution_result()
-            .map(|(exec_result, _)| exec_result.executed_steps)
+            .map(|(exec_result, _)| exec_result.steps)
             .unwrap_or(0)
     }
 

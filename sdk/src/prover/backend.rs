@@ -205,8 +205,7 @@ impl ProverBackend {
                 std::fs::create_dir_all(output_dir)?;
             }
 
-            let logs =
-                ProofLog::new(execution_result.executed_steps, proof_id, elapsed.as_secs_f64());
+            let logs = ProofLog::new(execution_result.steps, proof_id, elapsed.as_secs_f64());
             let log_path = output_dir.join("result.json");
             ProofLog::write_json_log(&log_path, &logs)
                 .map_err(|e| anyhow::anyhow!("Error generating log: {}", e))?;

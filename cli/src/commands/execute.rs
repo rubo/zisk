@@ -106,10 +106,7 @@ impl ZiskExecute {
         let result =
             if emulator { self.run_emu(stdin)? } else { self.run_asm(stdin, Some(hints_stream))? };
 
-        info!(
-            "Execution completed in {:.2?}, steps: {}",
-            result.duration, result.execution.executed_steps
-        );
+        info!("Execution completed in {:.2?}, steps: {}", result.duration, result.execution.steps);
 
         Ok(())
     }

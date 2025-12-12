@@ -143,11 +143,7 @@ impl ZiskProve {
                 tracing::info!("      Proof ID: {}", proof_id);
             }
             tracing::info!("    ► Statistics");
-            tracing::info!(
-                "      time: {} seconds, steps: {}",
-                elapsed,
-                result.execution.executed_steps
-            );
+            tracing::info!("      time: {} seconds, steps: {}", elapsed, result.execution.steps);
         }
 
         Ok(())

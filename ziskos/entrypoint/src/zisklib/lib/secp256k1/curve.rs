@@ -14,20 +14,12 @@ use super::{
     scalar::{secp256k1_fn_inv, secp256k1_fn_mul, secp256k1_fn_reduce},
 };
 
-/// Converts a point `p` on the Secp256k1 curve from projective coordinates to affine coordinates
-pub fn secp256k1_to_affine(p: &[u64; 12]) -> Option<[u64; 8]> {
+/// Converts a non-zero point `p` on the Secp256k1 curve from projective coordinates to affine coordinates
+pub fn secp256k1_to_affine(p: &[u64; 12]) -> [u64; 8] {
     let z: [u64; 4] = p[8..12].try_into().unwrap();
 
-    // Check if p is the point at infinity
-    if z == [0u64; 4] {
-        // Point at infinity cannot be converted to affine
-        return None;
-    }
-
-    // Check if p is already in affine coordinates
-    if z == [1u64, 0, 0, 0] {
-        return Some([p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]]);
-    }
+    // Point at infinity cannot be converted to affine
+    debug_assert!(z != [0u64; 4], "Cannot convert point at infinity to affine");
 
     let zinv = secp256k1_fp_inv(&z);
     let zinv_sq = secp256k1_fp_square(&zinv);
@@ -39,7 +31,7 @@ pub fn secp256k1_to_affine(p: &[u64; 12]) -> Option<[u64; 8]> {
     let mut y_res = secp256k1_fp_mul(&y, &zinv_sq);
     y_res = secp256k1_fp_mul(&y_res, &zinv);
 
-    Some([x_res[0], x_res[1], x_res[2], x_res[3], y_res[0], y_res[1], y_res[2], y_res[3]])
+    [x_res[0], x_res[1], x_res[2], x_res[3], y_res[0], y_res[1], y_res[2], y_res[3]]
 }
 
 /// Checks if two points `p1` and `p2` on the Secp256k1 curve in projective coordinates are equal
@@ -316,4 +308,116 @@ pub fn secp256k1_ecdsa_verify(
     }
 
     eq(&secp256k1_fn_reduce(&res.x), r)
+}
+
+/// # Safety
+/// - `p_ptr` must point to 12 u64s (projective point: x[4], y[4], z[4])
+/// - `out_ptr` must point to at least 8 u64s (will write affine x[4], y[4])
+///
+/// Returns 1 on success, 0 if point is at infinity
+#[no_mangle]
+pub unsafe extern "C" fn secp256k1_to_affine_c(p_ptr: *const u64, out_ptr: *mut u64) {
+    let p: &[u64; 12] = &*(p_ptr as *const [u64; 12]);
+    let result = secp256k1_to_affine(p);
+
+    *out_ptr.add(0) = result[0];
+    *out_ptr.add(1) = result[1];
+    *out_ptr.add(2) = result[2];
+    *out_ptr.add(3) = result[3];
+    *out_ptr.add(4) = result[4];
+    *out_ptr.add(5) = result[5];
+    *out_ptr.add(6) = result[6];
+    *out_ptr.add(7) = result[7];
+}
+
+/// # Safety
+/// - `x_bytes_ptr` must point to 32 bytes (big-endian x-coordinate)
+/// - `out_ptr` must point to at least 8 u64s (will write x[4] and y[4] in little-endian)
+///
+/// Returns 1 on success, 0 if no valid point exists
+#[no_mangle]
+pub unsafe extern "C" fn secp256k1_decompress_c(
+    x_bytes_ptr: *const u8,
+    y_is_odd: u8,
+    out_ptr: *mut u64,
+) -> u8 {
+    let x_bytes: &[u8; 32] = &*(x_bytes_ptr as *const [u8; 32]);
+
+    let ((x, y), success) = secp256k1_decompress(x_bytes, y_is_odd != 0);
+
+    if !success {
+        return 0;
+    }
+
+    *out_ptr.add(0) = x[0];
+    *out_ptr.add(1) = x[1];
+    *out_ptr.add(2) = x[2];
+    *out_ptr.add(3) = x[3];
+    *out_ptr.add(4) = y[0];
+    *out_ptr.add(5) = y[1];
+    *out_ptr.add(6) = y[2];
+    *out_ptr.add(7) = y[3];
+
+    1
+}
+
+/// # Safety
+/// - `k1_ptr` must point to 4 u64s (scalar k1)
+/// - `k2_ptr` must point to 4 u64s (scalar k2)
+/// - `p_ptr` must point to 8 u64s (point P: x[4], y[4])
+/// - `out_ptr` must point to at least 8 u64s (will write result x[4], y[4])
+///
+/// Returns 1 if result is point at infinity, 0 otherwise
+#[no_mangle]
+pub unsafe extern "C" fn secp256k1_double_scalar_mul_with_g_c(
+    k1_ptr: *const u64,
+    k2_ptr: *const u64,
+    p_ptr: *const u64,
+    out_ptr: *mut u64,
+) -> bool {
+    let k1: &[u64; 4] = &*(k1_ptr as *const [u64; 4]);
+    let k2: &[u64; 4] = &*(k2_ptr as *const [u64; 4]);
+
+    let p = SyscallPoint256 {
+        x: [*p_ptr.add(0), *p_ptr.add(1), *p_ptr.add(2), *p_ptr.add(3)],
+        y: [*p_ptr.add(4), *p_ptr.add(5), *p_ptr.add(6), *p_ptr.add(7)],
+    };
+
+    let (is_infinity, res) = secp256k1_double_scalar_mul_with_g(k1, k2, &p);
+
+    *out_ptr.add(0) = res.x[0];
+    *out_ptr.add(1) = res.x[1];
+    *out_ptr.add(2) = res.x[2];
+    *out_ptr.add(3) = res.x[3];
+    *out_ptr.add(4) = res.y[0];
+    *out_ptr.add(5) = res.y[1];
+    *out_ptr.add(6) = res.y[2];
+    *out_ptr.add(7) = res.y[3];
+
+    is_infinity
+}
+
+/// # Safety
+/// - `pk_ptr` must point to 8 u64s (public key: x[4], y[4])
+/// - `z_ptr` must point to 4 u64s (message hash)
+/// - `r_ptr` must point to 4 u64s (signature r)
+/// - `s_ptr` must point to 4 u64s (signature s)
+///
+/// Returns 1 if signature is valid, 0 otherwise
+#[no_mangle]
+pub unsafe extern "C" fn secp256k1_ecdsa_verify_c(
+    pk_ptr: *const u64,
+    z_ptr: *const u64,
+    r_ptr: *const u64,
+    s_ptr: *const u64,
+) -> bool {
+    let pk = SyscallPoint256 {
+        x: [*pk_ptr.add(0), *pk_ptr.add(1), *pk_ptr.add(2), *pk_ptr.add(3)],
+        y: [*pk_ptr.add(4), *pk_ptr.add(5), *pk_ptr.add(6), *pk_ptr.add(7)],
+    };
+    let z: &[u64; 4] = &*(z_ptr as *const [u64; 4]);
+    let r: &[u64; 4] = &*(r_ptr as *const [u64; 4]);
+    let s: &[u64; 4] = &*(s_ptr as *const [u64; 4]);
+
+    secp256k1_ecdsa_verify(&pk, z, r, s)
 }

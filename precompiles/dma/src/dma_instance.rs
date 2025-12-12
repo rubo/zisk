@@ -151,7 +151,7 @@ impl DmaCollector {
     }
 }
 
-impl BusDevice<PayloadType> for DmaCollector {
+impl BusDevice<u64> for DmaCollector {
     /// Processes data received on the bus, collecting the inputs necessary for witness computation.
     ///
     /// # Arguments
@@ -167,8 +167,9 @@ impl BusDevice<PayloadType> for DmaCollector {
     fn process_data(
         &mut self,
         bus_id: &BusId,
-        data: &[PayloadType],
-        _pending: &mut VecDeque<(BusId, Vec<PayloadType>)>,
+        data: &[u64],
+        _data_ext: &[u64],
+        _pending: &mut VecDeque<(BusId, Vec<u64>, Vec<u64>)>,
         _mem_collector_info: Option<&[MemCollectorInfo]>,
     ) -> bool {
         debug_assert!(*bus_id == OPERATION_BUS_ID);

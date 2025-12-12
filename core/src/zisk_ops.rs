@@ -388,6 +388,8 @@ define_ops! {
     (RemuW, "remu_w", ArithA32, ARITHA32_COST, 0xbd, 0, 0, opc_remu_w, op_remu_w, ops_none),
     (DivW, "div_w", ArithA32, ARITHA32_COST, 0xbe, 0, 0, opc_div_w, op_div_w, ops_none),
     (RemW, "rem_w", ArithA32, ARITHA32_COST, 0xbf, 0, 0, opc_rem_w, op_rem_w, ops_none),
+    (DmaMemCpy, "dma_memcpy", Dma, 0, 0xd0, 208, 96, opc_dma_memcpy, op_dma_memcpy, ops_dma_memcpy),
+    (DmaMemCmp, "dma_memcmp", Dma, 0, 0xd1, 208, 96, opc_dma_memcmp, op_dma_memcmp, ops_dma_memcmp),
     (Arith384Mod, "arith384_mod", ArithEq384, ARITH_EQ_384_COST, 0xe2, 232, 48, opc_arith384_mod, op_arith384_mod, ops_arith384_mod),
     (Bls12_381CurveAdd, "bls12_381_curve_add", ArithEq384, ARITH_EQ_384_COST, 0xe3, 208, 96, opc_bls12_381_curve_add, op_bls12_381_curve_add, ops_bls12_381_curve_add),
     (Bls12_381CurveDbl, "bls12_381_curve_dbl", ArithEq384, ARITH_EQ_384_COST, 0xe4, 96, 96, opc_bls12_381_curve_dbl, op_bls12_381_curve_dbl, ops_bls12_381_curve_dbl),
@@ -410,8 +412,6 @@ define_ops! {
     (Bn254ComplexSub, "bn254_complex_sub", ArithEq, ARITH_EQ_COST, 0xfd, 144, 64, opc_bn254_complex_sub, op_bn254_complex_sub, ops_bn254_complex_sub),
     (Bn254ComplexMul, "bn254_complex_mul", ArithEq, ARITH_EQ_COST, 0xfe, 144, 64, opc_bn254_complex_mul, op_bn254_complex_mul, ops_bn254_complex_mul),
     (Halt, "halt", Internal, INTERNAL_COST, 0xff, 144, 0, opc_halt, op_halt, ops_none),
-    (DmaMemCmp, "dma_mem_cmp", Dma, 0, 0xee, 208, 96, opc_dma_memcmp, op_dma_memcmp, ops_dma_memcmp),
-    (DmaMemCpy, "dma_mem_cpy", Dma, 0, 0xef, 208, 96, opc_dma_memcpy, op_dma_memcpy, ops_dma_memcpy),
 }
 
 /* INTERNAL operations */
@@ -2275,6 +2275,96 @@ pub fn opc_halt(ctx: &mut InstContext) {
 }
 
 pub fn opc_dma_memcpy(ctx: &mut InstContext) {
+    /*    let dst = ctx.a;
+        let src = ctx.b;
+        let count = ctx.regs[12];
+
+        if let EmulationMode::ConsumeMemReads = ctx.emulation_mode {
+            // copy from data
+            let src64 = src & !0x07;
+            let data_offset = src - src64;
+
+            // execute from precompile.input_data
+            // TODO: avoid copy data
+            ctx.mem.memcpy_from_data(src, count, &ctx.precompiled.input_data, data_offset as usize);
+
+            // Read data from the precompiled context
+            for (i, d) in data.iter_mut().enumerate() {
+                *d = ctx.precompiled.input_data[i];
+            }
+            // Write the input data address to the precompiled context
+            // ctx.precompiled.input_data_address = address;
+            return;
+        }
+
+        // Write the indirections to data
+        for (i, data) in data.iter_mut().enumerate().take(params_count) {
+            let indirection = ctx.mem.read(address + (8 * i as u64), 8);
+            if address & 0x7 != 0 {
+                panic!("precompiled_check_address() found address[{i}] not aligned to 8 bytes");
+            }
+            *data = indirection;
+        }
+
+        let mut data_offset = params_count;
+        for i in 0..load_indirections {
+            let data_offset = i * load_chunks + data_offset;
+            // if there aren't indirections, take directly from the address
+            let param_address = if params_count == 0 { address + data_offset as u64 } else { data[i] };
+            for j in 0..load_chunks {
+                let addr = param_address + (8 * j as u64);
+                data[data_offset + j] = ctx.mem.read(addr, 8);
+            }
+        }
+
+        // Process the remanent of the last chunk
+        if load_rem > 0 {
+            data_offset += (load_indirections - 1) * load_chunks;
+            let param_address = if params_count == 0 {
+                address + data_offset as u64
+            } else {
+                data[load_indirections - 1]
+            };
+            for j in load_chunks..load_chunks + load_rem {
+                let addr = param_address + (8 * j as u64);
+                data[data_offset + j] = ctx.mem.read(addr, 8);
+            }
+        }
+
+        if let EmulationMode::GenerateMemReads = ctx.emulation_mode {
+            ctx.precompiled.input_data.clear();
+            for (i, d) in data.iter_mut().enumerate() {
+                ctx.precompiled.input_data.push(*d);
+            }
+            ctx.precompiled.step = ctx.step;
+        }
+    */
+    println!(
+        "opc_dma_memcpy 0x{:08X} 0x{:08X} A0-A2:[0x{:08X},0x{:08X},{}] {:?}",
+        ctx.a, ctx.b, ctx.regs[10], ctx.regs[11], ctx.regs[12], ctx.emulation_mode
+    );
+    ctx.mem.memcpy(ctx.a, ctx.b, ctx.regs[12]);
+    ctx.c = ctx.a;
+    ctx.flag = false;
+}
+
+/// Unimplemented.  Arith256 can only be called from the system call context via InstContext.
+/// This is provided just for completeness.
+#[inline(always)]
+pub fn op_dma_memcpy(_a: u64, _b: u64) -> (u64, bool) {
+    unimplemented!("op_dma_memcpy() is not implemented");
+}
+
+#[inline(always)]
+pub fn ops_dma_memcpy(ctx: &InstContext, stats: &mut dyn OpStats) {
+    // unimplemented!("ops_dma_memcpy() is not implemented");
+}
+
+pub fn opc_dma_memcmp(ctx: &mut InstContext) {
+    println!(
+        "opc_dma_memcmp 0x{:08X} 0x{:08X} A0-A2:[0x{:08X},0x{:08X},{}] {:?}",
+        ctx.a, ctx.b, ctx.regs[10], ctx.regs[11], ctx.regs[12], ctx.emulation_mode
+    );
     const WORDS: usize = 4 + 1 + 2 * 4;
     let mut data = [0u64; WORDS];
 
@@ -2310,22 +2400,12 @@ pub fn opc_dma_memcpy(ctx: &mut InstContext) {
         ctx.c = data[4 + 2 * 4];
         ctx.flag = data[4 + 2 * 4] != 0;
     }
-}
-
-/// Unimplemented.  Arith256 can only be called from the system call context via InstContext.
-/// This is provided just for completeness.
-#[inline(always)]
-pub fn op_dma_memcpy(_a: u64, _b: u64) -> (u64, bool) {
-    unimplemented!("op_dma_memcpy() is not implemented");
-}
-
-#[inline(always)]
-pub fn ops_dma_memcpy(ctx: &InstContext, stats: &mut dyn OpStats) {
-    unimplemented!("ops_dma_memcpy() is not implemented");
-}
-
-pub fn opc_dma_memcmp(ctx: &mut InstContext) {
-    unimplemented!("opc_dma_memcmp() is not implemented");
+    ctx.c = ctx.mem.memcmp(ctx.a, ctx.b, ctx.regs[12]);
+    println!(
+        "opc_dma_memcmp 0x{:08X} 0x{:08X} = 0x{:016X} A0-A2:[0x{:08X},0x{:08X},{}] {:?}",
+        ctx.a, ctx.b, ctx.c, ctx.regs[10], ctx.regs[11], ctx.regs[12], ctx.emulation_mode
+    );
+    ctx.flag = false;
 }
 
 /// Unimplemented.  Arith256 can only be called from the system call context via InstContext.
@@ -2337,5 +2417,5 @@ pub fn op_dma_memcmp(_a: u64, _b: u64) -> (u64, bool) {
 
 #[inline(always)]
 pub fn ops_dma_memcmp(ctx: &InstContext, stats: &mut dyn OpStats) {
-    unimplemented!("ops_dma_memcmp() is not implemented");
+    // unimplemented!("ops_dma_memcmp() is not implemented");
 }

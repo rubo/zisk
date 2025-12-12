@@ -14,7 +14,7 @@ use std::collections::HashMap;
 // The CSR precompiled addresses are defined in the `ZiskOS` `ziskos/entrypoint/src` files
 // because legacy versions of Rust do not support constant parameters in `asm!` macros.
 
-const CSR_PRECOMPILED: [&str; 18] = [
+const CSR_PRECOMPILED: [&str; 20] = [
     "keccak",
     "arith256",
     "arith256_mod",
@@ -33,6 +33,8 @@ const CSR_PRECOMPILED: [&str; 18] = [
     "bls12_381_complex_sub",
     "bls12_381_complex_mul",
     "add256",
+    "dma_memcpy",
+    "dma_memcmp",
 ];
 const CSR_PRECOMPILED_ADDR_START: u32 = 0x800;
 const CSR_PRECOMPILED_ADDR_END: u32 = CSR_PRECOMPILED_ADDR_START + CSR_PRECOMPILED.len() as u32;
@@ -61,17 +63,58 @@ impl Riscv2ZiskContext<'_> {
     /// Converts an input RISCV instruction into a ZisK instruction and stores it into the internal
     /// map.  C instrucions are already expanded into their equivalent RISCV instructions, so we
     /// only have to map them to their corresponding IMA 32-bits equivalent instructions.
-    pub fn convert(&mut self, riscv_instruction: &RiscvInstruction) {
+    ///
+    /// # Parameters
+    /// * `riscv_instruction` - The current instruction to convert
+    /// * `next_instructions` - Slice of the remaining instructions after the current one
+    pub fn convert(
+        &mut self,
+        riscv_instruction: &RiscvInstruction,
+        next_instructions: &[RiscvInstruction],
+    ) {
         // ZisK supports the IMAC RISC-V instruction set
+        println!("CONVERT {} # {}", riscv_instruction.inst, riscv_instruction.to_text());
         match riscv_instruction.inst.as_str() {
             // I: Base Integer Instruction Set
             //////////////////////////////////
 
             // I.1. Integer Computational (Register-Register)
             "add" => {
-                if riscv_instruction.rs1 == 0 {
-                    // rd = rs1(0) + rs2 = rs2
-                    self.copyb(riscv_instruction, 4, 2);
+                if riscv_instruction.rd == 0
+                    && next_instructions.len() > 0
+                    && next_instructions[0].inst == "csrrs"
+                    && next_instructions[0].csr == 0x812
+                {
+                    println!(
+                        "DETECTED INSTRUCTION MEMCPY '{}' + '{}' AT 0x{:08X}",
+                        riscv_instruction.inst,
+                        next_instructions[0].inst,
+                        riscv_instruction.rom_address
+                    );
+                    self.create_special_register_op(riscv_instruction, "dma_memcpy", 8);
+                } else if riscv_instruction.rd == 10
+                    && next_instructions.len() > 0
+                    && next_instructions[0].inst == "csrrs"
+                    && next_instructions[0].csr == 0x813
+                {
+                    println!(
+                        "DETECTED INSTRUCTION MEMCMP '{}' + '{}' AT 0x{:08X}",
+                        riscv_instruction.inst,
+                        next_instructions[0].inst,
+                        riscv_instruction.rom_address
+                    );
+                    self.create_special_register_op(riscv_instruction, "dma_memcmp", 8);
+                } else if riscv_instruction.rs1 == 0 {
+                    //                    if next_instructions.len() > 0 && next_instructions[0].inst == "csrw" {
+                    println!("Detected instruction pattern");
+                    if next_instructions.len() > 0 {
+                        // rd = rs1(0) + rs2 = rs2 followed by ret
+                        println!("Detected instruction pattern '{}'", next_instructions[0].inst);
+                        self.copyb(riscv_instruction, 4, 2);
+                    } else {
+                        // rd = rs1(0) + rs2 = rs2
+                        self.copyb(riscv_instruction, 4, 2);
+                    }
                 } else if riscv_instruction.rs2 == 0 {
                     // rd = rs1 + rs2(0) = rs1
                     self.copyb(riscv_instruction, 4, 1);
@@ -589,6 +632,23 @@ impl Riscv2ZiskContext<'_> {
         self.insts.insert(i.rom_address, zib);
     }
 
+    /// Creates a Zisk operation that implements a RISC-V register operation, i.e. an operation that
+    /// loads both input parameters a and b from their respective registers,
+    /// and stores the result c into a register
+    pub fn create_special_register_op(&mut self, i: &RiscvInstruction, op: &str, inst_size: u64) {
+        // assert!(inst_size == 2 || inst_size == 4);
+        let mut zib = ZiskInstBuilder::new_from_riscv(i.rom_address, i.inst.clone());
+        zib.src_a("reg", i.rs1 as u64, false);
+        zib.src_b("reg", i.rs2 as u64, false);
+        zib.op(op).unwrap();
+        zib.store("reg", i.rd as i64, false, false);
+        zib.j(inst_size as i64, inst_size as i64);
+        zib.verbose(&format!("{} r{}, r{}, r{}", i.inst, i.rd, i.rs1, i.rs2));
+        zib.build();
+        println!("Special at 0x{:08X} op: {:?}", i.rom_address, zib);
+        self.insts.insert(i.rom_address, zib);
+    }
+
     // beq rs1, rs2, label
     //    eq([%rs1], [rs2]), j(label)
 
@@ -767,7 +827,7 @@ impl Riscv2ZiskContext<'_> {
         zib.src_a("imm", 0, false);
         zib.src_b("imm", 0, false);
         zib.op("flag").unwrap();
-        zib.store_ra("reg", i.rd as i64, false);
+        zib.store_pc("reg", i.rd as i64, false);
         zib.j(4, i.imm as i64);
         zib.verbose(&format!("auipc r{}, 0x{:x}", i.rd, i.imm));
         zib.build();
@@ -889,7 +949,7 @@ impl Riscv2ZiskContext<'_> {
             zib.src_b("reg", i.rs1 as u64, false);
             zib.op("and").unwrap();
             zib.set_pc();
-            zib.store_ra("reg", i.rd as i64, false);
+            zib.store_pc("reg", i.rd as i64, false);
             zib.j(i.imm as i64, inst_size as i64);
             zib.verbose(&format!("jalr r{}, r{}, 0x{:x}", i.rd, i.rs1, i.imm));
             zib.build();
@@ -912,7 +972,7 @@ impl Riscv2ZiskContext<'_> {
                 zib.src_b("lastc", 0, false);
                 zib.op("and").unwrap();
                 zib.set_pc();
-                zib.store_ra("reg", i.rd as i64, false);
+                zib.store_pc("reg", i.rd as i64, false);
                 zib.j(0, inst_size as i64 - 1);
                 zib.verbose(&format!("jalr r{}, r{}, 0x{:x} ; 2/2", i.rd, i.rs1, i.imm));
                 zib.build();
@@ -930,7 +990,7 @@ impl Riscv2ZiskContext<'_> {
         zib.src_a("imm", 0, false);
         zib.src_b("imm", 0, false);
         zib.op("flag").unwrap();
-        zib.store_ra("reg", i.rd as i64, false);
+        zib.store_pc("reg", i.rd as i64, false);
         zib.j(i.imm as i64, inst_size as i64);
         zib.verbose(&format!("jal r{}, 0x{:x}", i.rd, i.imm));
         zib.build();
@@ -943,7 +1003,7 @@ impl Riscv2ZiskContext<'_> {
         zib.src_a("imm", 0, false);
         zib.src_b("mem", MTVEC, false);
         zib.op("copyb").unwrap();
-        zib.store_ra("reg", 1, false);
+        zib.store_pc("reg", 1, false);
         zib.set_pc();
         zib.j(0, 4);
         zib.verbose("ecall");
@@ -1698,13 +1758,41 @@ pub fn add_zisk_code(rom: &mut ZiskRom, addr: u64, data: &[u8]) {
     // Create a context to convert RISCV instructions to ZisK instructions, using rom.insts
     let mut ctx = Riscv2ZiskContext { insts: &mut rom.insts };
 
+    // for (i, riscv_instruction) in riscv_instructions.iter().enumerate() {
+    //     println!("RISCV#{i} 0x{:08X}", riscv_instruction.rom_address);
+    // }
+    // let zisk_memcmp_index =
+    //     riscv_instructions.iter().position(|inst| inst.rom_address == 0x80236edc);
+    let zisk_memcmp_index: Option<usize> = None;
+
     // For all RISCV instructions
-    for riscv_instruction in riscv_instructions {
+    for (i, riscv_instruction) in riscv_instructions.iter().enumerate() {
         //print!("add_zisk_code() converting RISCV instruction={}\n",
         // riscv_instruction.to_string());
+        if riscv_instructions[i].rom_address >= 0x80267b28
+            && riscv_instructions[i].rom_address <= 0x80267b30
+        {
+            if let Some(zisk_memcmp_index) = zisk_memcmp_index {
+                // Get slice of remaining instructions after current one
+                let index_offset = (riscv_instructions[i].rom_address - 0x80267b28) as usize >> 2;
+                let next_instructions =
+                    &riscv_instructions[(zisk_memcmp_index + index_offset + 1)..];
+
+                let mut instruction = riscv_instructions[zisk_memcmp_index + index_offset].clone();
+                instruction.rom_address = riscv_instructions[i].rom_address;
+
+                // Convert RICV instruction to ZisK instruction and store it in rom.insts
+                ctx.convert(&instruction, next_instructions);
+                continue;
+                //print!("   to: {}", ctx.insts.iter().last().)
+            }
+        }
+
+        // Get slice of remaining instructions after current one
+        let next_instructions = &riscv_instructions[(i + 1)..];
 
         // Convert RICV instruction to ZisK instruction and store it in rom.insts
-        ctx.convert(&riscv_instruction);
+        ctx.convert(riscv_instruction, next_instructions);
         //print!("   to: {}", ctx.insts.iter().last().)
     }
 }
@@ -1901,7 +1989,7 @@ pub fn add_entry_exit_jmp(rom: &mut ZiskRom, addr: u64) {
     zib.src_b("imm", addr, false);
     zib.op("copyb").unwrap();
     zib.set_pc();
-    zib.store_ra("reg", 1, false);
+    zib.store_pc("reg", 1, false);
     zib.j(0, 4);
     zib.verbose(&format!("CALL to entry: 0x{addr:08x}"));
     zib.build();

@@ -39,7 +39,7 @@ pub fn generate_dma_mem_inputs(
     _data: &[u64],
     _data_ext: &[u64],
     _only_counters: bool,
-    _pending: &mut VecDeque<(BusId, Vec<u64>)>,
+    _pending: &mut VecDeque<(BusId, Vec<u64>, Vec<u64>)>,
 ) {
     let from_src = src & !0x07;
     let to_src = (src + count as u64 - 1) & MASK_ALIGNED_ADDR;

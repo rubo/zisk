@@ -2406,7 +2406,7 @@ impl ZiskRom2Asm {
                         .full_line_comment(format!("STORE_REG reg={}", instruction.store_offset));
 
                     // Store in mem[address]
-                    if instruction.store_ra {
+                    if instruction.store_pc {
                         let value = (ctx.pc as i64 + instruction.jmp_offset2) as u64;
                         Self::write_riscv_reg_constant(
                             &mut ctx,
@@ -2530,7 +2530,7 @@ impl ZiskRom2Asm {
                     if !ctx.chunk_player_mt_collect_mem()
                         && !ctx.chunk_player_mem_reads_collect_main()
                     {
-                        if instruction.store_ra {
+                        if instruction.store_pc {
                             *code += &format!(
                                 "\tmov {}, 0x{:x} {}\n",
                                 REG_VALUE,
@@ -2952,7 +2952,7 @@ impl ZiskRom2Asm {
                     {
                         match instruction.ind_width {
                             8 => {
-                                if instruction.store_ra {
+                                if instruction.store_pc {
                                     *code += &format!(
                                         "\tmov qword {}[{}], {} {}\n",
                                         ctx.ptr,
@@ -2970,7 +2970,7 @@ impl ZiskRom2Asm {
                                 }
                             }
                             4 => {
-                                if instruction.store_ra {
+                                if instruction.store_pc {
                                     *code += &format!(
                                         "\tmov dword {}[{}], {} {}\n",
                                         ctx.ptr,
@@ -2988,7 +2988,7 @@ impl ZiskRom2Asm {
                                 }
                             }
                             2 => {
-                                if instruction.store_ra {
+                                if instruction.store_pc {
                                     *code += &format!(
                                         "\tmov word {}[{}], {} {}\n",
                                         ctx.ptr,
@@ -3006,7 +3006,7 @@ impl ZiskRom2Asm {
                                 }
                             }
                             1 => {
-                                if instruction.store_ra {
+                                if instruction.store_pc {
                                     *code += &format!(
                                         "\tmov word {}[{}], {} {}\n",
                                         ctx.ptr,
@@ -3041,7 +3041,7 @@ impl ZiskRom2Asm {
                                         ctx.pc,
                                         ctx.comment_str("width=1: continue")
                                     );
-                                    if instruction.store_ra {
+                                    if instruction.store_pc {
                                         *code += &format!(
                                             "\tmov dil, 0x{:x} {}\n",
                                             (ctx.pc as i64 + instruction.jmp_offset2) as u64 as u8,

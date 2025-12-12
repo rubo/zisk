@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "8fd1a573bca203f3459cd96b0a3b317861a7f8736958da14cc0c8f8314050ad2";
+pub const PILOUT_HASH: &str = "b43b0a9602c2f7aae31d49817972ddde0b08eaf9ac20d3fa0975f58fb093d52b";
 
 //AIRGROUP CONSTANTS
 
@@ -178,7 +178,7 @@ trace_row!(MainFixedRow<F> {
 pub type MainFixed<F> = GenericTrace<MainFixedRow<F>, 4194304, 0, 4>;
 
 trace_row!(MainTraceRow<F> {
- a:[u32; 2], b:[u32; 2], c:[u32; 2], flag:bit, pc:u32, a_src_imm:bit, a_src_mem:bit, a_offset_imm0:u64, a_imm1:u32, op_with_step:bit, b_src_imm:bit, b_src_mem:bit, b_offset_imm0:u64, b_imm1:u32, b_src_ind:bit, ind_width:ubit(4), is_external_op:bit, op:u8, store_ra:bit, store_mem:bit, store_ind:bit, store_offset:u64, set_pc:bit, jmp_offset1:u64, jmp_offset2:u64, m32:bit, addr1:u32, a_reg_prev_mem_step:ubit(40), b_reg_prev_mem_step:ubit(40), store_reg_prev_mem_step:ubit(40), store_reg_prev_value:[u32; 2], a_src_reg:bit, b_src_reg:bit, store_reg:bit,
+ a:[u32; 2], b:[u32; 2], c:[u32; 2], flag:bit, pc:u32, a_src_imm:bit, a_src_mem:bit, a_offset_imm0:u64, a_imm1:u32, op_with_step:bit, b_src_imm:bit, b_src_mem:bit, b_offset_imm0:u64, b_imm1:u32, b_src_ind:bit, ind_width:ubit(4), is_external_op:bit, op:u8, store_pc:bit, store_mem:bit, store_ind:bit, store_offset:u64, set_pc:bit, jmp_offset1:u64, jmp_offset2:u64, m32:bit, addr1:u32, a_reg_prev_mem_step:ubit(40), b_reg_prev_mem_step:ubit(40), store_reg_prev_mem_step:ubit(40), store_reg_prev_value:[u32; 2], a_src_reg:bit, b_src_reg:bit, store_reg:bit,
 });
 pub type MainTrace<F> = GenericTrace<MainTraceRow<F>, 4194304, 0, 4>;
 

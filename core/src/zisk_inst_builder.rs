@@ -158,7 +158,7 @@ impl ZiskInstBuilder {
     }
 
     /// Sets the c store instruction attributes
-    pub fn store(&mut self, dst_input: &str, offset_input: i64, use_sp: bool, store_ra: bool) {
+    pub fn store(&mut self, dst_input: &str, offset_input: i64, use_sp: bool, store_pc: bool) {
         let mut dst = dst_input;
         let mut offset = offset_input;
         if dst == "reg" {
@@ -170,7 +170,7 @@ impl ZiskInstBuilder {
             }
         }
 
-        self.i.store_ra = store_ra;
+        self.i.store_pc = store_pc;
         self.i.store = self.c_store(dst);
 
         if self.i.store == STORE_REG || self.i.store == STORE_MEM || self.i.store == STORE_IND {
@@ -183,7 +183,7 @@ impl ZiskInstBuilder {
     }
 
     /// Set the store as a store ra
-    pub fn store_ra(&mut self, dst: &str, offset: i64, use_sp: bool) {
+    pub fn store_pc(&mut self, dst: &str, offset: i64, use_sp: bool) {
         self.store(dst, offset, use_sp, true);
     }
 

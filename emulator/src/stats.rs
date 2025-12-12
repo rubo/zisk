@@ -449,14 +449,14 @@ impl Stats {
         self.previous_pc = pc;
         self.previous_verbose = instruction.verbose.clone();
         if instruction.set_pc {
-            // CALL: set_pc=true, store_ra=true, store_offset=1 (stores PC+4 or PC+2 in ra)
-            // self.is_call = instruction.store_ra && instruction.store_offset == 1;
-            self.is_call = instruction.store_ra;
+            // CALL: set_pc=true, store_pc=true, store_offset=1 (stores PC+4 or PC+2 in ra)
+            // self.is_call = instruction.store_pc && instruction.store_offset == 1;
+            self.is_call = instruction.store_pc;
             self.call_return_reg = if self.is_call { instruction.store_offset as u8 } else { 0 };
 
-            // RETURN: set_pc=true, store_ra=false (no stores RA), b_src=SRC_REG, b_offset_imm0=1 (jumps to ra/x1)
+            // RETURN: set_pc=true, store_pc=false (no stores RA), b_src=SRC_REG, b_offset_imm0=1 (jumps to ra/x1)
             // Additionally, verify that the target PC matches the expected return address from the call stack
-            let is_jalr_ra = !instruction.store_ra
+            let is_jalr_ra = !instruction.store_pc
                 && instruction.b_src == SRC_REG
                 && instruction.b_offset_imm0 == 1;
 
@@ -470,7 +470,7 @@ impl Stats {
                     self.is_return = false;
                 }
             } else if let Some(top) = self.call_stack.last() {
-                self.is_return = !instruction.store_ra
+                self.is_return = !instruction.store_pc
                     && instruction.b_src == SRC_REG
                     && instruction.b_offset_imm0 == top.return_reg as u64;
             } else {

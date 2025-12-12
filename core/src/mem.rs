@@ -795,5 +795,168 @@ impl Mem {
         }
     }
 
+    #[inline(always)]
+    pub fn get_writeable_section(&mut self, addr: u64, count: u64) -> &mut MemSection {
+        if let Ok(section) = self.read_sections.binary_search_by(|section| {
+            if addr < section.start {
+                std::cmp::Ordering::Greater
+            } else if addr > (section.end - count) {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        }) {
+            panic!(
+            "Mem::get_write_section() invalid addr={addr}={addr:x},count={count} write section start={:x} end={:x} is read only section",
+            self.read_sections[section].start, self.read_sections[section].end);
+        };
+
+        // If not found in read sections, try write section
+        let section = &mut self.write_section;
+
+        // Check that the address and count fall into this section address range
+        if (addr < section.start) || ((addr + count) > section.end) {
+            panic!(
+            "Mem::get_section() invalid addr={addr}={addr:x},count={count} write section start={:x} end={:x}",
+            section.start, section.end
+        );
+        }
+        section
+    }
+
+    #[inline(always)]
+    pub fn get_readable_section(&self, addr: u64, count: u64) -> &MemSection {
+        let section = if let Ok(section) = self.read_sections.binary_search_by(|section| {
+            if addr < section.start {
+                std::cmp::Ordering::Greater
+            } else if addr > (section.end - count) {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        }) {
+            &self.read_sections[section]
+        } else {
+            &self.write_section
+        };
+        if (addr < section.start) || ((addr + count) > section.end) {
+            panic!(
+                "Mem::get_read_section() invalid addr={addr}={addr:x},count={count} read section start={:x} end={:x}",
+                section.start, section.end
+            );
+        }
+        section
+    }
+
+    #[inline(always)]
+    pub fn memcpy(&mut self, dst: u64, src: u64, count: u64) {
+        // Early return if source and destination are the same or count is zero
+        if dst == src || count == 0 {
+            return;
+        }
+
+        let dst_end = dst + count;
+        let src_end = src + count;
+        let count_usize = count as usize;
+
+        // Check if there is an overlap between source and destination
+        let overlaps = (dst < src_end) && (src < dst_end);
+
+        if overlaps {
+            // Overlapping case: use temporary buffer to avoid data corruption
+            let temp_buffer: Vec<u8> = {
+                let src_section = self.get_readable_section(src, count);
+                let src_offset: usize = (src - src_section.start) as usize;
+                src_section.buffer[src_offset..src_offset + count_usize].to_vec()
+            };
+
+            let dst_section = self.get_writeable_section(dst, count);
+            let dst_offset: usize = (dst - dst_section.start) as usize;
+            dst_section.buffer[dst_offset..dst_offset + count_usize].copy_from_slice(&temp_buffer);
+        } else {
+            // Non-overlapping case: direct copy
+            // First, get a copy of the source data
+            let data_to_copy: Vec<u8> = {
+                let src_section = self.get_readable_section(src, count);
+                let src_offset: usize = (src - src_section.start) as usize;
+                src_section.buffer[src_offset..src_offset + count_usize].to_vec()
+            };
+
+            // Then, write to destination
+            let dst_section = self.get_writeable_section(dst, count);
+            let dst_offset: usize = (dst - dst_section.start) as usize;
+            dst_section.buffer[dst_offset..dst_offset + count_usize].copy_from_slice(&data_to_copy);
+        }
+    }
+
+    pub fn memcpy_from_data(&mut self, dst: u64, count: u64, data: &[u64], data_offset: usize) {
+        // Early return if source and destination are the same or count is zero
+        if count == 0 {
+            return;
+        }
+
+        let data_bytes: &[u8] =
+            unsafe { core::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 8) };
+
+        // Then, write to destination
+        let dst_section = self.get_writeable_section(dst, count);
+        let dst_offset: usize = (dst - dst_section.start) as usize;
+
+        let count = count as usize;
+        let bytes = &data_bytes[data_offset..data_offset + count];
+        dst_section.buffer[dst_offset..dst_offset + count].copy_from_slice(bytes);
+    }
+
+    pub fn memcmp(&self, a: u64, b: u64, count: u64) -> u64 {
+        if count == 0 {
+            return 0;
+        }
+
+        let count_usize = count as usize;
+
+        println!("memcmp dump A:{}", self.memdump(a, count));
+        println!("memcmp dump B:{}", self.memdump(b, count));
+        // Get sections for both addresses
+        let a_section = self.get_readable_section(a, count);
+        let b_section = self.get_readable_section(b, count);
+
+        let a_offset: usize = (a - a_section.start) as usize;
+        let b_offset: usize = (b - b_section.start) as usize;
+
+        // Compare byte by byte
+        for i in 0..count_usize {
+            let byte_a = a_section.buffer[a_offset + i] as i8;
+            let byte_b = b_section.buffer[b_offset + i] as i8;
+
+            if byte_a != byte_b {
+                // Sign extend the difference to 64 bits
+                let diff = (byte_a as i64) - (byte_b as i64);
+                return diff as u64;
+            }
+        }
+
+        // All bytes are equal
+        0
+    }
+
+    pub fn memdump(&self, addr: u64, count: u64) -> String {
+        if count == 0 {
+            return String::new();
+        }
+
+        let count_usize = count as usize;
+
+        // Get section for the address range
+        let section = self.get_readable_section(addr, count);
+        let offset: usize = (addr - section.start) as usize;
+
+        // Convert bytes to hex string
+        section.buffer[offset..offset + count_usize]
+            .iter()
+            .map(|byte| format!("{:02x}", byte))
+            .collect::<Vec<String>>()
+            .join("")
+    }
+
     //pub fn get_non_aligned_data_from_required(address: u64, width: u8,)
 }

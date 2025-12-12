@@ -140,7 +140,7 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
 
     // Destination C
 
-    col witness bits(1) store_ra;
+    col witness bits(1) store_pc;
 
     col witness bits(1) store_mem;
     
@@ -307,8 +307,8 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
 
     const expr store_value[2];
 
-    store_value[0] = store_ra*(pc + jmp_offset2 - c[0]) + c[0];
-    store_value[1] = (1 - store_ra) * c[1];
+    store_value[0] = store_pc*(pc + jmp_offset2 - c[0]) + c[0];
+    store_value[1] = (1 - store_pc) * c[1];
 
     // Memory function to prove that previous register store_offset access.
 
@@ -458,7 +458,7 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
     b_src_imm * (1 - b_src_imm) === 0;
     b_src_mem * (1 - b_src_mem) === 0;
     is_external_op * (1 - is_external_op) === 0;
-    store_ra * (1 - store_ra) === 0;
+    store_pc * (1 - store_pc) === 0;
     store_mem * (1 - store_mem) === 0;
     store_ind * (1 - store_ind) === 0;
     set_pc * (1 - set_pc) === 0;
@@ -469,7 +469,7 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
     store_reg * (1 - store_reg) === 0;
 
     const expr rom_flags = 1 + 2 * a_src_imm + 4 * a_src_mem + 8 * op_with_step + 16 * b_src_imm
-                           + 32 * b_src_mem + 64 * is_external_op + 128 * store_ra + 256 * store_mem
+                           + 32 * b_src_mem + 64 * is_external_op + 128 * store_pc + 256 * store_mem
                            + 512 * store_ind + 1024 * set_pc + 2048 * m32 + 4096 * b_src_ind
                            + 8192 * a_src_reg + 16384 * b_src_reg + 32768 * store_reg;
 

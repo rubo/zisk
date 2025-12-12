@@ -286,4 +286,62 @@ mod ziskos {
 
         ptr
     }
+    #[no_mangle]
+    #[inline(never)]
+    #[export_name = "memcpy"]
+    pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 {
+        asm!(
+            ".insn r 0x33, 0, 0, x0, a0, a1 ",
+            // "csrs 0x812, a0",               // Marker: Write count (a0) to CSR 0x812
+            // "csrs 0x813, a1",               // Marker: Write count (a1) to CSR 0x812
+            "csrs 0x812, a2",               // Marker: Write count (a2) to CSR 0x812
+            in("a0") dest,        // Force dest parameter into register a0
+            in("a1") src,         // Force src parameter into register a1
+            in("a2") count,       // Force count parameter into register a2
+            options(preserves_flags)
+        );
+
+        dest
+    }
+    #[no_mangle]
+    #[inline(never)]
+    #[export_name = "memmove"]
+    pub unsafe extern "C" fn memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 {
+        asm!(
+            ".insn r 0x33, 0, 0, x0, a0, a1 ",
+            // "csrs 0x812, a0",               // Marker: Write count (a0) to CSR 0x812
+            // "csrs 0x813, a1",               // Marker: Write count (a1) to CSR 0x812
+            "csrs 0x812, a2",               // Marker: Write count (a2) to CSR 0x812
+            in("a0") dest,        // Force dest parameter into register a0
+            in("a1") src,         // Force src parameter into register a1
+            in("a2") count,       // Force count parameter into register a2
+            options(preserves_flags)
+        );
+
+        dest
+    }
+    // #[no_mangle]
+    // #[inline(always)]
+    // #[export_name = "memcmp"]
+    // pub unsafe extern "C" fn memcmp(a: *const u8, b: *const u8, count: usize) -> i64 {
+    //     let result: i64;
+    //     asm!(
+    //         ".insn r 0x33, 0, 0, a0, a0, a1 ",
+    //         // "csrs 0x812, a0",               // Marker: Write count (a0) to CSR 0x812
+    //         // "csrs 0x813, a1",               // Marker: Write count (a1) to CSR 0x812
+    //         "csrs 0x813, a2",               // Marker: Write count (a2) to CSR 0x812
+    //         in("a0") a,        // Force dest parameter into register a0
+    //         in("a1") b,         // Force src parameter into register a1
+    //         in("a2") count,       // Force count parameter into register a2
+    //         lateout("a0") result,
+    //         options(preserves_flags)
+    //     );
+    //     result
+    // }
+    core::arch::global_asm!(include_str!("memcmp.s"));
+    // core::arch::global_asm!(include_str!("memcpy.s"));
+    // core::arch::global_asm!(include_str!("memset.s"));
+    // #[used]
+    // pub static KEEP_FUNCTIONS: &[unsafe extern "C" fn(*const u8, *const u8, usize) -> i64] =
+    //     &[zisk_memcmp];
 }

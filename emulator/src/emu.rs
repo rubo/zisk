@@ -1015,7 +1015,7 @@ impl<'a> Emu<'a> {
             }
             STORE_IND => {
                 // Calculate value
-                let val: i64 = if instruction.store_ra {
+                let val: i64 = if instruction.store_pc {
                     self.ctx.inst_ctx.pc as i64 + instruction.jmp_offset2
                 } else {
                     self.ctx.inst_ctx.c as i64
@@ -1624,6 +1624,41 @@ impl<'a> Emu<'a> {
 
         // While not done
         while !self.ctx.inst_ctx.end {
+            if self.ctx.inst_ctx.pc == 0x802681d4 {
+                println!(
+                    "PC: 0x{:08x} memcmp call (0x{:08x}, 0x{:08x}, {})",
+                    self.ctx.inst_ctx.pc,
+                    self.ctx.inst_ctx.regs[10],
+                    self.ctx.inst_ctx.regs[11],
+                    self.ctx.inst_ctx.regs[12]
+                );
+                println!(
+                    "memcmp dump A:{}",
+                    self.ctx
+                        .inst_ctx
+                        .mem
+                        .memdump(self.ctx.inst_ctx.regs[10], self.ctx.inst_ctx.regs[12])
+                );
+                println!(
+                    "memcmp dump B:{}",
+                    self.ctx
+                        .inst_ctx
+                        .mem
+                        .memdump(self.ctx.inst_ctx.regs[11], self.ctx.inst_ctx.regs[12])
+                );
+            }
+            if self.ctx.inst_ctx.pc == 0x802681f8 {
+                println!(
+                    "PC: 0x{:08x} memcmp equal 0x{:016X}",
+                    self.ctx.inst_ctx.pc, self.ctx.inst_ctx.regs[10]
+                );
+            }
+            if self.ctx.inst_ctx.pc == 0x80268200 {
+                println!(
+                    "PC: 0x{:08x} memcmp different 0x{:016X}",
+                    self.ctx.inst_ctx.pc, self.ctx.inst_ctx.regs[10]
+                );
+            }
             if options.verbose {
                 println!(
                     "Emu::run() step={} ctx.pc={}",
@@ -1823,13 +1858,14 @@ impl<'a> Emu<'a> {
         let pc = self.ctx.inst_ctx.pc;
         let instruction = self.rom.get_instruction(self.ctx.inst_ctx.pc);
 
-        // println!(
-        //     "Emu::step() executing step={} pc={:x} inst={}",
-        //     self.ctx.inst_ctx.step,
-        //     self.ctx.inst_ctx.pc,
-        //     instruction.to_text()
-        // );
-
+        let pc = self.ctx.inst_ctx.pc;
+        if pc >= 0x80265b8c && pc <= 0x80265b98 {
+            println!(
+                "Emu::step() executing step={} pc={pc:x} inst={}",
+                self.ctx.inst_ctx.step,
+                instruction.to_text()
+            );
+        }
         //println!("PCLOG={}", instruction.to_text());
 
         // Build the 'a' register value  based on the source specified by the current instruction
@@ -2402,7 +2438,7 @@ impl<'a> Emu<'a> {
                 inst.op
             },
         );
-        trace.set_store_ra(inst.store_ra);
+        trace.set_store_pc(inst.store_pc);
         trace.set_store_mem(inst.store == STORE_MEM);
         trace.set_store_reg(inst.store == STORE_REG);
         trace.set_store_ind(inst.store == STORE_IND);
@@ -2526,7 +2562,7 @@ impl<'a> Emu<'a> {
 
     #[inline(always)]
     pub fn get_value_to_store(&self, instruction: &ZiskInst) -> u64 {
-        if instruction.store_ra {
+        if instruction.store_pc {
             (self.ctx.inst_ctx.pc as i64 + instruction.jmp_offset2) as u64
         } else {
             self.ctx.inst_ctx.c

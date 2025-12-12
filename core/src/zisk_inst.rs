@@ -82,7 +82,7 @@ pub enum ZiskOperationType {
     ArithEq,
     ArithEq384,
     BigInt, // Note: Add new core operations here
-    Dma,
+    Dma,    // Note: To add extra params to precompiles calls
     // ZisK Free Input Operations
     FcallParam,
     Fcall,
@@ -114,7 +114,7 @@ pub const DMA_OP_TYPE_ID: u32 = ZiskOperationType::Dma as u32;
 #[derive(Debug, Clone)]
 pub struct ZiskInst {
     pub paddr: u64,
-    pub store_ra: bool,
+    pub store_pc: bool,
     pub store_use_sp: bool,
     pub store: u64,
     pub store_offset: i64,
@@ -152,7 +152,7 @@ impl Default for ZiskInst {
     fn default() -> Self {
         Self {
             paddr: 0,
-            store_ra: false,
+            store_pc: false,
             store_use_sp: false,
             store: 0,
             store_offset: 0,
@@ -223,8 +223,8 @@ impl ZiskInst {
         if self.store_offset != 0 {
             s += &format!(" store_offset=0x{:x}", self.store_offset as u64);
         }
-        if self.store_ra {
-            s += &format!(" store_ra={}", self.store_ra);
+        if self.store_pc {
+            s += &format!(" store_pc={}", self.store_pc);
         }
         if self.store_use_sp {
             s += &format!(" store_use_sp={}", self.store_use_sp);
@@ -271,7 +271,7 @@ impl ZiskInst {
             | (((self.b_src == SRC_IMM) as u64) << 4)
             | (((self.b_src == SRC_MEM) as u64) << 5)
             | ((self.is_external_op as u64) << 6)
-            | ((self.store_ra as u64) << 7)
+            | ((self.store_pc as u64) << 7)
             | (((self.store == STORE_MEM) as u64) << 8)
             | (((self.store == STORE_IND) as u64) << 9)
             | ((self.set_pc as u64) << 10)

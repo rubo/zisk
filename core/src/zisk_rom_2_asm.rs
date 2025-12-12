@@ -71,6 +71,7 @@ const F_MEM_WRITE_SHIFT: u64 = 36;
 const F_MEM_WRITE: u64 = 1 << F_MEM_WRITE_SHIFT;
 const F_MEM_WIDTH_SHIFT: u64 = 32;
 
+// const PRECOMPILE_BUFFER_SIZE_IN_BYTES: u64 = 0x100000; // 1MB
 const PRECOMPILE_BUFFER_SIZE_IN_BYTES: u64 = 0x10000000; // 256MB
 const PRECOMPILE_BUFFER_SIZE_IN_U64: u64 = PRECOMPILE_BUFFER_SIZE_IN_BYTES / 8;
 const PRECOMPILE_BUFFER_SIZE_U64_MASK: u64 = PRECOMPILE_BUFFER_SIZE_IN_U64 - 1;
@@ -512,7 +513,7 @@ impl ZiskRom2Asm {
         ctx.mem_precompile_results_address =
             format!("qword {}[MEM_PRECOMPILE_RESULTS_ADDRESS]", ctx.ptr);
         ctx.mem_precompile_written_address = format!("qword {}[0x70000000]", ctx.ptr);
-        ctx.mem_precompile_read_address = format!("qword {}[0x70000008]", ctx.ptr);
+        ctx.mem_precompile_read_address = format!("qword {}[0x70001000]", ctx.ptr);
 
         // Preamble
         *code += ".intel_syntax noprefix\n";

@@ -10,37 +10,59 @@ use std::sync::Mutex;
 use tracing::debug;
 use zisk_hints::HintsSink;
 
-enum NameType {
-    Control,
-    Data,
-    SemAvail,
-    SemRead,
+/// Names for a service's shared memory and semaphore resources
+struct ServiceResourceNames {
+    control_name: String,
+    data_name: String,
+    sem_available_name: String,
+    sem_read_name: String,
+}
+
+impl ServiceResourceNames {
+    fn new(service: &AsmService, port: u16, local_rank: i32) -> Self {
+        Self {
+            control_name: AsmSharedMemory::<AsmMTHeader>::shmem_control_name(
+                port, *service, local_rank,
+            ),
+            data_name: AsmSharedMemory::<AsmMTHeader>::shmem_precompile_name(
+                port, *service, local_rank,
+            ),
+            sem_available_name: AsmSharedMemory::<AsmMTHeader>::semaphore_available_name(
+                port, *service, local_rank,
+            ),
+            sem_read_name: AsmSharedMemory::<AsmMTHeader>::semaphore_read_name(
+                port, *service, local_rank,
+            ),
+        }
+    }
+}
+
+/// Represents a service's shared memory and synchronization resources
+struct ServiceResources {
+    /// Control shared memory writer
+    control_writer: SharedMemoryWriter,
+    /// Data shared memory writer
+    data_writer: SharedMemoryWriter,
+    /// Semaphore to signal data availability
+    sem_available: NamedSemaphore,
+    /// Semaphore to wait for data consumption
+    sem_read: NamedSemaphore,
 }
 
 /// HintsShmem struct manages the writing of processed precompile hints to shared memory.
 pub struct HintsShmem {
-    /// Names of the shared memories to write hints to. 0 for control, 1 for data
-    shmem_names: Vec<(String, String)>,
-
-    /// Names of the semaphores for synchronization. 0 for available, 1 for read
-    sem_names: Vec<(String, String)>,
-
-    /// Whether to unlock mapped memory after writing.
-    unlock_mapped_memory: bool,
-
-    /// Shared memory writers for writing processed hints. 0 for control, 1 for data
-    shmem_writers: Mutex<Vec<(SharedMemoryWriter, SharedMemoryWriter)>>,
-
-    /// Control semaphores for synchronization. 0 for available, 1 for read
-    sem_control: Mutex<Vec<(NamedSemaphore, NamedSemaphore)>>,
+    /// Service resources combining shared memory writers and semaphores
+    resources: Mutex<Vec<ServiceResources>>,
 }
 
 unsafe impl Send for HintsShmem {}
 unsafe impl Sync for HintsShmem {}
 
 impl HintsShmem {
-    const CONTROL_PRECOMPILE_SIZE: u64 = 0x1000; // 4KB
+    const CONTROL_PRECOMPILE_SIZE: u64 = 0x2000; // 8KB
     const MAX_PRECOMPILE_SIZE: u64 = 0x10000000; // 256MB
+                                                 // const MAX_PRECOMPILE_SIZE: u64 = 0x100000; // 1MB
+    const BUFFER_THRESHOLD: u64 = 1000; // 1000 bytes - threshold for signaling reader
 
     /// Create a new HintsShmem with the given shared memory names and unlock option.
     ///
@@ -51,127 +73,55 @@ impl HintsShmem {
     ///
     /// # Returns
     /// A new `HintsShmem` instance with uninitialized writers.
-    pub fn new(base_port: Option<u16>, local_rank: i32, unlock_mapped_memory: bool) -> Self {
-        // Generate shared memory names for hints pipeline.
-        let shmem_names = AsmServices::SERVICES
-            .iter()
-            .map(|service| {
-                let port = if let Some(base_port) = base_port {
-                    AsmServices::port_for(service, base_port, local_rank)
-                } else {
-                    AsmServices::default_port(service, local_rank)
-                };
-                let control_name =
-                    Self::resource_name(service, port, local_rank, NameType::Control);
-                let data = Self::resource_name(service, port, local_rank, NameType::Data);
-                (control_name, data)
-            })
-            .collect::<Vec<_>>();
-
-        // Generate semaphore names for hints pipeline.
-        let sem_names = AsmServices::SERVICES
-            .iter()
-            .map(|service| {
-                let port = if let Some(base_port) = base_port {
-                    AsmServices::port_for(service, base_port, local_rank)
-                } else {
-                    AsmServices::default_port(service, local_rank)
-                };
-                let sem_avail = Self::resource_name(service, port, local_rank, NameType::SemAvail);
-                let sem_read = Self::resource_name(service, port, local_rank, NameType::SemRead);
-                (sem_avail, sem_read)
-            })
-            .collect::<Vec<_>>();
-
-        Self {
-            shmem_names,
-            sem_names,
-            unlock_mapped_memory,
-            shmem_writers: Mutex::new(Vec::new()),
-            sem_control: Mutex::new(Vec::new()),
-        }
-    }
-
-    fn resource_name(
-        service: &AsmService,
-        port: u16,
+    pub fn new(
+        base_port: Option<u16>,
         local_rank: i32,
-        name_type: NameType,
-    ) -> String {
-        match name_type {
-            NameType::Control => {
-                AsmSharedMemory::<AsmMTHeader>::shmem_control_name(port, *service, local_rank)
-            }
-            NameType::Data => {
-                AsmSharedMemory::<AsmMTHeader>::shmem_precompile_name(port, *service, local_rank)
-            }
-            NameType::SemAvail => AsmSharedMemory::<AsmMTHeader>::shmem_semaphore_available_name(
-                port, *service, local_rank,
-            ),
-            NameType::SemRead => AsmSharedMemory::<AsmMTHeader>::shmem_semaphore_read_name(
-                port, *service, local_rank,
-            ),
-        }
-    }
+        unlock_mapped_memory: bool,
+    ) -> Result<Self> {
+        let resources_names = AsmServices::SERVICES
+            .iter()
+            .map(|service| {
+                let port = if let Some(base_port) = base_port {
+                    AsmServices::port_for(service, base_port, local_rank)
+                } else {
+                    AsmServices::default_port(service, local_rank)
+                };
+                ServiceResourceNames::new(service, port, local_rank)
+            })
+            .collect();
 
-    /// Check if the shared memory writers have been initialized.
-    fn is_initialized(&self) -> bool {
-        let shmem_writers = self.shmem_writers.lock().unwrap();
-        !shmem_writers.is_empty()
+        let resources = Mutex::new(Self::create_resources(resources_names, unlock_mapped_memory)?);
+
+        Ok(Self { resources })
     }
 
     /// Initialize the shared memory writers for the pipeline.
     ///
     /// This method creates SharedMemoryWriter instances for each shared memory name.
     /// If writers are already initialized it logs a warning and does nothing.
-    fn initialize(&self) -> Result<()> {
-        let mut shmem_writer = self.shmem_writers.lock().unwrap();
-        let mut sem_control = self.sem_control.lock().unwrap();
+    fn create_resources(
+        resources_names: Vec<ServiceResourceNames>,
+        unlock_mapped_memory: bool,
+    ) -> Result<Vec<ServiceResources>> {
+        debug!("Initializing resources for precompile hints");
 
-        // Initialize shared memory writers
-        if !shmem_writer.is_empty() {
-            return Err(anyhow::anyhow!(
-                "SharedMemoryWriters for precompile hints already initialized."
-            ));
-        }
-
-        debug!("Initializing SharedMemoryWriter for precompile hints",);
-        *shmem_writer = self
-            .shmem_names
+        Ok(resources_names
             .iter()
-            .map(|(control_name, name)| {
-                (
-                    Self::create_writer(
-                        control_name,
-                        Self::CONTROL_PRECOMPILE_SIZE as usize,
-                        self.unlock_mapped_memory,
-                    ),
-                    Self::create_writer(
-                        name,
-                        Self::MAX_PRECOMPILE_SIZE as usize,
-                        self.unlock_mapped_memory,
-                    ),
-                )
+            .map(|names: &ServiceResourceNames| ServiceResources {
+                control_writer: Self::create_writer(
+                    &names.control_name,
+                    Self::CONTROL_PRECOMPILE_SIZE as usize,
+                    unlock_mapped_memory,
+                ),
+                data_writer: Self::create_writer(
+                    &names.data_name,
+                    Self::MAX_PRECOMPILE_SIZE as usize,
+                    unlock_mapped_memory,
+                ),
+                sem_available: Self::create_semaphore(&names.sem_available_name),
+                sem_read: Self::create_semaphore(&names.sem_read_name),
             })
-            .collect();
-
-        // Initialize semaphores
-        if !sem_control.is_empty() {
-            return Err(anyhow::anyhow!(
-                "Control semaphores for precompile hints already initialized."
-            ));
-        }
-
-        debug!("Initializing control semaphores for precompile hints",);
-        *sem_control = self
-            .sem_names
-            .iter()
-            .map(|(sem_avail_name, sem_read_name)| {
-                (Self::create_semaphore(sem_avail_name), Self::create_semaphore(sem_read_name))
-            })
-            .collect();
-
-        Ok(())
+            .collect())
     }
 
     /// Create a SharedMemoryWriter with error handling.
@@ -186,12 +136,19 @@ impl HintsShmem {
             .expect("Failed to create semaphore for precompile hints")
     }
 
-    fn write_size(&self, writer: &SharedMemoryWriter) -> u64 {
-        writer.read_u64_at(0)
+    #[inline]
+    fn get_write_size(&self, writer: &SharedMemoryWriter) -> Result<u64> {
+        writer.read_u64_at(0).map_err(|e| anyhow::anyhow!(e))
     }
 
-    fn read_size(&self, writer: &SharedMemoryWriter) -> u64 {
-        writer.read_u64_at(8)
+    #[inline]
+    fn set_write_size(&self, writer: &SharedMemoryWriter, size: u64) -> anyhow::Result<()> {
+        writer.write_u64_at(0, size).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn get_read_size(&self, writer: &SharedMemoryWriter) -> Result<u64> {
+        writer.read_u64_at(4096).map_err(|e| anyhow::anyhow!(e))
     }
 }
 
@@ -205,22 +162,53 @@ impl HintsSink for HintsShmem {
     /// * `Ok(())` - If hints were successfully written to all shared memories
     /// * `Err` - If writing to any shared memory fails
     fn submit(&self, processed: Vec<u64>) -> anyhow::Result<()> {
-        // TODO! Is it necessary????
-        if !self.is_initialized() {
-            self.initialize()?;
+        let data_size = processed.len() as u64;
+
+        let mut resources = self.resources.lock().unwrap();
+
+        // for resource in resources.iter_mut() {
+        let resource = &mut resources[0];
+
+        // Read current positions
+        let write_pos = self.get_write_size(&resource.control_writer)?;
+        let read_pos = self.get_read_size(&resource.control_writer)?;
+
+        // Calculate occupied space in ring buffer (positions are absolute values)
+        let occupied_space = write_pos - read_pos;
+        let available_space = (Self::MAX_PRECOMPILE_SIZE >> 3) - occupied_space;
+
+        debug_assert!(
+            available_space <= (Self::MAX_PRECOMPILE_SIZE >> 3),
+            "Available space calculation error"
+        );
+        // TODO! Check for overflow of write_pos and read_pos and handle it
+
+        // Flow control based on buffer occupancy
+        if available_space < data_size {
+            // Not enough space - signal reader and wait for consumption
+            // resource.sem_available.post()?;
+            if write_pos > 131000 {
+                println!("Waiting on sem_read for precompile hints write_pos={} occupied={} available={} needed={}",
+                    write_pos, occupied_space, available_space, data_size);
+            }
+            resource.sem_read.wait()?;
+        } else if available_space < Self::BUFFER_THRESHOLD {
+            // Buffer getting full - signal reader but don't wait
+            // resource.sem_available.post()?;
         }
 
-        // Input size includes length prefix as u64
-        let shmem_input_size = processed.len();
+        // Write data to shared memory with automatic wraparound
+        resource.data_writer.write_ring_buffer(&processed)?;
 
-        let mut full_input = Vec::with_capacity(shmem_input_size);
-        full_input.extend_from_slice(&processed);
+        // Update write position in control memory with wraparound
+        self.set_write_size(&resource.control_writer, write_pos + data_size)?;
 
-        let shmem_writers = self.shmem_writers.lock().unwrap();
-        for shmem_writer in shmem_writers.iter() {
-            shmem_writer.1.write_input(&full_input)?;
-            shmem_writer.0.write_input(&[processed.len() as u64])?;
-        }
+        resource.sem_available.post()?;
+
+        // if write_pos > 131000 {
+        //     println!("Posted available semaphore for precompile hints {}", write_pos);
+        // }
+        // }
 
         Ok(())
     }

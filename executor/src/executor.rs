@@ -198,7 +198,8 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         };
 
         // Create hints pipeline with null hints stream initially.
-        let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory);
+        let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)
+            .expect("Failed to create HintsShmem");
 
         let hints_processor = PrecompileHintsProcessor::new(hints_shmem)
             .expect("Failed to create PrecompileHintsProcessor");

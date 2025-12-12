@@ -47,7 +47,7 @@ uint64_t get_precompile_results(void);
 #define INITIAL_TRACE_SIZE (uint64_t)0x100000000 // 4GB
 
 #define CONTROL_ADDR (uint64_t)0x70000000
-#define CONTROL_SIZE (uint64_t)0x1000 // 4kB
+#define CONTROL_SIZE (uint64_t)0x2000 // 8kB
 
 uint8_t * pInput = (uint8_t *)INPUT_ADDR;
 uint8_t * pInputLast = (uint8_t *)(INPUT_ADDR + 10440504 - 64);
@@ -317,6 +317,7 @@ int process_id = 0;
 uint64_t input_size = 0;
 
 #define MAX_PRECOMPILE_SIZE (uint64_t)0x10000000 // 256MB
+// #define MAX_PRECOMPILE_SIZE (uint64_t)0x100000 // 1MB
 
 // Precompile results shared memory
 char shmem_precompile_name[128];
@@ -337,8 +338,8 @@ char precompile_file_name[4096] = {0};
 char shmem_control_name[128];
 int shmem_control_fd = -1;
 uint64_t * shmem_control_address = NULL;
-uint64_t * precompile_written_address = NULL;
-uint64_t * precompile_read_address = NULL;
+volatile uint64_t * precompile_written_address = NULL;
+volatile uint64_t * precompile_read_address = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -1790,7 +1791,7 @@ void client_setup (void)
         }
         shmem_control_address = (uint64_t *)pControl;
         precompile_written_address = &shmem_control_address[0];
-        precompile_read_address = &shmem_control_address[1];
+        precompile_read_address = &shmem_control_address[4096/8];
         if (verbose) printf("mmap(control) mapped %lu B and returned address %p in %lu us\n", CONTROL_SIZE, shmem_control_address, duration);
 
         // Create the semaphore for precompile results available signal
@@ -3140,7 +3141,7 @@ void server_setup (void)
         }
         shmem_control_address = (uint64_t *)pControl;
         precompile_written_address = &shmem_control_address[0];
-        precompile_read_address = &shmem_control_address[1];
+        precompile_read_address = &shmem_control_address[4096/8];
         if (verbose) printf("mmap(control) mapped %lu B and returned address %p in %lu us\n", CONTROL_SIZE, shmem_control_address, duration);
 
         // Create the semaphore for precompile results available signal
@@ -4588,6 +4589,19 @@ void file_lock(void)
 
 int _wait_for_prec_avail (void)
 {
+    int sem_prec_avail_value = 0;
+    sem_getvalue(sem_prec_avail, &sem_prec_avail_value);
+    printf("_wait_for_prec_avail() sem_prec_avail_value=%d\n", sem_prec_avail_value);
+
+    // Sync precompile shared memory
+    __sync_synchronize();
+    if (msync((void *)shmem_control_address + 4096, 8, MS_SYNC) != 0) {
+        printf("ERROR: 1 msync failed for shmem_control_address errno=%d=%s\n", errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+
     // Tell the writer that we have read the precompile results
     sem_post(sem_prec_read);
 
@@ -4595,8 +4609,9 @@ int _wait_for_prec_avail (void)
     sem_trywait(sem_prec_avail);
 
     // Sync precompile shared memory
-    if (msync((void *)shmem_control_address, CONTROL_SIZE, MS_SYNC) != 0) {
-        printf("ERROR: msync failed for shmem_control_address errno=%d=%s\n", errno, strerror(errno));
+    __sync_synchronize();
+    if (msync((void *)shmem_control_address, 8, MS_SYNC) != 0) {
+        printf("ERROR: 2 msync failed for shmem_control_address errno=%d=%s\n", errno, strerror(errno));
         fflush(stdout);
         fflush(stderr);
         exit(-1);
@@ -4606,6 +4621,7 @@ int _wait_for_prec_avail (void)
     if (*precompile_written_address > *precompile_read_address)
     {
         // Sync precompile shared memory
+        __sync_synchronize();
         if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
             printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
             fflush(stdout);
@@ -4626,8 +4642,9 @@ int _wait_for_prec_avail (void)
     }
 
     // Sync precompile shared memory
-    if (msync((void *)shmem_control_address, CONTROL_SIZE, MS_SYNC) != 0) {
-        printf("ERROR: msync failed for shmem_control_address errno=%d=%s\n", errno, strerror(errno));
+    __sync_synchronize();
+    if (msync((void *)shmem_control_address, 8, MS_SYNC) != 0) {
+        printf("ERROR: 3 msync failed for shmem_control_address errno=%d=%s\n", errno, strerror(errno));
         fflush(stdout);
         fflush(stderr);
         exit(-1);
@@ -4640,6 +4657,7 @@ int _wait_for_prec_avail (void)
     }
 
     // Sync precompile shared memory
+    __sync_synchronize();
     if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
         printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
         fflush(stdout);

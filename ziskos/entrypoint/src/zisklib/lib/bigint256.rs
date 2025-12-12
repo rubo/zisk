@@ -167,18 +167,14 @@ pub fn wpow256(a: &[u64; 4], exp: &[u64; 4]) -> [u64; 4] {
 
 // ========== Pointer-based API ==========
 
-/// Modular reduction of a 256-bit integer using pointers
+/// Modular reduction of a 256-bit integer
 ///
 /// # Safety
-///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn redmod256_ptr(a: *const u64, m: *const u64, result: *mut u64) {
-    debug_assert!(!a.is_null() && !m.is_null() && !result.is_null());
-
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `m` must point to a valid `[u64; 4]` (32 bytes).
+/// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
+#[no_mangle]
+pub unsafe extern "C" fn redmod256_c(a: *const u64, m: *const u64, result: *mut u64) {
     let mut d = [0u64; 4];
     let mut params = SyscallArith256ModParams {
         a: &*(a as *const [u64; 4]),
@@ -189,22 +185,23 @@ pub unsafe fn redmod256_ptr(a: *const u64, m: *const u64, result: *mut u64) {
     };
     syscall_arith256_mod(&mut params);
 
-    std::ptr::copy_nonoverlapping(d.as_ptr(), result, 4);
+    core::ptr::copy_nonoverlapping(d.as_ptr(), result, 4);
 }
 
-/// Modular addition of a 256-bit integer using pointers
+/// Modular addition of 256-bit integers
 ///
 /// # Safety
-///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `b` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn addmod256_ptr(a: *const u64, b: *const u64, m: *const u64, result: *mut u64) {
-    debug_assert!(!a.is_null() && !b.is_null() && !result.is_null());
-
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `b` must point to a valid `[u64; 4]` (32 bytes).
+/// - `m` must point to a valid `[u64; 4]` (32 bytes).
+/// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
+#[no_mangle]
+pub unsafe extern "C" fn addmod256_c(
+    a: *const u64,
+    b: *const u64,
+    m: *const u64,
+    result: *mut u64,
+) {
     let mut d = [0u64; 4];
     let mut params = SyscallArith256ModParams {
         a: &*(a as *const [u64; 4]),
@@ -215,22 +212,23 @@ pub unsafe fn addmod256_ptr(a: *const u64, b: *const u64, m: *const u64, result:
     };
     syscall_arith256_mod(&mut params);
 
-    std::ptr::copy_nonoverlapping(d.as_ptr(), result, 4);
+    core::ptr::copy_nonoverlapping(d.as_ptr(), result, 4);
 }
 
-/// Modular multiplication of a 256-bit integer using pointers
+/// Modular multiplication of 256-bit integers
 ///
 /// # Safety
-///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `b` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn mulmod256_ptr(a: *const u64, b: *const u64, m: *const u64, result: *mut u64) {
-    debug_assert!(!a.is_null() && !b.is_null() && !result.is_null());
-
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `b` must point to a valid `[u64; 4]` (32 bytes).
+/// - `m` must point to a valid `[u64; 4]` (32 bytes).
+/// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
+#[no_mangle]
+pub unsafe extern "C" fn mulmod256_c(
+    a: *const u64,
+    b: *const u64,
+    m: *const u64,
+    result: *mut u64,
+) {
     let mut d = [0u64; 4];
     let mut params = SyscallArith256ModParams {
         a: &*(a as *const [u64; 4]),
@@ -241,22 +239,17 @@ pub unsafe fn mulmod256_ptr(a: *const u64, b: *const u64, m: *const u64, result:
     };
     syscall_arith256_mod(&mut params);
 
-    std::ptr::copy_nonoverlapping(d.as_ptr(), result, 4);
+    core::ptr::copy_nonoverlapping(d.as_ptr(), result, 4);
 }
 
-/// Wrapping multiplication of 256-bit integers using pointers
+/// Wrapping multiplication of 256-bit integers
 ///
 /// # Safety
-///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `b` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn wmul256_ptr(a: *const u64, b: *const u64, result: *mut u64) {
-    debug_assert!(!a.is_null() && !b.is_null() && !result.is_null());
-
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `b` must point to a valid `[u64; 4]` (32 bytes).
+/// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
+#[no_mangle]
+pub unsafe extern "C" fn wmul256_c(a: *const u64, b: *const u64, result: *mut u64) {
     let mut dl = [0u64; 4];
     let mut dh = [0u64; 4];
     let mut params = SyscallArith256Params {
@@ -268,22 +261,19 @@ pub unsafe fn wmul256_ptr(a: *const u64, b: *const u64, result: *mut u64) {
     };
     syscall_arith256(&mut params);
 
-    std::ptr::copy_nonoverlapping(dl.as_ptr(), result, 4);
+    core::ptr::copy_nonoverlapping(dl.as_ptr(), result, 4);
 }
 
-/// Overflowing multiplication of 256-bit integers using pointers
+/// Overflowing multiplication of 256-bit integers
 ///
 /// # Safety
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `b` must point to a valid `[u64; 4]` (32 bytes).
+/// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
 ///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `b` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn omul256_ptr(a: *const u64, b: *const u64, result: *mut u64) -> bool {
-    debug_assert!(!a.is_null() && !b.is_null() && !result.is_null());
-
+/// Returns `true` if overflow occurred, `false` otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn omul256_c(a: *const u64, b: *const u64, result: *mut u64) -> bool {
     let mut dl = [0u64; 4];
     let mut dh = [0u64; 4];
     let mut params = SyscallArith256Params {
@@ -295,64 +285,52 @@ pub unsafe fn omul256_ptr(a: *const u64, b: *const u64, result: *mut u64) -> boo
     };
     syscall_arith256(&mut params);
 
-    std::ptr::copy_nonoverlapping(dl.as_ptr(), result, 4);
+    core::ptr::copy_nonoverlapping(dl.as_ptr(), result, 4);
 
     // If the high part is non-zero, we have an overflow
     !eq(&dh, &[0u64; 4])
 }
 
-/// Pointer version of divrem256 that works directly with mutable pointers to u64
+/// Division and remainder of 256-bit integers
 ///
 /// # Safety
-///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `b` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn divrem256_ptr(a: *const u64, b: *const u64, q: *mut u64, r: *mut u64) {
-    debug_assert!(!a.is_null() && !b.is_null() && !q.is_null() && !r.is_null());
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `b` must point to a valid `[u64; 4]` (32 bytes).
+/// - `q` must point to a valid `[u64; 4]` (32 bytes), used as quotient output.
+/// - `r` must point to a valid `[u64; 4]` (32 bytes), used as remainder output.
+#[no_mangle]
+pub unsafe extern "C" fn divrem256_c(a: *const u64, b: *const u64, q: *mut u64, r: *mut u64) {
+    let a_ref = &*(a as *const [u64; 4]);
+    let b_ref = &*(b as *const [u64; 4]);
 
     // Hint the result of the division
-    let (quotient, remainder) =
-        fcall_bigint256_div(&*(a as *const [u64; 4]), &*(b as *const [u64; 4]));
+    let (quotient, remainder) = fcall_bigint256_div(a_ref, b_ref);
 
     // Check that a = b * quotient + remainder and remainder < b
     let mut dl = [0u64; 4];
     let mut dh = [0u64; 4];
-    let mut params = SyscallArith256Params {
-        a: &*(b as *const [u64; 4]),
-        b: &quotient,
-        c: &remainder,
-        dl: &mut dl,
-        dh: &mut dh,
-    };
+    let mut params =
+        SyscallArith256Params { a: b_ref, b: &quotient, c: &remainder, dl: &mut dl, dh: &mut dh };
     syscall_arith256(&mut params);
-    assert!(eq(&dl, &*(a as *const [u64; 4])));
-    assert!(lt(&remainder, &*(b as *const [u64; 4])));
+    assert!(eq(&dl, a_ref));
+    assert!(lt(&remainder, b_ref));
 
-    std::ptr::copy_nonoverlapping(quotient.as_ptr(), q, 4);
-    std::ptr::copy_nonoverlapping(remainder.as_ptr(), r, 4);
+    core::ptr::copy_nonoverlapping(quotient.as_ptr(), q, 4);
+    core::ptr::copy_nonoverlapping(remainder.as_ptr(), r, 4);
 }
 
-/// Pointer version of wpow256 that works directly with mutable pointers to u64
+/// Wrapping exponentiation of 256-bit integers
 ///
 /// # Safety
-///
-/// The caller must ensure:
-/// - `a` points to a valid array of at least 4 u64 elements
-/// - `exp` points to a valid array of at least 4 u64 elements
-/// - `result` points to a valid mutable array of at least 4 u64 elements
-/// - All pointers are properly aligned
-#[inline(always)]
-pub unsafe fn wpow256_ptr(a: *const u64, exp: *const u64, result: *mut u64) {
-    debug_assert!(!a.is_null() && !exp.is_null() && !result.is_null());
+/// - `a` must point to a valid `[u64; 4]` (32 bytes).
+/// - `exp` must point to a valid `[u64; 4]` (32 bytes).
+/// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
+#[no_mangle]
+pub unsafe extern "C" fn wpow256_c(a: *const u64, exp: *const u64, result: *mut u64) {
+    let a_ref = &*(a as *const [u64; 4]);
+    let exp_ref = &*(exp as *const [u64; 4]);
 
-    let a_array = &*(a as *const [u64; 4]);
-    let exp_array = &*(exp as *const [u64; 4]);
+    let res = wpow256(a_ref, exp_ref);
 
-    let res = wpow256(a_array, exp_array);
-
-    std::ptr::copy_nonoverlapping(res.as_ptr(), result, 4);
+    core::ptr::copy_nonoverlapping(res.as_ptr(), result, 4);
 }

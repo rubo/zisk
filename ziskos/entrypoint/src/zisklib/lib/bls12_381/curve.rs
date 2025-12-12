@@ -9,11 +9,11 @@ use crate::{
 };
 
 use super::{
-    constants::{E_B, GAMMA},
+    constants::{E_B, GAMMA, IDENTITY_G1},
     fp::{add_fp_bls12_381, mul_fp_bls12_381, neg_fp_bls12_381, square_fp_bls12_381},
 };
 
-/// Check if a point `p` is on the BLS12-381 curve
+/// Check if a non-zero point `p` is on the BLS12-381 curve
 pub fn is_on_curve_bls12_381(p: &[u64; 12]) -> bool {
     let x: [u64; 6] = p[0..6].try_into().unwrap();
     let y: [u64; 6] = p[6..12].try_into().unwrap();
@@ -26,7 +26,7 @@ pub fn is_on_curve_bls12_381(p: &[u64; 12]) -> bool {
     eq(&lhs, &rhs)
 }
 
-/// Check if a point `p` is on the BLS12-381 subgroup
+/// Check if a non-zero point `p` is on the BLS12-381 subgroup
 pub fn is_on_subgroup_bls12_381(p: &[u64; 12]) -> bool {
     // p in subgroup iff:
     //          ((x²-1)/3)(2·σ(P) - P - σ²(P)) == σ²(P)
@@ -57,12 +57,10 @@ pub fn add_bls12_381(p1: &[u64; 12], p2: &[u64; 12]) -> [u64; 12] {
         // Is y1 == y2?
         if eq(&y1, &y2) {
             // Compute the doubling
-            let mut p1 = SyscallPoint384 { x: x1, y: y1 };
-            syscall_bls12_381_curve_dbl(&mut p1);
-            return [p1.x, p1.y].concat().try_into().unwrap();
+            return dbl_bls12_381(p1);
         } else {
             // Return 𝒪
-            return [0u64; 12];
+            return IDENTITY_G1;
         }
     }
 
@@ -74,36 +72,40 @@ pub fn add_bls12_381(p1: &[u64; 12], p2: &[u64; 12]) -> [u64; 12] {
     [p1.x, p1.y].concat().try_into().unwrap()
 }
 
-/// Doubling of a non-zero point
+/// Negation of a non-zero point `p` on the BLS12-381 curve
+pub fn neg_bls12_381(p: &[u64; 12]) -> [u64; 12] {
+    let x: [u64; 6] = p[0..6].try_into().unwrap();
+    let y: [u64; 6] = p[6..12].try_into().unwrap();
+
+    let y_neg = neg_fp_bls12_381(&y);
+    [x, y_neg].concat().try_into().unwrap()
+}
+
+/// Doubling of a non-zero point `p` on the BLS12-381 curve
 pub fn dbl_bls12_381(p: &[u64; 12]) -> [u64; 12] {
     let mut p = SyscallPoint384 { x: p[0..6].try_into().unwrap(), y: p[6..12].try_into().unwrap() };
     syscall_bls12_381_curve_dbl(&mut p);
     [p.x, p.y].concat().try_into().unwrap()
 }
 
-/// Subtraction of two non-zero points
+/// Subtraction of two non-zero points `p1` and `p2` on the BLS12-381 curve
 pub fn sub_bls12_381(p1: &[u64; 12], p2: &[u64; 12]) -> [u64; 12] {
     let x2: [u64; 6] = p2[0..6].try_into().unwrap();
     let y2: [u64; 6] = p2[6..12].try_into().unwrap();
 
+    // P1 - P2 = P1 + (-P2)
     let y2_neg = neg_fp_bls12_381(&y2);
 
     add_bls12_381(p1, &[x2, y2_neg].concat().try_into().unwrap())
 }
 
-/// Multiplies a point `p` on the BLS12-381 curve by a scalar `k` on the BLS12-381 scalar field
+/// Multiplies a non-zero point `p` on the BLS12-381 curve by a scalar `k` on the BLS12-381 scalar field
 pub fn scalar_mul_bls12_381(p: &[u64; 12], k: &[u64; 6]) -> [u64; 12] {
-    // Is p = 𝒪?
-    if *p == [0u64; 12] {
-        // Return 𝒪
-        return [0u64; 12];
-    }
-
     // Direct cases: k = 0, k = 1, k = 2
     match k {
         [0, 0, 0, 0, 0, 0] => {
             // Return 𝒪
-            return [0u64; 12];
+            return IDENTITY_G1;
         }
         [1, 0, 0, 0, 0, 0] => {
             // Return p
@@ -175,7 +177,7 @@ pub fn scalar_mul_bls12_381(p: &[u64; 12], k: &[u64; 6]) -> [u64; 12] {
     [q.x, q.y].concat().try_into().unwrap()
 }
 
-/// Scalar multiplication of a non-zero point by x
+/// Scalar multiplication of a non-zero point `p` by a binary scalar `k`
 pub fn scalar_mul_bin_bls12_381(p: &[u64; 12], k: &[u8]) -> [u64; 12] {
     let x1: [u64; 6] = p[0..6].try_into().unwrap();
     let y1: [u64; 6] = p[6..12].try_into().unwrap();
@@ -206,7 +208,7 @@ pub fn scalar_mul_by_x2div3_bls12_381(p: &[u64; 12]) -> [u64; 12] {
     scalar_mul_bin_bls12_381(p, &X2DIV3_BIN_BE)
 }
 
-/// Compute the sigma endomorphism σ defined as:
+/// Compute the sigma endomorphism σ of a non-zero point `p`, defined as:
 ///              σ : E(Fp)  ->  E(Fp)
 ///                  (x,y) |-> (ɣ·x,y)
 pub fn sigma_endomorphism_bls12_381(p: &[u64; 12]) -> [u64; 12] {
@@ -220,36 +222,33 @@ pub fn sigma_endomorphism_bls12_381(p: &[u64; 12]) -> [u64; 12] {
 // ========== Pointer-based API ==========
 
 /// # Safety
-///
-/// Addition of two non-zero and distinct points
-pub unsafe fn add_bls12_381_ptr(p1: *mut u64, p2: *const u64) {
-    let mut p1_point = SyscallPoint384 {
-        x: core::ptr::read(p1.cast::<[u64; 6]>()),
-        y: core::ptr::read(p1.add(6).cast::<[u64; 6]>()),
-    };
-    let p2_point = SyscallPoint384 {
-        x: core::ptr::read(p2.cast::<[u64; 6]>()),
-        y: core::ptr::read(p2.add(6).cast::<[u64; 6]>()),
-    };
+/// - `p1` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
+/// - `p2` must point to a valid `[u64; 12]` (96 bytes).
+/// - Points must be non-zero and distinct.
+#[no_mangle]
+pub unsafe extern "C" fn add_bls12_381_c(p1: *mut u64, p2: *const u64) {
+    let mut p1_point =
+        SyscallPoint384 { x: *(p1 as *const [u64; 6]), y: *(p1.add(6) as *const [u64; 6]) };
+    let p2_point =
+        SyscallPoint384 { x: *(p2 as *const [u64; 6]), y: *(p2.add(6) as *const [u64; 6]) };
 
     let mut params = SyscallBls12_381CurveAddParams { p1: &mut p1_point, p2: &p2_point };
     syscall_bls12_381_curve_add(&mut params);
 
-    core::ptr::write(p1.cast::<[u64; 6]>(), p1_point.x);
-    core::ptr::write(p1.add(6).cast::<[u64; 6]>(), p1_point.y);
+    *(p1 as *mut [u64; 6]) = p1_point.x;
+    *(p1.add(6) as *mut [u64; 6]) = p1_point.y;
 }
 
 /// # Safety
-///
-/// Doubling of a non-zero point
-pub unsafe fn dbl_bls12_381_ptr(p: *mut u64) {
-    let mut p_point = SyscallPoint384 {
-        x: core::ptr::read(p.cast::<[u64; 6]>()),
-        y: core::ptr::read(p.add(6).cast::<[u64; 6]>()),
-    };
+/// - `p` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
+/// - Point must be non-zero.
+#[no_mangle]
+pub unsafe extern "C" fn dbl_bls12_381_c(p: *mut u64) {
+    let mut p_point =
+        SyscallPoint384 { x: *(p as *const [u64; 6]), y: *(p.add(6) as *const [u64; 6]) };
 
     syscall_bls12_381_curve_dbl(&mut p_point);
 
-    core::ptr::write(p.cast::<[u64; 6]>(), p_point.x);
-    core::ptr::write(p.add(6).cast::<[u64; 6]>(), p_point.y);
+    *(p as *mut [u64; 6]) = p_point.x;
+    *(p.add(6) as *mut [u64; 6]) = p_point.y;
 }

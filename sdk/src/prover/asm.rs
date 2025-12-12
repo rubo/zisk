@@ -144,8 +144,12 @@ impl ProverEngine for AsmProver {
         self.core_prover.backend.verify_constraints(stdin, hints_stream)
     }
 
-    fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult> {
-        self.core_prover.backend.prove(stdin)
+    fn prove(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskProveResult> {
+        self.core_prover.backend.prove(stdin, hints_stream)
     }
 
     fn prove_phase(

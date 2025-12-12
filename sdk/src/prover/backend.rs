@@ -168,7 +168,11 @@ impl ProverBackend {
         self.verify_constraints_debug(stdin, hints_stream, DebugInfo::default())
     }
 
-    pub(crate) fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult> {
+    pub(crate) fn prove(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskProveResult> {
         if self.verify_constraints {
             return Err(anyhow::anyhow!(
                 "Prover initialized with constraint verification enabled. Use `prove` instead."
@@ -178,6 +182,11 @@ impl ProverBackend {
         let start = std::time::Instant::now();
 
         self.witness_lib.set_stdin(stdin);
+        if let Some(stream) = hints_stream {
+            self.witness_lib
+                .set_hints_stream(stream)
+                .map_err(|e| anyhow::anyhow!("Error setting hints stream: {}", e))?;
+        }
 
         self.proofman.set_barrier();
         let proof = self

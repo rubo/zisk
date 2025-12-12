@@ -79,7 +79,11 @@ pub trait ProverEngine {
         hints_stream: Option<StreamSource>,
     ) -> Result<ZiskVerifyConstraintsResult>;
 
-    fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult>;
+    fn prove(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskProveResult>;
 
     fn prove_phase(
         &self,
@@ -181,8 +185,12 @@ impl<C: ZiskBackend> ZiskProver<C> {
     }
 
     /// Generate a proof with the given standard input.
-    pub fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult> {
-        self.prover.prove(stdin)
+    pub fn prove(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskProveResult> {
+        self.prover.prove(stdin, hints_stream)
     }
 
     pub fn prove_phase(

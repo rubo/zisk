@@ -69,10 +69,15 @@ pub trait ProverEngine {
     fn verify_constraints_debug(
         &self,
         stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
         debug_info: Option<Option<String>>,
     ) -> Result<ZiskVerifyConstraintsResult>;
 
-    fn verify_constraints(&self, stdin: ZiskStdin) -> Result<ZiskVerifyConstraintsResult>;
+    fn verify_constraints(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskVerifyConstraintsResult>;
 
     fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult>;
 
@@ -160,14 +165,19 @@ impl<C: ZiskBackend> ZiskProver<C> {
     pub fn verify_constraints_debug(
         &self,
         stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
         debug_info: Option<Option<String>>,
     ) -> Result<ZiskVerifyConstraintsResult> {
-        self.prover.verify_constraints_debug(stdin, debug_info)
+        self.prover.verify_constraints_debug(stdin, hints_stream, debug_info)
     }
 
     /// Verify the constraints with the given standard input.
-    pub fn verify_constraints(&self, stdin: ZiskStdin) -> Result<ZiskVerifyConstraintsResult> {
-        self.prover.verify_constraints(stdin)
+    pub fn verify_constraints(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskVerifyConstraintsResult> {
+        self.prover.verify_constraints(stdin, hints_stream)
     }
 
     /// Generate a proof with the given standard input.

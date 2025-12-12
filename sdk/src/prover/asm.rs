@@ -127,16 +127,21 @@ impl ProverEngine for AsmProver {
     fn verify_constraints_debug(
         &self,
         stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
         debug_info: Option<Option<String>>,
     ) -> Result<ZiskVerifyConstraintsResult> {
         let debug_info =
             create_debug_info(debug_info, self.core_prover.backend.proving_key.clone())?;
 
-        self.core_prover.backend.verify_constraints_debug(stdin, debug_info)
+        self.core_prover.backend.verify_constraints_debug(stdin, hints_stream, debug_info)
     }
 
-    fn verify_constraints(&self, stdin: ZiskStdin) -> Result<ZiskVerifyConstraintsResult> {
-        self.core_prover.backend.verify_constraints(stdin)
+    fn verify_constraints(
+        &self,
+        stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
+    ) -> Result<ZiskVerifyConstraintsResult> {
+        self.core_prover.backend.verify_constraints(stdin, hints_stream)
     }
 
     fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult> {

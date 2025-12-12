@@ -124,6 +124,7 @@ impl ProverBackend {
     pub(crate) fn verify_constraints_debug(
         &self,
         stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
         debug_info: DebugInfo,
     ) -> Result<ZiskVerifyConstraintsResult> {
         if !self.verify_constraints {
@@ -133,6 +134,11 @@ impl ProverBackend {
         let start = std::time::Instant::now();
 
         self.witness_lib.set_stdin(stdin);
+        if let Some(stream) = hints_stream {
+            self.witness_lib
+                .set_hints_stream(stream)
+                .map_err(|e| anyhow::anyhow!("Error setting hints stream: {}", e))?;
+        }
 
         self.proofman
             .verify_proof_constraints_from_lib(&debug_info, false)
@@ -157,8 +163,9 @@ impl ProverBackend {
     pub(crate) fn verify_constraints(
         &self,
         stdin: ZiskStdin,
+        hints_stream: Option<StreamSource>,
     ) -> Result<ZiskVerifyConstraintsResult> {
-        self.verify_constraints_debug(stdin, DebugInfo::default())
+        self.verify_constraints_debug(stdin, hints_stream, DebugInfo::default())
     }
 
     pub(crate) fn prove(&self, stdin: ZiskStdin) -> Result<ZiskProveResult> {

@@ -6,10 +6,25 @@ use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver};
+use std::thread::{self, JoinHandle};
 
 use anyhow::{Context, Result};
 
 use super::{StreamRead, StreamWrite};
+
+/// Errors specific to Unix socket operations
+#[derive(Debug, thiserror::Error)]
+pub enum UnixSocketError {
+    #[error("No client connected yet")]
+    NoClientConnected,
+
+    #[error("Socket not connected")]
+    NotConnected,
+
+    #[error("Failed to write to socket: {0}")]
+    WriteFailed(#[from] std::io::Error),
+}
 
 /// A Unix domain socket implementation of StreamRead using SOCK_SEQPACKET.
 pub struct UnixSocketStreamReader {
@@ -200,6 +215,12 @@ pub struct UnixSocketStreamWriter {
 
     /// The connected socket for writing
     socket: Option<UnixStream>,
+
+    /// Receiver for the accepted socket from background thread
+    socket_receiver: Option<Receiver<UnixStream>>,
+
+    /// Handle to the accept thread
+    accept_thread: Option<JoinHandle<()>>,
 }
 
 impl UnixSocketStreamWriter {
@@ -211,6 +232,8 @@ impl UnixSocketStreamWriter {
             path: path.as_ref().to_path_buf(),
             listener_fd: None,
             socket: None,
+            socket_receiver: None,
+            accept_thread: None,
         })
     }
 
@@ -298,55 +321,53 @@ impl UnixSocketStreamWriter {
         self.listener_fd = Some(sock_fd);
         Ok(())
     }
-
-    /// Accept a connection from the listening socket
-    fn accept_connection(&mut self) -> Result<()> {
-        let listener_fd =
-            self.listener_fd.ok_or_else(|| anyhow::anyhow!("Listener socket not initialized"))?;
-
-        // Close old socket if exists to prevent resource leak
-        self.socket = None;
-
-        // Retry accept on EINTR
-        let conn_fd = loop {
-            let fd =
-                unsafe { libc::accept(listener_fd, std::ptr::null_mut(), std::ptr::null_mut()) };
-
-            if fd < 0 {
-                let err = std::io::Error::last_os_error();
-                if err.kind() == std::io::ErrorKind::Interrupted {
-                    continue; // Retry on EINTR
-                }
-                return Err(anyhow::anyhow!("Failed to accept connection: {}", err));
-            }
-
-            break fd;
-        };
-
-        // Convert to UnixStream for easier handling
-        let socket = unsafe { UnixStream::from_raw_fd(conn_fd) };
-        self.socket = Some(socket);
-
-        Ok(())
-    }
 }
 
 impl StreamWrite for UnixSocketStreamWriter {
     /// Open/initialize the stream for writing
     ///
-    /// Creates a listening socket and waits for a reader connection.
+    /// Creates a listening socket and spawns a background thread to accept connections.
+    /// Returns immediately without blocking.
     fn open(&mut self) -> Result<()> {
-        if self.is_active() {
-            return Ok(());
-        }
-
         // Create listener if not exists
         if self.listener_fd.is_none() {
             self.create_listener()?;
         }
 
-        // Accept a connection
-        self.accept_connection()?;
+        // Spawn accept thread if not already running
+        if self.accept_thread.is_none() {
+            let listener_fd = self.listener_fd.unwrap();
+            let (tx, rx) = mpsc::channel();
+            self.socket_receiver = Some(rx);
+
+            let handle = thread::spawn(move || {
+                // Retry accept on EINTR
+                let conn_fd = loop {
+                    let fd = unsafe {
+                        libc::accept(listener_fd, std::ptr::null_mut(), std::ptr::null_mut())
+                    };
+
+                    if fd < 0 {
+                        let err = std::io::Error::last_os_error();
+                        if err.kind() == std::io::ErrorKind::Interrupted {
+                            continue; // Retry on EINTR
+                        }
+                        eprintln!("Accept failed: {}", err);
+                        return;
+                    }
+
+                    break fd;
+                };
+
+                // Convert to UnixStream
+                let stream = unsafe { UnixStream::from_raw_fd(conn_fd) };
+
+                // Send socket through channel
+                let _ = tx.send(stream);
+            });
+
+            self.accept_thread = Some(handle);
+        }
 
         Ok(())
     }
@@ -355,15 +376,29 @@ impl StreamWrite for UnixSocketStreamWriter {
     ///
     /// With SOCK_SEQPACKET, each write() sends exactly one complete message,
     /// providing natural message boundaries.
+    ///
+    /// Returns an error if no client is connected yet.
     fn write(&mut self, item: &[u8]) -> Result<usize> {
         self.open()?;
 
-        let socket = self
-            .socket
-            .as_mut()
-            .ok_or_else(|| anyhow::anyhow!("UnixSocketStreamWriter: Socket not connected"))?;
+        // Receive socket from channel if we don't have it yet
+        if self.socket.is_none() {
+            if let Some(rx) = &self.socket_receiver {
+                // Non-blocking check for socket from accept thread
+                match rx.try_recv() {
+                    Ok(stream) => {
+                        self.socket = Some(stream);
+                    }
+                    Err(_) => {
+                        return Err(UnixSocketError::NoClientConnected.into());
+                    }
+                }
+            }
+        }
 
-        socket.write_all(item).context("Failed to write to socket")?;
+        let socket = self.socket.as_mut().ok_or(UnixSocketError::NotConnected)?;
+
+        socket.write_all(item).map_err(UnixSocketError::WriteFailed)?;
         Ok(item.len())
     }
 
@@ -378,6 +413,8 @@ impl StreamWrite for UnixSocketStreamWriter {
     /// Close the stream
     fn close(&mut self) -> Result<()> {
         self.flush()?;
+
+        // Clear the socket
         self.socket = None;
 
         if let Some(fd) = self.listener_fd.take() {
@@ -420,7 +457,21 @@ mod tests {
         // Spawn writer (server) thread
         let writer_thread = thread::spawn(move || {
             let mut writer = UnixSocketStreamWriter::new(&socket_path_clone).unwrap();
-            writer.write(b"Hello, World!").unwrap();
+
+            // Retry write until client connects
+            loop {
+                if let Err(e) = writer.write(b"Hello, World!") {
+                    if let Some(UnixSocketError::NoClientConnected) =
+                        e.downcast_ref::<UnixSocketError>()
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    panic!("Unexpected error: {}", e);
+                }
+                break;
+            }
+
             writer.close().unwrap();
         });
 
@@ -446,7 +497,21 @@ mod tests {
         // Spawn writer (server) thread
         let writer_thread = thread::spawn(move || {
             let mut writer = UnixSocketStreamWriter::new(&socket_path_clone).unwrap();
-            writer.write(b"First").unwrap();
+
+            // Retry until client connects for first message
+            loop {
+                if let Err(e) = writer.write(b"First") {
+                    if let Some(UnixSocketError::NoClientConnected) =
+                        e.downcast_ref::<UnixSocketError>()
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    panic!("Unexpected error: {}", e);
+                }
+                break;
+            }
+
             writer.write(b"Second message").unwrap();
             writer.write(b"Third message with more data!").unwrap();
             writer.close().unwrap();
@@ -477,7 +542,21 @@ mod tests {
         // Spawn writer (server) thread
         let writer_thread = thread::spawn(move || {
             let mut writer = UnixSocketStreamWriter::new(&socket_path_clone).unwrap();
-            writer.write(b"ABC").unwrap();
+
+            // Retry until client connects for first message
+            loop {
+                if let Err(e) = writer.write(b"ABC") {
+                    if let Some(UnixSocketError::NoClientConnected) =
+                        e.downcast_ref::<UnixSocketError>()
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    panic!("Unexpected error: {}", e);
+                }
+                break;
+            }
+
             writer.write(b"DEF").unwrap();
             writer.close().unwrap();
         });
@@ -510,7 +589,21 @@ mod tests {
         // Spawn writer (server) thread
         let writer_thread = thread::spawn(move || {
             let mut writer = UnixSocketStreamWriter::new(&socket_path_clone).unwrap();
-            writer.write(&large_data).unwrap();
+
+            // Retry until client connects for first message
+            loop {
+                if let Err(e) = writer.write(&large_data) {
+                    if let Some(UnixSocketError::NoClientConnected) =
+                        e.downcast_ref::<UnixSocketError>()
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    panic!("Unexpected error: {}", e);
+                }
+                break;
+            }
+
             writer.close().unwrap();
         });
 
@@ -535,7 +628,21 @@ mod tests {
         // Spawn writer (server) thread
         let writer_thread = thread::spawn(move || {
             let mut writer = UnixSocketStreamWriter::new(&socket_path_clone).unwrap();
-            writer.write(b"Message").unwrap();
+
+            // Retry until client connects for first message
+            loop {
+                if let Err(e) = writer.write(b"Message") {
+                    if let Some(UnixSocketError::NoClientConnected) =
+                        e.downcast_ref::<UnixSocketError>()
+                    {
+                        thread::sleep(Duration::from_millis(10));
+                        continue;
+                    }
+                    panic!("Unexpected error: {}", e);
+                }
+                break;
+            }
+
             writer.close().unwrap();
         });
 

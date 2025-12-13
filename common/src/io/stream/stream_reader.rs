@@ -1,4 +1,4 @@
-use crate::io::UnixSocketStreamReader;
+use crate::io::{QuicStreamReader, UnixSocketStreamReader};
 
 use super::{FileStreamReader, NullStreamReader};
 
@@ -24,6 +24,7 @@ pub enum StreamSource {
     File(FileStreamReader),
     Null(NullStreamReader),
     UnixSocket(UnixSocketStreamReader),
+    Quic(QuicStreamReader),
 }
 
 impl StreamSource {
@@ -42,6 +43,11 @@ impl StreamSource {
         Ok(StreamSource::UnixSocket(UnixSocketStreamReader::new(path.as_ref())?))
     }
 
+    /// Create a QUIC-based stdin
+    pub fn from_quic(addr: std::net::SocketAddr) -> Result<Self> {
+        Ok(StreamSource::Quic(QuicStreamReader::new(addr)?))
+    }
+
     /// Create a StreamSource from a URI string
     ///
     /// # URI Formats
@@ -52,6 +58,7 @@ impl StreamSource {
     /// # Supported Schemes
     /// - `file://path/to/file`   → File-based stream
     /// - `unix://path/to/socket` → Unix domain socket stream
+    /// - `quic://host:port`      → QUIC network stream (e.g., `quic://127.0.0.1:8080`)
     pub fn from_str<S: Into<String>>(hints_uri: Option<S>) -> Result<StreamSource> {
         if hints_uri.is_none() {
             return Ok(Self::null());
@@ -67,6 +74,7 @@ impl StreamSource {
             match scheme {
                 "file" => Self::from_file(path),
                 "unix" => Self::from_unix_socket(path),
+                "quic" => Self::from_quic(path.parse()?),
                 // Unknown scheme - could error or fallback
                 _ => Err(anyhow::anyhow!("Unknown stream source scheme: {}", scheme)),
             }
@@ -84,6 +92,7 @@ impl StreamRead for StreamSource {
             StreamSource::File(file_stream) => file_stream.open(),
             StreamSource::Null(null_stream) => null_stream.open(),
             StreamSource::UnixSocket(unix_stream) => unix_stream.open(),
+            StreamSource::Quic(quic_stream) => quic_stream.open(),
         }
     }
 
@@ -93,6 +102,7 @@ impl StreamRead for StreamSource {
             StreamSource::File(file_stream) => file_stream.next(),
             StreamSource::Null(null_stream) => null_stream.next(),
             StreamSource::UnixSocket(unix_stream) => unix_stream.next(),
+            StreamSource::Quic(quic_stream) => quic_stream.next(),
         }
     }
 
@@ -102,6 +112,7 @@ impl StreamRead for StreamSource {
             StreamSource::File(file_stream) => file_stream.close(),
             StreamSource::Null(null_stream) => null_stream.close(),
             StreamSource::UnixSocket(unix_stream) => unix_stream.close(),
+            StreamSource::Quic(quic_stream) => quic_stream.close(),
         }
     }
 
@@ -111,6 +122,7 @@ impl StreamRead for StreamSource {
             StreamSource::File(file_stream) => file_stream.is_active(),
             StreamSource::Null(null_stream) => null_stream.is_active(),
             StreamSource::UnixSocket(unix_stream) => unix_stream.is_active(),
+            StreamSource::Quic(quic_stream) => quic_stream.is_active(),
         }
     }
 }

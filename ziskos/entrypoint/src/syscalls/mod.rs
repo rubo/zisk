@@ -63,7 +63,7 @@ macro_rules! ziskos_syscall_ret_u64 {
                 concat!("csrrs {0}, ", stringify!($csr_addr), ", {1}"),
                 out(reg) v,
                 in(reg) $addr,
-                options(nostack, nomem)
+                options(nostack)
             );
         }
         v

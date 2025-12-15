@@ -54,6 +54,7 @@ harness = false
 
 [features]
 default = []
+debug_stats_trace = []
 gpu = ["proofman-common/gpu", "packed"]
 packed = ["proofman-common/packed"]
 # sp = []

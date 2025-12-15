@@ -1,3 +1,4 @@
+mod array_lib;
 mod bigint256;
 mod bls12_381;
 mod bn254;
@@ -6,6 +7,7 @@ mod sha256f_compress;
 mod utils;
 
 // For public consumption
+pub use array_lib::*;
 pub use bigint256::*;
 pub use bls12_381::*;
 pub use bn254::*;

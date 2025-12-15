@@ -17,13 +17,20 @@ witness = { workspace = true }
 proofman-common = { workspace = true }
 proofman = { workspace = true }
 fields = { workspace = true }
-tracing = { workspace = true}
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+thiserror = { workspace = true }
 bytemuck = { workspace = true }
 zstd = { workspace = true }
+
+# QUIC networking
+quinn = { workspace = true }
+tokio = { workspace = true }
+rustls = { workspace = true }
+rcgen = { workspace = true }
 
 # Distributed mode (mpi) is only supported on Linux x86_64
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
@@ -33,7 +40,10 @@ libc = "0.2"
 
 [features]
 default = []
-disable_distributed = ["proofman/disable_distributed", "proofman-common/disable_distributed"]
+disable_distributed = [
+    "proofman/disable_distributed",
+    "proofman-common/disable_distributed",
+]
 stats = []
 
 [lints.rust]

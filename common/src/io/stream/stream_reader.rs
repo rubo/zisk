@@ -1,3 +1,5 @@
+use crate::io::{QuicStreamReader, UnixSocketStreamReader};
+
 use super::{FileStreamReader, NullStreamReader};
 
 use anyhow::Result;
@@ -21,6 +23,8 @@ pub trait StreamRead: Send + 'static {
 pub enum StreamSource {
     File(FileStreamReader),
     Null(NullStreamReader),
+    UnixSocket(UnixSocketStreamReader),
+    Quic(QuicStreamReader),
 }
 
 impl StreamSource {
@@ -33,6 +37,52 @@ impl StreamSource {
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
         Ok(StreamSource::File(FileStreamReader::new(path)?))
     }
+
+    /// Create a Unix socket-based stdin
+    pub fn from_unix_socket<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        Ok(StreamSource::UnixSocket(UnixSocketStreamReader::new(path.as_ref())?))
+    }
+
+    /// Create a QUIC-based stdin
+    pub fn from_quic(addr: std::net::SocketAddr) -> Result<Self> {
+        Ok(StreamSource::Quic(QuicStreamReader::new(addr)?))
+    }
+
+    /// Create a StreamSource from a URI string
+    ///
+    /// # URI Formats
+    /// - `None` → null stream (no input)
+    /// - `"scheme://resource"` → parsed based on scheme
+    /// - No scheme → treated as a file path
+    ///
+    /// # Supported Schemes
+    /// - `file://path/to/file`   → File-based stream
+    /// - `unix://path/to/socket` → Unix domain socket stream
+    /// - `quic://host:port`      → QUIC network stream (e.g., `quic://127.0.0.1:8080`)
+    pub fn from_str<S: Into<String>>(hints_uri: Option<S>) -> Result<StreamSource> {
+        if hints_uri.is_none() {
+            return Ok(Self::null());
+        }
+
+        let uri_str = hints_uri.unwrap().into();
+
+        // Check if URI contains "://" separator
+        if let Some(pos) = uri_str.find("://") {
+            let (scheme, location) = uri_str.split_at(pos);
+            let path = &location[3..]; // Skip "://"
+
+            match scheme {
+                "file" => Self::from_file(path),
+                "unix" => Self::from_unix_socket(path),
+                "quic" => Self::from_quic(path.parse()?),
+                // Unknown scheme - could error or fallback
+                _ => Err(anyhow::anyhow!("Unknown stream source scheme: {}", scheme)),
+            }
+        } else {
+            // No "://" found - fallback as a file path
+            StreamSource::from_file(uri_str.as_str())
+        }
+    }
 }
 
 impl StreamRead for StreamSource {
@@ -41,6 +91,8 @@ impl StreamRead for StreamSource {
         match self {
             StreamSource::File(file_stream) => file_stream.open(),
             StreamSource::Null(null_stream) => null_stream.open(),
+            StreamSource::UnixSocket(unix_stream) => unix_stream.open(),
+            StreamSource::Quic(quic_stream) => quic_stream.open(),
         }
     }
 
@@ -49,6 +101,8 @@ impl StreamRead for StreamSource {
         match self {
             StreamSource::File(file_stream) => file_stream.next(),
             StreamSource::Null(null_stream) => null_stream.next(),
+            StreamSource::UnixSocket(unix_stream) => unix_stream.next(),
+            StreamSource::Quic(quic_stream) => quic_stream.next(),
         }
     }
 
@@ -57,6 +111,8 @@ impl StreamRead for StreamSource {
         match self {
             StreamSource::File(file_stream) => file_stream.close(),
             StreamSource::Null(null_stream) => null_stream.close(),
+            StreamSource::UnixSocket(unix_stream) => unix_stream.close(),
+            StreamSource::Quic(quic_stream) => quic_stream.close(),
         }
     }
 
@@ -65,6 +121,8 @@ impl StreamRead for StreamSource {
         match self {
             StreamSource::File(file_stream) => file_stream.is_active(),
             StreamSource::Null(null_stream) => null_stream.is_active(),
+            StreamSource::UnixSocket(unix_stream) => unix_stream.is_active(),
+            StreamSource::Quic(quic_stream) => quic_stream.is_active(),
         }
     }
 }

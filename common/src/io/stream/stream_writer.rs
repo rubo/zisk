@@ -5,11 +5,8 @@ pub trait StreamWrite: Send + 'static {
     /// Open/initialize the stream for writing
     fn open(&mut self) -> Result<()>;
 
-    /// Write an item to the stream
-    fn write(&mut self, item: &[u8]) -> Result<()>;
-
-    /// Write raw bytes to the stream
-    fn write_bytes(&mut self, data: &[u8]) -> Result<usize>;
+    /// Write data to the stream, returns the number of bytes written
+    fn write(&mut self, item: &[u8]) -> Result<usize>;
 
     /// Flush any buffered data
     fn flush(&mut self) -> Result<()>;

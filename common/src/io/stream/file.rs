@@ -1,11 +1,11 @@
-//! A file-based implementation of FileStreamReader.
-//! This module provides functionality to read input data from a file.
+//! A file-based implementation of FileStreamReader and FileStreamWriter.
+//! This module provides functionality to read and write data from/to files.
 
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
-use super::StreamRead;
+use super::{StreamRead, StreamWrite};
 
 use anyhow::Result;
 
@@ -76,5 +76,67 @@ impl StreamRead for FileStreamReader {
     /// Check if the stream is currently active
     fn is_active(&self) -> bool {
         self.reader.is_some()
+    }
+}
+
+/// A file-based implementation of StreamWrite that writes to a file.
+pub struct FileStreamWriter {
+    /// The path to the output file.
+    path: PathBuf,
+
+    /// Buffered writer for the file.
+    writer: Option<BufWriter<File>>,
+}
+
+impl FileStreamWriter {
+    /// Create a new FileStreamWriter from a file path.
+    pub fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+        Ok(FileStreamWriter { path: path.as_ref().to_path_buf(), writer: None })
+    }
+}
+
+impl StreamWrite for FileStreamWriter {
+    /// Open/initialize the stream for writing
+    fn open(&mut self) -> Result<()> {
+        if self.is_active() {
+            return Ok(());
+        }
+
+        let file = File::create(&self.path)?;
+        self.writer = Some(BufWriter::new(file));
+        Ok(())
+    }
+
+    /// Write data to the stream, returns the number of bytes written
+    fn write(&mut self, item: &[u8]) -> Result<usize> {
+        // Open the file if it's not already open
+        self.open()?;
+
+        let writer = self.writer.as_mut().ok_or_else(|| {
+            anyhow::anyhow!("FileStreamWriter: Writer is not initialized after opening the file")
+        })?;
+
+        writer.write_all(item)?;
+        Ok(item.len())
+    }
+
+    /// Flush any buffered data
+    fn flush(&mut self) -> Result<()> {
+        if let Some(writer) = self.writer.as_mut() {
+            writer.flush()?;
+        }
+        Ok(())
+    }
+
+    /// Close the stream
+    fn close(&mut self) -> Result<()> {
+        self.flush()?;
+        self.writer = None;
+        Ok(())
+    }
+
+    /// Check if the stream is currently active
+    fn is_active(&self) -> bool {
+        self.writer.is_some()
     }
 }

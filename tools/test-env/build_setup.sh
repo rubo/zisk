@@ -113,9 +113,8 @@ main() {
         fi
 
         rm -rf build/provingKey
-        ensure node "${WORKSPACE_DIR}/pil2-proofman-js/src/main_setup.js" \
-            --max-old-space-size=16384 \
-            --stack-size=8192 \
+        ensure node --max-old-space-size=16384 --stack-size=8192 \
+            "${WORKSPACE_DIR}/pil2-proofman-js/src/main_setup.js" \
             -a ./pil/zisk.pilout -b build \
             -u tmp/fixed ${setup_flags} \
             -s state-machines/starkstructs.json

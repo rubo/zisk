@@ -605,11 +605,11 @@ impl Coordinator {
         active_workers: &[WorkerId],
     ) -> CoordinatorResult<()> {
         let input_source = match job.input_mode {
-            InputModeDto::InputModePath(ref path) => {
-                InputSourceDto::InputPath(path.display().to_string())
+            InputModeDto::InputModePath(ref inputs_uri, ref hints_uri) => {
+                InputSourceDto::InputPath(inputs_uri.clone(), hints_uri.clone())
             }
-            InputModeDto::InputModeData(ref path) => {
-                let inputs = tokio::fs::read(path).await.map_err(|e| {
+            InputModeDto::InputModeData(ref inputs_uri, ref _hints_uri) => {
+                let inputs = tokio::fs::read(inputs_uri).await.map_err(|e| {
                     CoordinatorError::Internal(format!(
                         "Failed to read input data for job {}: {}",
                         job.job_id, e

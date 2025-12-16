@@ -47,6 +47,8 @@ pub trait ProverEngine {
 
     fn set_stdin(&self, stdin: ZiskStdin);
 
+    fn set_hints_stream(&self, hints_stream: StreamSource) -> Result<()>;
+
     fn executed_steps(&self) -> u64;
 
     fn execute(
@@ -108,6 +110,11 @@ impl<C: ZiskBackend> ZiskProver<C> {
     /// Set the standard input for the current proof.
     pub fn set_stdin(&self, stdin: ZiskStdin) {
         self.prover.set_stdin(stdin);
+    }
+
+    /// Set the hints stream for the current proof.
+    pub fn set_hints_stream(&self, hints_stream: StreamSource) -> Result<()> {
+        self.prover.set_hints_stream(hints_stream)
     }
 
     /// Get the world rank of the prover. The world rank is the rank of the prover in the global MPI context.

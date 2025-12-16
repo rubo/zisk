@@ -54,6 +54,7 @@ impl<HP: HintsProcessor + Send + Sync + 'static> HintsStream<HP> {
     /// # Arguments
     /// * `stream` - The new StreamSource source for reading hints.
     pub fn set_hints_stream(&mut self, mut stream: StreamSource) -> Result<()> {
+        // TODO!!!!!! Check if it is necessary to close the previous stream
         // Stop the existing thread if running
         self.stop_thread();
 

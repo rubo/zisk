@@ -89,6 +89,10 @@ impl ProverEngine for AsmProver {
         self.core_prover.backend.witness_lib.set_stdin(stdin);
     }
 
+    fn set_hints_stream(&self, hints_stream: StreamSource) -> anyhow::Result<()> {
+        self.core_prover.backend.witness_lib.set_hints_stream(hints_stream)
+    }
+
     fn executed_steps(&self) -> u64 {
         self.core_prover
             .backend

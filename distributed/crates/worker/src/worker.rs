@@ -9,7 +9,7 @@ use std::fs;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
-use zisk_common::io::ZiskStdin;
+use zisk_common::io::{StreamSource, ZiskStdin};
 use zisk_distributed_common::{AggregationParams, DataCtx, InputSourceDto, JobPhase, WorkerState};
 use zisk_distributed_common::{ComputeCapacity, JobId, WorkerId};
 use zisk_sdk::{Asm, Emu, ProverClient, ZiskBackend, ZiskProver};
@@ -531,9 +531,11 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         let phase = proofman::ProvePhase::Contributions;
 
         match input_source {
-            InputSourceDto::InputPath(input_path) => {
-                let stdin = ZiskStdin::from_file(input_path)?;
+            InputSourceDto::InputPath(inputs_uri, hints_uri) => {
+                let stdin = ZiskStdin::from_file(inputs_uri)?;
+                let hints_stdin = StreamSource::from_file(hints_uri)?; // TODO!!!!!! CHANGE THIS
                 prover.set_stdin(stdin);
+                prover.set_hints_stream(hints_stdin)?;
             }
             InputSourceDto::InputData(input_data) => {
                 let stdin = ZiskStdin::from_vec(input_data);

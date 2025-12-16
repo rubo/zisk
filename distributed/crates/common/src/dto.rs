@@ -4,7 +4,7 @@
 //! These DTOs serve as the canonical data structures for business logic, separate from external
 //! representations like gRPC protobuf types or serialization formats.
 
-use std::{fmt::Display, path::PathBuf};
+use std::fmt::Display;
 
 use crate::{ComputeCapacity, DataId, JobId, JobPhase, JobState, WorkerId, WorkerState};
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -68,17 +68,26 @@ pub struct SystemStatusDto {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub enum InputModeDto {
-    InputModeNone = 0,          // No input provided
-    InputModePath(PathBuf) = 1, // Input will be provided as a path
-    InputModeData(PathBuf) = 2, // Input data will be sent directly
+    // No input provided
+    InputModeNone = 0,
+    // Input will be provided as a path. First String is the inputs path,
+    // second String is the precompiles hints path
+    InputModePath(String, String) = 1,
+    // Input will be provided as a path. First String is the inputs path URI,
+    // second String is the precompiles hints URI
+    InputModeData(String, String) = 2,
 }
 
 impl Display for InputModeDto {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InputModeDto::InputModeNone => write!(f, "None"),
-            InputModeDto::InputModePath(path) => write!(f, "Path({})", path.display()),
-            InputModeDto::InputModeData(path) => write!(f, "Data({})", path.display()),
+            InputModeDto::InputModePath(inputs, hints) => {
+                write!(f, "Path(inputs: {}, hints: {})", inputs, hints)
+            }
+            InputModeDto::InputModeData(inputs, hints) => {
+                write!(f, "Data(inputs: {}, hints: {})", inputs, hints)
+            }
         }
     }
 }
@@ -160,7 +169,7 @@ pub struct ContributionParamsDto {
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub enum InputSourceDto {
-    InputPath(String),
+    InputPath(String, String), // (inputs_path, hints_path)
     InputData(Vec<u8>),
     InputNull,
 }

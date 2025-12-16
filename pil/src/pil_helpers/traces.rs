@@ -16,7 +16,9 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "72ffe234f081a450c9823e4108c50df316c8e070995b9b09d90c0be7dba6fdd3";
+pub const PILOUT_HASH: &str = "b6a95d37ee456885c594ed4f5dcabe263897c7117efc5992e6f54e42c61217eb";
+
+pub const MERKLE_TREE_ARITY: u64 = 4;
 
 //AIRGROUP CONSTANTS
 
@@ -332,15 +334,15 @@ pub type ArithEq384TracePacked<F> = GenericTrace<ArithEq384TraceRowPacked<F>, 10
 trace_row!(KeccakfFixedRow<F> {
  CLK_0: F, __L1__: F,
 });
-pub type KeccakfFixed<F> = GenericTrace<KeccakfFixedRow<F>, 65536, 0, 16>;
+pub type KeccakfFixed<F> = GenericTrace<KeccakfFixedRow<F>, 131072, 0, 16>;
 
 trace_row!(KeccakfTraceRow<F> {
  in_use_clk_0:bit, in_use:bit, state:[bit; 1600], chunk_acc:[ubit(22); 533], rem_acc:u8, step_addr:ubit(40),
 });
-pub type KeccakfTrace<F> = GenericTrace<KeccakfTraceRow<F>, 65536, 0, 16>;
+pub type KeccakfTrace<F> = GenericTrace<KeccakfTraceRow<F>, 131072, 0, 16>;
 
 
-pub type KeccakfTracePacked<F> = GenericTrace<KeccakfTraceRowPacked<F>, 65536, 0, 16>;
+pub type KeccakfTracePacked<F> = GenericTrace<KeccakfTraceRowPacked<F>, 131072, 0, 16>;
 
 
 trace_row!(Sha256fFixedRow<F> {
@@ -369,25 +371,25 @@ pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048
 
 
 trace_row!(VirtualTable0FixedRow<F> {
- UID: [F; 16], column: [F; 83], __L1__: F,
+ UID: [F; 8], column: [F; 43], __L1__: F,
 });
-pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 1048576, 0, 19>;
+pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 2097152, 0, 19>;
 
 trace_row!(VirtualTable0TraceRow<F> {
- multiplicity:[F; 16],
+ multiplicity:[F; 8],
 });
-pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 1048576, 0, 19>;
+pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 2097152, 0, 19>;
 
 
 trace_row!(VirtualTable1FixedRow<F> {
- UID: [F; 16], column: [F; 128], __L1__: F,
+ UID: [F; 8], column: [F; 64], __L1__: F,
 });
-pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 1048576, 0, 20>;
+pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 2097152, 0, 20>;
 
 trace_row!(VirtualTable1TraceRow<F> {
- multiplicity:[F; 16],
+ multiplicity:[F; 8],
 });
-pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 1048576, 0, 20>;
+pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 2097152, 0, 20>;
 
 
 trace_row!(RomRomTraceRow<F> {

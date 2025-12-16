@@ -117,7 +117,8 @@ main() {
             --max-old-space-size=8192 \
             --stack-size=65500 \
             -a ./pil/zisk.pilout -b build \
-            -u tmp/fixed ${setup_flags}
+            -u tmp/fixed ${setup_flags} \
+            -s state-machines/starkstructs.json
     fi
 
     if [[ ${USE_CACHE_SETUP} == "1" && ${cached} == "0" ]]; then

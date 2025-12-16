@@ -110,11 +110,6 @@ impl<F: PrimeField64> KeccakfSM<F> {
                 }
                 if r > 0 {
                     trace[r - 1].set_chunk_acc(i, acc);
-
-                    if lookup_active {
-                        let table_row = KeccakfTableSM::calculate_table_row(acc);
-                        self.std.inc_virtual_row(self.table_id, table_row as u64, 1);
-                    }
                 }
             }
 
@@ -128,11 +123,6 @@ impl<F: PrimeField64> KeccakfSM<F> {
             }
             if r > 0 {
                 trace[r - 1].set_rem_acc(acc);
-
-                if lookup_active {
-                    let table_row = KeccakfTableSM::calculate_table_row(acc as u32);
-                    self.std.inc_virtual_row(self.table_id, table_row as u64, 1);
-                }
             }
         }
 
@@ -141,8 +131,8 @@ impl<F: PrimeField64> KeccakfSM<F> {
         }
 
         // Fill step and addr
-        trace[0].set_step_addr(step.unwrap());
-        trace[1].set_step_addr(addr.unwrap() as u64);
+        trace[0].set_step_addr(step.unwrap_or(0));
+        trace[1].set_step_addr(addr.unwrap_or(0) as u64);
 
         // Fill in_use_clk_0
         trace[0].set_in_use_clk_0(true);
@@ -165,8 +155,6 @@ impl<F: PrimeField64> KeccakfSM<F> {
         inputs: &[Vec<KeccakfInput>],
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<AirInstance<F>> {
-        // TODO: Multiplicity update in this function
-
         let mut trace = KeccakfTraceType::new_from_vec_zeroes(trace_buffer)?;
         let num_rows = trace.num_rows();
 
@@ -206,31 +194,54 @@ impl<F: PrimeField64> KeccakfSM<F> {
             }
         }
 
-        par_traces.into_par_iter().enumerate().for_each(|(index, trace)| {
+        par_traces.par_iter_mut().enumerate().for_each(|(index, trace)| {
             let input_index = inputs_indexes[index];
             let input = &inputs[input_index.0][input_index.1];
             self.process_trace(trace, &input.state, Some(input.addr_main), Some(input.step_main));
         });
 
+        // 2] Update lookup table
+        let mut table = vec![0u32; TABLE_SIZE as usize];
+        for trace in &par_traces {
+            for r in 1..ROWS_BY_KECCAKF {
+                for i in 0..Self::NUM_REDUCED {
+                    let table_row =
+                        KeccakfTableSM::calculate_table_row(trace[r - 1].get_chunk_acc(i));
+                    table[table_row as usize] += 1;
+                }
+                let table_row =
+                    KeccakfTableSM::calculate_table_row(trace[r - 1].get_rem_acc() as u32);
+                table[table_row as usize] += 1;
+            }
+        }
+        table.into_par_iter().enumerate().for_each(|(row, value)| {
+            if value > 0 {
+                self.std.inc_virtual_row(self.table_id, row as u64, value as u64);
+            }
+        });
         timer_stop_and_log_trace!(KECCAKF_TRACE);
 
         timer_start_trace!(KECCAKF_PADDING);
 
-        // 2] Fill the padding rows with Keccakf(0)
+        // 3] Fill the padding rows with Keccakf(0)
         let padding_rows_start = num_rows_needed;
         let padding_rows_end =
             padding_rows_start + ((num_available_keccakfs - num_inputs) * ROWS_BY_KECCAKF);
 
         // Split the padding trace into padding chunks
         let padding_trace = &mut trace.buffer[padding_rows_start..padding_rows_end];
-        let padding_chunks: Vec<_> = padding_trace.chunks_mut(ROWS_BY_KECCAKF).collect();
+        let mut padding_chunks: Vec<_> = padding_trace.chunks_mut(ROWS_BY_KECCAKF).collect();
 
         // Process padding in parallel
-        padding_chunks.into_par_iter().for_each(|trace_chunk| {
-            self.process_trace(trace_chunk, &[0u64; 25], None, None);
-        });
+        if let Some((first, rest)) = padding_chunks.split_first_mut() {
+            self.process_trace(first, &[0u64; 25], None, None);
 
-        // 3] The non-usable rows should be zeroes, which are already set at initialization
+            rest.par_iter_mut().for_each(|chunk| {
+                chunk.copy_from_slice(first);
+            });
+        }
+
+        // 4] The non-usable rows should be zeroes, which are already set at initialization
 
         timer_stop_and_log_trace!(KECCAKF_PADDING);
 

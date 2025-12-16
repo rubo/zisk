@@ -205,7 +205,7 @@ Please note that the process can be long, taking approximately 45-60 minutes dep
 
 6. Generate setup data: (this step may take 30-45 minutes):
     ```bash
-    node ../pil2-proofman-js/src/main_setup.js --stack-size=8192 -a ./pil/zisk.pilout -b build -t ../pil2-proofman/pil2-components/lib/std/pil -u tmp/fixed -r
+    node ../pil2-proofman-js/src/main_setup.js --stack-size=8192 -a ./pil/zisk.pilout -b build -t ../pil2-proofman/pil2-components/lib/std/pil -u tmp/fixed -r -s ./state-machines/starkstructs.json
     ```
 
     This command generates the `build/provingKey` directory.

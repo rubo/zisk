@@ -1040,7 +1040,7 @@ dependencies = [
 [[package]]
 name = "curves"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "fields",
  "num-bigint",
@@ -1383,7 +1383,7 @@ dependencies = [
 [[package]]
 name = "fields"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "num-bigint",
  "paste",
@@ -2215,9 +2215,9 @@ dependencies = [
 
 [[package]]
 name = "libredox"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "416f7e718bdb06000964960ffa43b4335ad4012ae8b99060261aa4a8088d5ccb"
+checksum = "df15f6eac291ed1cf25865b1ee60399f57e7c227e7f51bdbd4c5270396a9ed50"
 dependencies = [
  "bitflags 2.10.0",
  "libc",
@@ -2701,7 +2701,7 @@ dependencies = [
 [[package]]
 name = "pil-std-lib"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "colored",
  "fields",
@@ -3051,7 +3051,7 @@ dependencies = [
 [[package]]
 name = "proofman"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "blake3",
  "borsh",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "proofman-common"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "borsh",
  "colored",
@@ -3117,7 +3117,7 @@ dependencies = [
 [[package]]
 name = "proofman-hints"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "fields",
  "proofman-common",
@@ -3129,7 +3129,7 @@ dependencies = [
 [[package]]
 name = "proofman-macros"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3140,7 +3140,7 @@ dependencies = [
 [[package]]
 name = "proofman-starks-lib-c"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "crossbeam-channel",
  "tracing",
@@ -3149,7 +3149,7 @@ dependencies = [
 [[package]]
 name = "proofman-util"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "colored",
  "fields",
@@ -3160,13 +3160,12 @@ dependencies = [
 [[package]]
 name = "proofman-verifier"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "bytemuck",
  "fields",
  "rayon",
  "tracing",
- "zstd",
 ]
 
 [[package]]
@@ -5411,7 +5410,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 [[package]]
 name = "witness"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#ba6c7400a932ca4e090199f9a9c1ab1cd73702c8"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#eb2eb2d2ebafbcf6b9addfda84848b328d303f25"
 dependencies = [
  "colored",
  "fields",

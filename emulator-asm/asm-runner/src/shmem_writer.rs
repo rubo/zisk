@@ -124,11 +124,7 @@ impl SharedMemoryWriter {
     ///
     /// # Arguments
     /// * `data` - A slice of data to write to shared memory
-    ///
-    /// # Returns
-    /// * `Ok(())` - If data was successfully written
-    /// * `Err` - If msync fails
-    pub fn write_ring_buffer<T>(&mut self, data: &[T]) -> Result<()> {
+    pub fn write_ring_buffer<T>(&mut self, data: &[T]) {
         let byte_size = data.len() * std::mem::size_of::<T>();
         let data_ptr = data.as_ptr() as *const u8;
 
@@ -161,8 +157,6 @@ impl SharedMemoryWriter {
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Reads a u64 from shared memory at a specific offset (in bytes)
@@ -178,10 +172,10 @@ impl SharedMemoryWriter {
     /// # Returns
     /// * The u64 value read from the specified offset (in native endianness)
     #[inline]
-    pub fn read_u64_at(&self, offset: usize) -> Result<u64> {
+    pub fn read_u64_at(&self, offset: usize) -> u64 {
         debug_assert_eq!(offset % 8, 0, "Offset must be 8-byte aligned");
 
-        Ok(unsafe { (self.ptr.add(offset) as *const u64).read() })
+        unsafe { (self.ptr.add(offset) as *const u64).read() }
     }
 
     /// Writes a u64 to shared memory at a specific offset (in bytes)
@@ -195,14 +189,12 @@ impl SharedMemoryWriter {
     /// - The shared memory contains at least `offset + 8` bytes of valid data
     /// - The offset is 8-byte aligned for optimal performance
     #[inline]
-    pub fn write_u64_at(&self, offset: usize, value: u64) -> Result<()> {
+    pub fn write_u64_at(&self, offset: usize, value: u64) {
         debug_assert_eq!(offset % 8, 0, "Offset must be 8-byte aligned");
 
         unsafe {
             (self.ptr.add(offset) as *mut u64).write(value);
         }
-
-        Ok(())
     }
 }
 

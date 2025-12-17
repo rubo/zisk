@@ -90,7 +90,7 @@ impl HintsShmem {
         let mut resources = Self::create_resources(resources_names, unlock_mapped_memory)?;
 
         for resource in resources.iter_mut() {
-            resource.control_writer.write_u64_at(0, 0)?;
+            resource.control_writer.write_u64_at(0, 0);
         }
 
         Ok(Self { resources: Mutex::new(resources) })
@@ -162,8 +162,8 @@ impl HintsSink for HintsShmem {
 
         for resource in resources.iter_mut() {
             // Read current positions
-            let write_pos = resource.control_writer.read_u64_at(0)?;
-            let read_pos = resource.control_reader.read_u64_at(0)?;
+            let write_pos = resource.control_writer.read_u64_at(0);
+            let read_pos = resource.control_reader.read_u64_at(0);
 
             // Calculate occupied space in ring buffer (positions are absolute values)
             let occupied_space = write_pos - read_pos;
@@ -182,10 +182,10 @@ impl HintsSink for HintsShmem {
             }
 
             // Write data to shared memory with automatic wraparound
-            resource.data_writer.write_ring_buffer(&processed)?;
+            resource.data_writer.write_ring_buffer(&processed);
 
             // Update write position in control memory with wraparound
-            resource.control_writer.write_u64_at(0, write_pos + data_size)?;
+            resource.control_writer.write_u64_at(0, write_pos + data_size);
 
             resource.sem_available.post()?;
         }

@@ -92,12 +92,10 @@ impl SharedMemoryReader {
     /// # Returns
     /// * The u64 value read from the specified offset (in native endianness)
     #[inline]
-    pub fn read_u64_at(&self, offset: usize) -> Result<u64> {
+    pub fn read_u64_at(&self, offset: usize) -> u64 {
         debug_assert_eq!(offset % 8, 0, "Offset must be 8-byte aligned");
 
-        // compiler_fence(Ordering::Acquire);
-
-        Ok(unsafe { (self.ptr.add(offset) as *const u64).read() })
+        unsafe { (self.ptr.add(offset) as *const u64).read() }
     }
 
     /// Reads a slice of data from shared memory at a specific offset

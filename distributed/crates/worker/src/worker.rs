@@ -533,9 +533,10 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         match input_source {
             InputSourceDto::InputPath(inputs_uri, hints_uri) => {
                 let stdin = ZiskStdin::from_file(inputs_uri)?;
-                let hints_stdin = StreamSource::from_file(hints_uri)?; // TODO!!!!!! CHANGE THIS
+                let hints_stream = StreamSource::from_str(hints_uri.into())?;
+
                 prover.set_stdin(stdin);
-                prover.set_hints_stream(hints_stdin)?;
+                prover.set_hints_stream(hints_stream)?;
             }
             InputSourceDto::InputData(input_data) => {
                 let stdin = ZiskStdin::from_vec(input_data);

@@ -4,7 +4,9 @@
 //! using SharedMemoryWriter instances.
 
 use anyhow::Result;
-use asm_runner::{AsmService, AsmServices, AsmSharedMemory, SharedMemoryReader, SharedMemoryWriter};
+use asm_runner::{
+    AsmService, AsmServices, AsmSharedMemory, SharedMemoryReader, SharedMemoryWriter,
+};
 use named_sem::NamedSemaphore;
 use std::sync::Mutex;
 use tracing::debug;

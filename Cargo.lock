@@ -541,9 +541,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.19.0"
+version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
+checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
 
 [[package]]
 name = "bytemuck"
@@ -795,7 +795,7 @@ dependencies = [
  "serde-untagged",
  "serde_core",
  "serde_json",
- "toml 0.9.8",
+ "toml 0.9.9+spec-1.0.0",
  "winnow",
  "yaml-rust2",
 ]
@@ -1040,7 +1040,7 @@ dependencies = [
 [[package]]
 name = "curves"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "fields",
  "num-bigint",
@@ -1383,7 +1383,7 @@ dependencies = [
 [[package]]
 name = "fields"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "num-bigint",
  "paste",
@@ -2701,7 +2701,7 @@ dependencies = [
 [[package]]
 name = "pil-std-lib"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "colored",
  "fields",
@@ -3036,7 +3036,7 @@ version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219cb19e96be00ab2e37d6e299658a0cfa83e52429179969b0f0121b4ac46983"
 dependencies = [
- "toml_edit 0.23.9",
+ "toml_edit 0.23.10+spec-1.0.0",
 ]
 
 [[package]]
@@ -3051,7 +3051,7 @@ dependencies = [
 [[package]]
 name = "proofman"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "blake3",
  "borsh",
@@ -3086,7 +3086,7 @@ dependencies = [
 [[package]]
 name = "proofman-common"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "borsh",
  "colored",
@@ -3117,7 +3117,7 @@ dependencies = [
 [[package]]
 name = "proofman-hints"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "fields",
  "proofman-common",
@@ -3129,7 +3129,7 @@ dependencies = [
 [[package]]
 name = "proofman-macros"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3140,7 +3140,7 @@ dependencies = [
 [[package]]
 name = "proofman-starks-lib-c"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "crossbeam-channel",
  "tracing",
@@ -3149,7 +3149,7 @@ dependencies = [
 [[package]]
 name = "proofman-util"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "colored",
  "fields",
@@ -3160,7 +3160,7 @@ dependencies = [
 [[package]]
 name = "proofman-verifier"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "bytemuck",
  "fields",
@@ -3630,9 +3630,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.13.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "708c0f9d5f54ba0272468c1d306a52c495b31fa155e91bc25371e6df7996908c"
+checksum = "21e6f2ab2928ca4291b86736a8bd920a277a399bba1589409d72154ff87c1282"
 dependencies = [
  "web-time",
  "zeroize",
@@ -3785,9 +3785,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e24345aa0fe688594e73770a5f6d1b216508b4f93484c0026d521acd30134392"
+checksum = "f8bbf91e5a4d6315eee45e704372590b30e260ee83af6639d64557f51b067776"
 dependencies = [
  "serde_core",
 ]
@@ -4440,14 +4440,14 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.9.8"
+version = "0.9.9+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0dc8b1fb61449e27716ec0e1bdf0f6b8f3e8f6b05391e8497b8b6d7804ea6d8"
+checksum = "eb5238e643fc34a1d5d7e753e1532a91912d74b63b92b3ea51fde8d1b7bc79dd"
 dependencies = [
  "indexmap",
  "serde_core",
- "serde_spanned 1.0.3",
- "toml_datetime 0.7.3",
+ "serde_spanned 1.0.4",
+ "toml_datetime 0.7.4+spec-1.0.0",
  "toml_parser",
  "toml_writer",
  "winnow",
@@ -4464,9 +4464,9 @@ dependencies = [
 
 [[package]]
 name = "toml_datetime"
-version = "0.7.3"
+version = "0.7.4+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2cdb639ebbc97961c51720f858597f7f24c4fc295327923af55b74c3c724533"
+checksum = "fe3cea6b2aa3b910092f6abd4053ea464fab5f9c170ba5e9a6aead16ec4af2b6"
 dependencies = [
  "serde_core",
 ]
@@ -4487,21 +4487,21 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.23.9"
+version = "0.23.10+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d7cbc3b4b49633d57a0509303158ca50de80ae32c265093b24c414705807832"
+checksum = "84c8b9f757e028cee9fa244aea147aab2a9ec09d5325a9b01e0a49730c2b5269"
 dependencies = [
  "indexmap",
- "toml_datetime 0.7.3",
+ "toml_datetime 0.7.4+spec-1.0.0",
  "toml_parser",
  "winnow",
 ]
 
 [[package]]
 name = "toml_parser"
-version = "1.0.4"
+version = "1.0.5+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0cbe268d35bdb4bb5a56a2de88d0ad0eb70af5384a99d648cd4b3d04039800e"
+checksum = "4c03bee5ce3696f31250db0bbaff18bc43301ce0e8db2ed1f07cbb2acf89984c"
 dependencies = [
  "winnow",
 ]
@@ -4514,9 +4514,9 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "toml_writer"
-version = "1.0.4"
+version = "1.0.5+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df8b2b54733674ad286d16267dcfc7a71ed5c776e4ac7aa3c3e2561f7c637bf2"
+checksum = "a9cd6190959dce0994aa8970cd32ab116d1851ead27e866039acaf2524ce44fa"
 
 [[package]]
 name = "tonic"
@@ -5410,7 +5410,7 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 [[package]]
 name = "witness"
 version = "0.15.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=feature%2Fverify-mt-optimization#5befcf2b68b0252194b5155afb476fea2ec7bee2"
+source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.15.0#d2862b995fec104e3ad424b64ec8de8ab612d3b0"
 dependencies = [
  "colored",
  "fields",
@@ -5700,7 +5700,7 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-stream",
- "toml 0.9.8",
+ "toml 0.9.9+spec-1.0.0",
  "tonic",
  "tracing",
  "uuid",

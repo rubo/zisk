@@ -516,13 +516,24 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
 
         let job_id = JobId::from(request.job_id);
         let input_source = match params.input_source {
-            Some(InputSource::InputPath(ref path)) => {
-                let input_path = self.worker_config.worker.inputs_folder.join(PathBuf::from(path));
+            Some(InputSource::InputPath(ref input_uris)) => {
+                // Validate and get the full path
+                let inputs_uri = Self::validate_subdir(
+                    &self.worker_config.worker.inputs_folder,
+                    &PathBuf::from(&input_uris.inputs_path),
+                )
+                .await?;
 
-                // Validate that input_path is a subdirectory of inputs_folder
-                Self::validate_subdir(&self.worker_config.worker.inputs_folder, &input_path)?;
+                let hints_uri = Self::validate_subdir(
+                    &self.worker_config.worker.inputs_folder,
+                    &PathBuf::from(&input_uris.hints_path),
+                )
+                .await?;
 
-                InputSourceDto::InputPath(input_path.display().to_string())
+                InputSourceDto::InputPath(
+                    inputs_uri.to_string_lossy().to_string(),
+                    hints_uri.to_string_lossy().to_string(),
+                )
             }
             Some(InputSource::InputData(data)) => InputSourceDto::InputData(data),
             None => {
@@ -549,35 +560,65 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
         Ok(())
     }
 
-    fn validate_subdir(base: &Path, candidate: &Path) -> Result<()> {
-        let base = base.canonicalize().map_err(|e| anyhow!("Inputs folder error: {e}"))?;
+    /// Validates that a subpath is within the base directory and waits for it to exist.
+    ///
+    /// This function joins the base directory with the provided subpath, waits for the
+    /// resulting file/directory to appear (up to 60 seconds), and validates that the
+    /// resolved path is within the base directory to prevent path traversal attacks.
+    ///
+    /// # Security Considerations
+    /// - Joins base and subpath before validation
+    /// - Canonicalizes paths to resolve symlinks and relative components (e.g., `..`)
+    /// - Validates that the resolved path is within the base directory
+    /// - Note: There's a small TOCTOU window between file existence check and canonicalization
+    ///   where a file could theoretically be replaced with a malicious symlink
+    ///
+    /// # Arguments
+    /// * `base_dir` - The base directory that must contain the subpath
+    /// * `subpath` - The relative path within base_dir (can include subdirectories)
+    ///
+    /// # Returns
+    /// * `Ok(PathBuf)` - The validated, canonicalized full path
+    /// * `Err` - If the path doesn't appear within timeout or is outside base directory
+    async fn validate_subdir(base_dir: &Path, subpath: &Path) -> Result<PathBuf> {
+        let base_canonical =
+            base_dir.canonicalize().map_err(|e| anyhow!("Inputs folder error: {e}"))?;
 
-        // Timeout 60 seconds
+        // Join base with subpath to get full path
+        let full_path = base_dir.join(subpath);
+
+        // Wait for file to appear (timeout: 60 seconds)
         let timeout = Duration::from_secs(60);
         let start = std::time::Instant::now();
+        let poll_interval = Duration::from_millis(500); // Poll every 500ms
 
-        while !candidate.exists() {
+        while !full_path.exists() {
             if start.elapsed() > timeout {
                 return Err(anyhow!(
-                    "Input path {:?} did not appear within {:?}",
-                    candidate,
+                    "Input path {:?} (subpath: {:?}) did not appear within {:?}",
+                    full_path,
+                    subpath,
                     timeout
                 ));
             }
-            std::thread::sleep(Duration::from_millis(10));
+            tokio::time::sleep(poll_interval).await;
         }
 
-        info!("Found input file {:?} (elapsed: {:?})", candidate, start.elapsed());
+        info!("Found input path {:?} (elapsed: {:?})", full_path, start.elapsed());
 
-        let candidate = candidate.canonicalize().map_err(|e| anyhow!("Input path error: {e}"))?;
+        // Canonicalize immediately after existence check to minimize TOCTOU window
+        let path_canonical =
+            full_path.canonicalize().map_err(|e| anyhow!("Input path error: {e}"))?;
 
-        if candidate.starts_with(&base) {
-            Ok(())
+        // Validate that the canonical path is within the base directory
+        if path_canonical.starts_with(&base_canonical) {
+            Ok(path_canonical)
         } else {
             Err(anyhow!(
-                "Input path {:?} must be a subdirectory of inputs folder {:?}",
-                candidate,
-                base
+                "Input path {:?} (resolved to {:?}) is outside base directory {:?}",
+                subpath,
+                path_canonical,
+                base_canonical
             ))
         }
     }

@@ -324,6 +324,8 @@ impl<HS: HintsSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                     has_ctrl_end = true;
                     idx += length + 1;
 
+                    debug!("CTRL_END received, all hints processed");
+
                     // CTRL_END should be the last message - verify and break
                     if idx < hints.len() {
                         return Err(anyhow::anyhow!(

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{info, warn};
 use zisk_build::ZISK_VERSION_MESSAGE;
 use zisk_sdk::{ProverClient, ZiskExecuteResult};
 
@@ -42,11 +42,11 @@ pub struct ZiskExecute {
 
     /// Input path
     #[clap(short = 'i', long)]
-    pub input: Option<PathBuf>,
+    pub input: Option<String>,
 
     /// Precompiles Hints path
     #[clap(short = 'h', long)]
-    pub precompile_hints_path: Option<PathBuf>,
+    pub precompile_hints_path: Option<String>,
 
     /// Setup folder path
     #[clap(short = 'k', long)]
@@ -82,57 +82,33 @@ impl ZiskExecute {
 
         print_banner();
 
-        if self.input.is_some() {
-            print_banner_field("Input", &self.input.as_ref().unwrap().to_string_lossy());
+        if let Some(input) = &self.input {
+            print_banner_field("Input", input);
         }
 
-        if self.precompile_hints_path.is_some() {
-            print_banner_field(
-                "Prec. Hints",
-                &self.precompile_hints_path.as_ref().unwrap().to_string_lossy(),
-            );
+        if let Some(hints) = &self.precompile_hints_path {
+            print_banner_field("Prec. Hints", hints);
         }
 
-        let stdin = self.create_stdin()?;
-        let hints_stream = self.create_hints_stream()?;
+        let stdin = ZiskStdin::from_str(self.input.as_ref().as_deref())?;
 
-        let emulator = if cfg!(target_os = "macos") { true } else { self.emulator };
+        let hints_stream = StreamSource::from_str(self.precompile_hints_path.as_deref())?;
+
+        let emulator = if cfg!(target_os = "macos") {
+            if !self.emulator {
+                warn!("Emulator mode is forced on macOS due to lack of ASM support.");
+            }
+            true
+        } else {
+            self.emulator
+        };
+
         let result =
             if emulator { self.run_emu(stdin)? } else { self.run_asm(stdin, Some(hints_stream))? };
 
-        info!(
-            "Execution completed in {:.2?}, executed steps: {}",
-            result.duration, result.execution.executed_steps
-        );
+        info!("Execution completed in {:.2?}, steps: {}", result.duration, result.execution.steps);
 
         Ok(())
-    }
-
-    fn create_stdin(&mut self) -> Result<ZiskStdin> {
-        let stdin = if let Some(input) = &self.input {
-            if !input.exists() {
-                return Err(anyhow::anyhow!("Input file not found at {:?}", input.display()));
-            }
-            ZiskStdin::from_file(input)?
-        } else {
-            ZiskStdin::null()
-        };
-        Ok(stdin)
-    }
-
-    fn create_hints_stream(&mut self) -> Result<StreamSource> {
-        let stream = if let Some(hints_path) = &self.precompile_hints_path {
-            if !hints_path.exists() {
-                return Err(anyhow::anyhow!(
-                    "Precompile Hints file not found at {:?}",
-                    hints_path.display()
-                ));
-            }
-            StreamSource::from_file(hints_path)?
-        } else {
-            StreamSource::null()
-        };
-        Ok(stream)
     }
 
     pub fn run_emu(&mut self, stdin: ZiskStdin) -> Result<ZiskExecuteResult> {
@@ -153,7 +129,7 @@ impl ZiskExecute {
     pub fn run_asm(
         &mut self,
         stdin: ZiskStdin,
-        stream: Option<StreamSource>,
+        hints_stream: Option<StreamSource>,
     ) -> Result<ZiskExecuteResult> {
         let prover = ProverClient::builder()
             .asm()
@@ -169,6 +145,6 @@ impl ZiskExecute {
             .print_command_info()
             .build()?;
 
-        prover.execute(stdin, stream)
+        prover.execute(stdin, hints_stream)
     }
 }

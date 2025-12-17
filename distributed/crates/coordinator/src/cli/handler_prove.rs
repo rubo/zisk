@@ -12,7 +12,8 @@ use zisk_distributed_grpc_api::{
 pub async fn handle(
     coordinator_url: Option<String>,
     data_id: Option<String>,
-    input_path: Option<PathBuf>,
+    inputs_uri: Option<String>,
+    hints_uri: Option<String>,
     direct_inputs: bool,
     compute_capacity: u32,
     simulated_node: Option<u32>,
@@ -28,24 +29,20 @@ pub async fn handle(
     let channel = Channel::from_shared(coordinator_url)?.connect().await?;
     let mut client = ZiskDistributedApiClient::new(channel);
 
-    let (input_mode, input_path) = if let Some(ref path) = input_path {
-        if path.as_os_str().is_empty() {
-            return Err(anyhow::anyhow!("Input path cannot be empty"));
+    let input_mode = if inputs_uri.is_some() {
+        if direct_inputs {
+            InputMode::Data
+        } else {
+            InputMode::Path
         }
-
-        let input_path = Some(path.to_string_lossy().to_string());
-
-        let input_mode = if direct_inputs { InputMode::Data } else { InputMode::Path };
-
-        (input_mode, input_path)
     } else {
-        (InputMode::None, None)
+        InputMode::None
     };
 
     // ID will be id if present, else input file name or random UUID
     let data_id = if let Some(id) = data_id {
         id
-    } else if let Some(ref path) = input_path {
+    } else if let Some(ref path) = inputs_uri {
         PathBuf::from(path).file_stem().unwrap().to_string_lossy().to_string()
     } else {
         uuid::Uuid::new_v4().to_string()
@@ -55,7 +52,8 @@ pub async fn handle(
         data_id,
         compute_capacity,
         input_mode: input_mode.into(),
-        input_path,
+        inputs_uri,
+        hints_uri,
         simulated_node,
     };
 

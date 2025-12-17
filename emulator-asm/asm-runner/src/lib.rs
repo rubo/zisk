@@ -17,6 +17,7 @@ mod asm_rh_runner;
 mod asm_rh_runner_stub;
 mod asm_runner;
 mod asm_services;
+mod shmem_reader;
 mod shmem_utils;
 mod shmem_writer;
 
@@ -37,5 +38,6 @@ pub use asm_rh_runner::*;
 pub use asm_rh_runner_stub::*;
 pub use asm_runner::*;
 pub use asm_services::*;
+pub use shmem_reader::*;
 pub use shmem_utils::*;
 pub use shmem_writer::*;

@@ -67,7 +67,11 @@ enum ZiskCoordinatorCommands {
 
         /// Path to the input file
         #[arg(long, help = "Path to the input file for proof generation")]
-        input: Option<PathBuf>,
+        input: Option<String>,
+
+        /// Precompiles Hints path
+        #[arg(long, help = "Path to the precompiles hints file for proof generation")]
+        precompile_hints_path: Option<String>,
 
         /// Whether to send the input data directly
         #[clap(short = 'x', long, default_value_t = false)]
@@ -92,6 +96,7 @@ async fn main() -> Result<()> {
             coordinator_url,
             data_id,
             input,
+            precompile_hints_path,
             direct_inputs,
             compute_capacity,
             simulated_node,
@@ -101,6 +106,7 @@ async fn main() -> Result<()> {
                 coordinator_url,
                 data_id,
                 input,
+                precompile_hints_path,
                 direct_inputs,
                 compute_capacity,
                 simulated_node,

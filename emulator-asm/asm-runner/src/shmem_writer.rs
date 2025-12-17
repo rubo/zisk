@@ -1,8 +1,7 @@
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-use libc::{mmap, msync, shm_open, MAP_FAILED, MAP_SHARED, MS_INVALIDATE, MS_SYNC};
+use libc::{mmap, msync, shm_open, MAP_FAILED, MAP_SHARED, MS_SYNC};
 use std::io::{self, Result};
 use std::ptr;
-use std::sync::atomic::{fence, Ordering};
 
 use libc::{c_void, close, munmap, PROT_READ, PROT_WRITE, S_IRUSR, S_IWUSR};
 
@@ -161,13 +160,6 @@ impl SharedMemoryWriter {
                     self.current_ptr = self.ptr;
                 }
             }
-
-            // Force changes to be flushed to the shared memory
-            // TODO! only msync the affected regions
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            if msync(self.ptr as *mut _, self.size, MS_SYNC) != 0 {
-                return Err(io::Error::last_os_error());
-            }
         }
 
         Ok(())
@@ -189,15 +181,6 @@ impl SharedMemoryWriter {
     pub fn read_u64_at(&self, offset: usize) -> Result<u64> {
         debug_assert_eq!(offset % 8, 0, "Offset must be 8-byte aligned");
 
-        unsafe {
-            fence(Ordering::SeqCst);
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            if msync(self.ptr.add(offset) as *mut _, std::mem::size_of::<u64>(), MS_INVALIDATE) != 0
-            {
-                return Err(io::Error::last_os_error());
-            }
-        }
-
         Ok(unsafe { (self.ptr.add(offset) as *const u64).read() })
     }
 
@@ -217,12 +200,6 @@ impl SharedMemoryWriter {
 
         unsafe {
             (self.ptr.add(offset) as *mut u64).write(value);
-
-            fence(Ordering::SeqCst);
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            if msync(self.ptr.add(offset) as *mut _, std::mem::size_of::<u64>(), MS_SYNC) != 0 {
-                return Err(io::Error::last_os_error());
-            }
         }
 
         Ok(())

@@ -66,7 +66,7 @@ const FCALL_RESULT_CAPACITY: u64 = FCALL_PARAMS + FCALL_PARAMS_LENGTH;
 const FCALL_RESULT_SIZE: u64 = FCALL_RESULT_CAPACITY + 1;
 const FCALL_RESULT: u64 = FCALL_RESULT_SIZE + 1;
 const FCALL_RESULT_GOT: u64 = FCALL_RESULT + FCALL_RESULT_LENGTH;
-//const FCALL_LENGTH: u64 = FCALL_RESULT_GOT + 1;
+const FCALL_LENGTH: u64 = FCALL_RESULT_GOT + 1;
 
 const XMM_MAPPED_REGS: [u64; 16] = [1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 //const XMM_MAPPED_REGS: [u64; 0] = []; // Used for debugging
@@ -491,7 +491,7 @@ impl ZiskRom2Asm {
         //     result_size
         //     result[32]
         //     result_got
-        *code += ".comm fcall_ctx, 8*70, 8\n";
+        *code += &format!(".comm fcall_ctx, 8*{}, 8\n", FCALL_LENGTH);
 
         // for k in 0..keys.len() {
         //     let pc = keys[k];

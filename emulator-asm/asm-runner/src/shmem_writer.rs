@@ -124,6 +124,7 @@ impl SharedMemoryWriter {
     ///
     /// # Arguments
     /// * `data` - A slice of data to write to shared memory
+    #[inline]
     pub fn write_ring_buffer<T>(&mut self, data: &[T]) {
         let byte_size = std::mem::size_of_val(data);
 

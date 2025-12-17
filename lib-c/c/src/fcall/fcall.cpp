@@ -934,11 +934,11 @@ int BinDecompCtx (
     ctx->result_size = 0;
     bool started = false;
 
-    // For every u64 in the input parameter
-    for (uint64_t i = 0; i < len_x; i++)
+    // For every u64 in the input parameter, in reverse order
+    for (int i = len_x - 1; i >= 0; i--)
     {
-        // For every bit in the u64
-        for (uint64_t bit_pos =0; bit_pos < 64; bit_pos++)
+        // For every bit in the u64, in reverse order
+        for (int bit_pos = 63; bit_pos >= 0; bit_pos--)
         {
             // Obtain the bit value
             uint8_t bit = (ctx->params[1 + i] >> bit_pos) & 1;

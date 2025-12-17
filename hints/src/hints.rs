@@ -1,7 +1,7 @@
 use crate::secp256k1_ecdsa_verify;
 use ziskos::syscalls::SyscallPoint256;
 
-use crate::hints_definitions::{HINTS_TYPE_ECRECOVER, HINTS_TYPE_RESULT};
+use crate::hints_processor::{HINTS_TYPE_ECRECOVER, HINTS_TYPE_RESULT};
 
 pub fn process_hints(hints: Vec<u64>) -> Vec<u64> {
     let mut processed_hints = Vec::new();

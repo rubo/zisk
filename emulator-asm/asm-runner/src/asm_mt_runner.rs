@@ -9,7 +9,10 @@ use std::time::{Duration, Instant};
 
 use tracing::{error, info};
 
-use crate::{AsmMTChunk, AsmMTHeader, AsmRunError, AsmService, AsmServices, AsmSharedMemory};
+use crate::{
+    sem_chunk_done_name, shmem_output_name, AsmMTChunk, AsmMTHeader, AsmRunError, AsmService,
+    AsmServices, AsmSharedMemory,
+};
 
 use anyhow::{Context, Result};
 
@@ -45,7 +48,7 @@ impl PreloadedMT {
             AsmServices::default_port(&AsmService::MT, local_rank)
         };
 
-        let output_name = AsmSharedMemory::shmem_output_name(port, AsmService::MT, local_rank);
+        let output_name = shmem_output_name(port, AsmService::MT, local_rank);
 
         let output_shared_memory =
             AsmSharedMemory::open_and_map::<AsmMTHeader>(&output_name, unlock_mapped_memory)?;
@@ -88,8 +91,7 @@ impl AsmRunnerMT {
             AsmServices::default_port(&AsmService::MT, local_rank)
         };
 
-        let sem_chunk_done_name =
-            AsmSharedMemory::shmem_chunk_done_name(port, AsmService::MT, local_rank);
+        let sem_chunk_done_name = sem_chunk_done_name(port, AsmService::MT, local_rank);
 
         let mut sem_chunk_done = NamedSemaphore::create(sem_chunk_done_name.clone(), 0)
             .map_err(|e| AsmRunError::SemaphoreError(sem_chunk_done_name.clone(), e))?;

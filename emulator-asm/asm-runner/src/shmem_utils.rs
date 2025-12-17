@@ -16,7 +16,7 @@ use zisk_common::io::{ZiskIO, ZiskStdin};
 use anyhow::anyhow;
 use anyhow::Result;
 
-use crate::{AsmInputC2, AsmService, AsmServices, SharedMemoryWriter};
+use crate::{AsmInputC2, SharedMemoryWriter};
 
 pub enum AsmSharedMemoryMode {
     ReadOnly,
@@ -274,74 +274,6 @@ impl AsmSharedMemory {
     pub fn data_ptr<H: AsmShmemHeader>(&self) -> *mut c_void {
         // Skip the header size to get the data pointer
         unsafe { self.mapped_ptr.add(size_of::<H>()) }
-    }
-
-    pub fn shmem_input_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!("{}_{}_input", AsmServices::shmem_prefix(port, local_rank), asm_service.as_str())
-    }
-
-    /// Shared memory name for precompile hints data
-    pub fn shmem_precompile_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!(
-            "{}_{}_precompile",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
-    }
-
-    /// Shared memory name for precompile hints data
-    pub fn sem_available_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!(
-            "/{}_{}_prec_avail",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
-    }
-
-    /// Shared memory name for precompile hints data
-    pub fn sem_read_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!(
-            "/{}_{}_prec_read",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
-    }
-
-    /// Shared memory name for precompile hints data control
-    pub fn shmem_control_writer_name(
-        port: u16,
-        asm_service: AsmService,
-        local_rank: i32,
-    ) -> String {
-        format!(
-            "{}_{}_control_input",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
-    }
-
-    pub fn shmem_control_reader_name(
-        port: u16,
-        asm_service: AsmService,
-        local_rank: i32,
-    ) -> String {
-        format!(
-            "{}_{}_control_output",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
-    }
-
-    pub fn shmem_output_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!("{}_{}_output", AsmServices::shmem_prefix(port, local_rank), asm_service.as_str())
-    }
-
-    pub fn shmem_chunk_done_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!(
-            "/{}_{}_chunk_done",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
     }
 }
 

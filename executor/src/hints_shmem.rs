@@ -5,7 +5,8 @@
 
 use anyhow::Result;
 use asm_runner::{
-    AsmService, AsmServices, AsmSharedMemory, SharedMemoryReader, SharedMemoryWriter,
+    sem_available_name, sem_read_name, shmem_control_reader_name, shmem_control_writer_name,
+    shmem_precompile_name, AsmService, AsmServices, SharedMemoryReader, SharedMemoryWriter,
 };
 use named_sem::NamedSemaphore;
 use std::sync::Mutex;
@@ -24,11 +25,11 @@ struct ServiceResourceNames {
 impl ServiceResourceNames {
     fn new(service: &AsmService, port: u16, local_rank: i32) -> Self {
         Self {
-            control_writer: AsmSharedMemory::shmem_control_writer_name(port, *service, local_rank),
-            control_reader: AsmSharedMemory::shmem_control_reader_name(port, *service, local_rank),
-            data_name: AsmSharedMemory::shmem_precompile_name(port, *service, local_rank),
-            sem_available_name: AsmSharedMemory::sem_available_name(port, *service, local_rank),
-            sem_read_name: AsmSharedMemory::sem_read_name(port, *service, local_rank),
+            control_writer: shmem_control_writer_name(port, *service, local_rank),
+            control_reader: shmem_control_reader_name(port, *service, local_rank),
+            data_name: shmem_precompile_name(port, *service, local_rank),
+            sem_available_name: sem_available_name(port, *service, local_rank),
+            sem_read_name: sem_read_name(port, *service, local_rank),
         }
     }
 }

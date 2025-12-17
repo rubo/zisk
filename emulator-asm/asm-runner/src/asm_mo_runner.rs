@@ -8,6 +8,8 @@ use std::sync::atomic::{fence, Ordering};
 use std::time::Duration;
 use tracing::error;
 
+use crate::sem_chunk_done_name;
+use crate::shmem_output_name;
 use crate::{AsmMOChunk, AsmMOHeader, AsmRunError, AsmService, AsmServices, AsmSharedMemory};
 use mem_planner_cpp::MemPlanner;
 
@@ -37,7 +39,7 @@ impl PreloadedMO {
             AsmServices::default_port(&AsmService::MO, local_rank)
         };
 
-        let output_name = AsmSharedMemory::shmem_output_name(port, AsmService::MO, local_rank);
+        let output_name = shmem_output_name(port, AsmService::MO, local_rank);
 
         let output_shared_memory =
             AsmSharedMemory::open_and_map::<AsmMOHeader>(&output_name, unlock_mapped_memory)?;
@@ -97,8 +99,7 @@ impl AsmRunnerMO {
             AsmServices::default_port(&AsmService::MO, local_rank)
         };
 
-        let sem_chunk_done_name =
-            AsmSharedMemory::shmem_chunk_done_name(port, AsmService::MO, local_rank);
+        let sem_chunk_done_name = sem_chunk_done_name(port, AsmService::MO, local_rank);
 
         let mut sem_chunk_done = NamedSemaphore::create(sem_chunk_done_name.clone(), 0)
             .map_err(|e| AsmRunError::SemaphoreError(sem_chunk_done_name.clone(), e))?;

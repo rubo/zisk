@@ -59,7 +59,7 @@ impl StreamSource {
     /// - `file://path/to/file`   → File-based stream
     /// - `unix://path/to/socket` → Unix domain socket stream
     /// - `quic://host:port`      → QUIC network stream (e.g., `quic://127.0.0.1:8080`)
-    pub fn from_str<S: Into<String>>(hints_uri: Option<S>) -> Result<StreamSource> {
+    pub fn from_uri<S: Into<String>>(hints_uri: Option<S>) -> Result<StreamSource> {
         if hints_uri.is_none() {
             return Ok(Self::null());
         }

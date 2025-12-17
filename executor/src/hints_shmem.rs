@@ -60,7 +60,8 @@ unsafe impl Sync for HintsShmem {}
 impl HintsShmem {
     const CONTROL_PRECOMPILE_SIZE: u64 = 0x1000; // 4KB
     const MAX_PRECOMPILE_SIZE: u64 = 0x10000000; // 256MB
-                                                 // const MAX_PRECOMPILE_SIZE: u64 = 0x100000; // 1MB
+    // const MAX_PRECOMPILE_SIZE: u64 = 0x100000; // 1MB
+    const BUFFER_CAPACITY_U64: u64 = Self::MAX_PRECOMPILE_SIZE >> 3; // Capacity in u64 elements
 
     /// Create a new HintsShmem with the given shared memory names and unlock option.
     ///
@@ -159,33 +160,40 @@ impl HintsSink for HintsShmem {
     fn submit(&self, processed: Vec<u64>) -> anyhow::Result<()> {
         let data_size = processed.len() as u64;
 
+        debug_assert!(
+            data_size <= Self::BUFFER_CAPACITY_U64,
+            "Processed data size ({} u64 elements) exceeds maximum precompile shared memory capacity ({} u64 elements)",
+            data_size,
+            Self::BUFFER_CAPACITY_U64
+        );
+
         let mut resources = self.resources.lock().unwrap();
 
         for resource in resources.iter_mut() {
-            // Read current positions
+            // Read current write position once (we're the only writer)
             let write_pos = resource.control_writer.read_u64_at(0);
-            let read_pos = resource.control_reader.read_u64_at(0);
 
-            // Calculate occupied space in ring buffer (positions are absolute values)
-            let occupied_space = write_pos - read_pos;
-            let available_space = (Self::MAX_PRECOMPILE_SIZE >> 3) - occupied_space;
+            loop {
+                // Read current read position (updated by reader)
+                let read_pos = resource.control_reader.read_u64_at(0);
 
-            debug_assert!(
-                available_space <= (Self::MAX_PRECOMPILE_SIZE >> 3),
-                "Available space calculation error"
-            );
-            // TODO! Check for overflow of write_pos and read_pos and handle it
+                // Calculate occupied space in ring buffer (positions are absolute values in u64 elements)
+                let occupied_space = write_pos - read_pos;
+                let available_space = Self::BUFFER_CAPACITY_U64 - occupied_space;
 
-            // Flow control based on buffer occupancy
-            if available_space < data_size {
-                // Not enough space - signal reader and wait for consumption
+                // Flow control based on buffer occupancy
+                if available_space >= data_size {
+                    break;
+                }
+
+                // Not enough space - wait for consumption
                 resource.sem_read.wait()?;
             }
 
             // Write data to shared memory with automatic wraparound
             resource.data_writer.write_ring_buffer(&processed);
 
-            // Update write position in control memory with wraparound
+            // Update write position in control memory (absolute position, always increases)
             resource.control_writer.write_u64_at(0, write_pos + data_size);
 
             resource.sem_available.post()?;

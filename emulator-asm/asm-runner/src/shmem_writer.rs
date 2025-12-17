@@ -117,7 +117,7 @@ impl SharedMemoryWriter {
 
     /// Writes data to the shared memory as a ring buffer, handling wraparound automatically
     ///
-    /// Uses internal pointer tracking - no offset parameter needed.
+    /// Uses internal pointer tracking with automatic wraparound.
     ///
     /// # Type Parameters
     /// * `T` - The element type of the slice (e.g., u8, u64)
@@ -153,10 +153,16 @@ impl SharedMemoryWriter {
                 // Update current_ptr, wrapping if at end
                 self.current_ptr = self.current_ptr.add(byte_size);
                 let new_offset = self.current_ptr.offset_from(self.ptr) as usize;
-                if new_offset >= self.size {
+                if new_offset == self.size {
                     self.current_ptr = self.ptr;
                 }
             }
+
+            // // Force changes to be flushed to the shared memory
+            // #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+            // if msync(self.ptr as *mut _, self.size, MS_SYNC) != 0 {
+            //     return Err(io::Error::last_os_error());
+            // }
         }
     }
 

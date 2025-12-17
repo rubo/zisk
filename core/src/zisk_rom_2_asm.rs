@@ -227,64 +227,84 @@ impl ZiskAsmContext {
         true
     }
     pub fn precompile_results_keccak(&self) -> bool {
-        self.precompile_results() && true
+        //self.precompile_results()
+        true
     }
     pub fn precompile_results_sha256(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_arith256(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_arith256mod(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_secp256k1add(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_secp256k1dbl(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_fcall(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bn254curveadd(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bn254curvedbl(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bn254complexadd(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bn254complexsub(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bn254complexmul(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_arith384mod(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bls12_381curveadd(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bls12_381curvedbl(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bls12_381complexadd(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bls12_381complexsub(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_bls12_381complexmul(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn precompile_results_add256(&self) -> bool {
-        self.precompile_results() && false
+        //self.precompile_results()
+        false
     }
     pub fn call_wait_for_prec_avail(&self) -> bool {
-        self.precompile_results() && true
+        //self.precompile_results()
+        true
     }
 }
 
@@ -5206,7 +5226,7 @@ impl ZiskRom2Asm {
 
                     // Get result from precompile results data
                     if ctx.precompile_results_sha256() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 4);
                     } else {
                         // Call the SHA256 function
@@ -5379,7 +5399,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_arith256mod() {
-                        *code += &format!("\tmov rdi, [rdi + 4*8]\n");
+                        *code += "\tmov rdi, [rdi + 4*8]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 4);
                     } else {
                         // Call the arith256_mod function
@@ -5460,7 +5480,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_secp256k1add() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 8);
                     } else {
                         // Call the secp256k1_add function
@@ -5867,7 +5887,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bn254curveadd() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 8);
                     } else {
                         // Call the bn254_curve_add function
@@ -6055,7 +6075,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bn254complexadd() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 8);
                     } else {
                         // Call the bn254_complex_add function
@@ -6137,7 +6157,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bn254complexsub() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 8);
                     } else {
                         // Call the bn254_complex_sub function
@@ -6219,7 +6239,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bn254complexmul() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 8);
                     } else {
                         // Call the bn254_complex_mul function
@@ -6309,7 +6329,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_arith384mod() {
-                        *code += &format!("\tmov rdi, [rdi + 4*8]\n");
+                        *code += "\tmov rdi, [rdi + 4*8]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 6);
                     } else {
                         // Call the arith384_mod function
@@ -6391,7 +6411,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bls12_381curveadd() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 12);
                     } else {
                         // Call the bls12_381_curve_add function
@@ -6583,7 +6603,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bls12_381complexadd() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 12);
                     } else {
                         // Call the bls12_381_complex_add function
@@ -6669,7 +6689,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bls12_381complexsub() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 12);
                     } else {
                         // Call the bls12_381_complex_sub function
@@ -6755,7 +6775,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_bls12_381complexmul() {
-                        *code += &format!("\tmov rdi, [rdi]\n");
+                        *code += "\tmov rdi, [rdi]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 12);
                     } else {
                         // Call the bls12_381_complex_mul function
@@ -6859,7 +6879,7 @@ impl ZiskRom2Asm {
                 {
                     // Get result from precompile results data
                     if ctx.precompile_results_add256() {
-                        *code += &format!("\tmov rdi, [rdi+3*8]\n");
+                        *code += "\tmov rdi, [rdi+3*8]\n";
                         Self::precompile_results_array(ctx, code, unusual_code, "rdi", 4);
                         Self::precompile_results_register(ctx, code, unusual_code, REG_C);
                     } else {
@@ -8013,7 +8033,7 @@ impl ZiskRom2Asm {
             "\tmov {}, [{}] {}\n",
             reg,
             REG_AUX,
-            ctx.comment(format!("value = precompile_results[0]"))
+            ctx.comment_str("value = precompile_results[0]")
         );
 
         // Increase precompile_read
@@ -8073,14 +8093,14 @@ impl ZiskRom2Asm {
             "\tmov {}, [{}] {}\n",
             REG_B,
             REG_ADDRESS,
-            ctx.comment(format!("b = precompile_results[0]"))
+            ctx.comment_str("b = precompile_results[0]")
         );
         *code += &format!(
             "\tmov [{} + {}*8], {} {}\n",
             reg_address,
             FCALL_RESULT_SIZE,
             REG_B,
-            ctx.comment(format!("fcall[result_size] = b"))
+            ctx.comment_str("fcall[result_size] = b")
         );
         *code += &format!(
             "\tinc {} {}\n",
@@ -8126,7 +8146,7 @@ impl ZiskRom2Asm {
             "\tmov {}, [{}] {}\n",
             REG_VALUE,
             REG_ADDRESS,
-            ctx.comment(format!("value = precompile_results[]"))
+            ctx.comment_str("value = precompile_results[]")
         );
         *code += &format!(
             "\tmov [{} + {}*8 + {}*8], {} {}\n",
@@ -8134,7 +8154,7 @@ impl ZiskRom2Asm {
             REG_A,
             FCALL_RESULT,
             REG_VALUE,
-            ctx.comment(format!("addr[] = value"))
+            ctx.comment_str("addr[] = value")
         );
 
         // Increment REG_A

@@ -322,7 +322,7 @@ int process_id = 0;
 uint64_t input_size = 0;
 
 #define MAX_PRECOMPILE_SIZE (uint64_t)0x10000000 // 256MB
-// #define MAX_PRECOMPILE_SIZE (uint64_t)0x100000 // 1MB
+//#define MAX_PRECOMPILE_SIZE (uint64_t)0x100000 // 1MB
 
 // Precompile results shared memory
 char shmem_precompile_name[128];
@@ -2324,6 +2324,11 @@ void client_run (void)
                     exit(-1);
                 }
 
+                if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+                {
+                    client_write_precompile_results();
+                }
+
                 // Read server response
                 bytes_received = recv(socket_fd, response, sizeof(response), MSG_WAITALL);
                 if (bytes_received < 0)
@@ -2383,6 +2388,11 @@ void client_run (void)
                     fflush(stdout);
                     fflush(stderr);
                     exit(-1);
+                }
+
+                if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+                {
+                    client_write_precompile_results();
                 }
 
                 // Read server response

@@ -378,6 +378,42 @@ pub unsafe extern "C" fn decompress_twist_bls12_381_c(ret: *mut u64, input: *con
 }
 
 /// # Safety
+/// - `p` must point to a valid `[u64; 24]` (192 bytes) for the input point.
+///   Returns true if the point is on the twist curve, false otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn is_on_curve_twist_bls12_381_c(p: *const u64) -> bool {
+    let p_arr: &[u64; 24] = &*(p as *const [u64; 24]);
+    is_on_curve_twist_bls12_381(p_arr)
+}
+
+/// # Safety
+/// - `p` must point to a valid `[u64; 24]` (192 bytes) for the input point.
+///   Returns true if the point is in the G2 subgroup, false otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn is_on_subgroup_twist_bls12_381_c(p: *const u64) -> bool {
+    let p_arr: &[u64; 24] = &*(p as *const [u64; 24]);
+    is_on_subgroup_twist_bls12_381(p_arr)
+}
+
+/// # Safety
+/// - `p1` must point to a valid `[u64; 24]` (192 bytes), used as both input and output.
+/// - `p2` must point to a valid `[u64; 24]` (192 bytes).
+#[no_mangle]
+pub unsafe extern "C" fn add_twist_bls12_381_c(p1: *mut u64, p2: *const u64) -> bool {
+    let p1_arr: &[u64; 24] = &*(p1 as *const [u64; 24]);
+    let p2_arr: &[u64; 24] = &*(p2 as *const [u64; 24]);
+
+    let result = add_twist_bls12_381(p1_arr, p2_arr);
+    if result == IDENTITY_G2 {
+        return true;
+    }
+
+    let ret_arr: &mut [u64; 24] = &mut *(p1 as *mut [u64; 24]);
+    *ret_arr = result;
+    false
+}
+
+/// # Safety
 /// - `ret` must point to a valid `[u64; 24]` for the output affine point.
 /// - `p` must point to a valid `[u64; 24]` affine point.
 /// - `k` must point to a valid `[u64; 6]` scalar.

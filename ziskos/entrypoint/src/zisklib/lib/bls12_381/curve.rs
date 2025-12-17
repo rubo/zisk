@@ -325,38 +325,6 @@ pub fn sigma_endomorphism_bls12_381(p: &[u64; 12]) -> [u64; 12] {
 // ========== Pointer-based API ==========
 
 /// # Safety
-/// - `p1` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
-/// - `p2` must point to a valid `[u64; 12]` (96 bytes).
-/// - Points must be non-zero and distinct.
-#[no_mangle]
-pub unsafe extern "C" fn add_bls12_381_c(p1: *mut u64, p2: *const u64) {
-    let mut p1_point =
-        SyscallPoint384 { x: *(p1 as *const [u64; 6]), y: *(p1.add(6) as *const [u64; 6]) };
-    let p2_point =
-        SyscallPoint384 { x: *(p2 as *const [u64; 6]), y: *(p2.add(6) as *const [u64; 6]) };
-
-    let mut params = SyscallBls12_381CurveAddParams { p1: &mut p1_point, p2: &p2_point };
-    syscall_bls12_381_curve_add(&mut params);
-
-    *(p1 as *mut [u64; 6]) = p1_point.x;
-    *(p1.add(6) as *mut [u64; 6]) = p1_point.y;
-}
-
-/// # Safety
-/// - `p` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
-/// - Point must be non-zero.
-#[no_mangle]
-pub unsafe extern "C" fn dbl_bls12_381_c(p: *mut u64) {
-    let mut p_point =
-        SyscallPoint384 { x: *(p as *const [u64; 6]), y: *(p.add(6) as *const [u64; 6]) };
-
-    syscall_bls12_381_curve_dbl(&mut p_point);
-
-    *(p as *mut [u64; 6]) = p_point.x;
-    *(p.add(6) as *mut [u64; 6]) = p_point.y;
-}
-
-/// # Safety
 /// - `ret` must point to a valid `[u64; 12]` (96 bytes) for the output.
 /// - `input` must point to a valid `[u8; 48]` (48 bytes) for the compressed input.
 ///   Returns:
@@ -397,6 +365,38 @@ pub unsafe extern "C" fn is_on_curve_bls12_381_c(p: *const u64) -> bool {
 pub unsafe extern "C" fn is_on_subgroup_bls12_381_c(p: *const u64) -> bool {
     let p_arr: &[u64; 12] = &*(p as *const [u64; 12]);
     is_on_subgroup_bls12_381(p_arr)
+}
+
+/// # Safety
+/// - `p1` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
+/// - `p2` must point to a valid `[u64; 12]` (96 bytes).
+#[no_mangle]
+pub unsafe extern "C" fn add_bls12_381_c(p1: *mut u64, p2: *const u64) -> bool {
+    let p1_arr: &[u64; 12] = &*(p1 as *const [u64; 12]);
+    let p2_arr: &[u64; 12] = &*(p2 as *const [u64; 12]);
+
+    let result = add_bls12_381(p1_arr, p2_arr);
+    if result == IDENTITY_G1 {
+        return true;
+    }
+
+    let ret_arr: &mut [u64; 12] = &mut *(p1 as *mut [u64; 12]);
+    *ret_arr = result;
+    false
+}
+
+/// # Safety
+/// - `p` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
+/// - Point must be non-zero.
+#[no_mangle]
+pub unsafe extern "C" fn dbl_bls12_381_c(p: *mut u64) {
+    let mut p_point =
+        SyscallPoint384 { x: *(p as *const [u64; 6]), y: *(p.add(6) as *const [u64; 6]) };
+
+    syscall_bls12_381_curve_dbl(&mut p_point);
+
+    *(p as *mut [u64; 6]) = p_point.x;
+    *(p.add(6) as *mut [u64; 6]) = p_point.y;
 }
 
 /// # Safety

@@ -223,8 +223,7 @@ impl ZiskAsmContext {
     }
 
     pub fn precompile_results(&self) -> bool {
-        // self.precompile_results
-        true
+        self.precompile_results
     }
     pub fn precompile_results_keccak(&self) -> bool {
         //self.precompile_results()

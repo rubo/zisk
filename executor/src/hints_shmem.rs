@@ -11,7 +11,7 @@ use asm_runner::{
 use named_sem::NamedSemaphore;
 use std::sync::Mutex;
 use tracing::debug;
-use zisk_hints::HintsSink;
+use zisk_common::io::StreamSink;
 
 /// Names for a service's shared memory and semaphore resources
 struct ServiceResourceNames {
@@ -148,7 +148,7 @@ impl HintsShmem {
     }
 }
 
-impl HintsSink for HintsShmem {
+impl StreamSink for HintsShmem {
     /// Writes processed precompile hints to all shared memory writers.
     ///
     /// # Arguments

@@ -1,19 +1,41 @@
-//! HintsStream is responsible for reading precompile hints from a stream source and sent to a hints processor.
+//! ZiskStream is responsible for reading precompile hints from a stream source and sent to a hints processor.
 
-use crate::HintsProcessor;
 use anyhow::Result;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use zisk_common::io::{StreamRead, StreamSource};
+
+use crate::io::{StreamRead, StreamSource};
+
+pub trait StreamProcessor {
+    /// Process data and return the processed result along with a flag indicating if CTRL_END was encountered.
+    ///
+    /// # Returns
+    /// A tuple of (processed_data, has_ctrl_end) where:
+    /// - processed_data: Vec<u64> - The processed data
+    /// - has_ctrl_end: bool - True if CTRL_END was found (signals end of batch)
+    fn process(&self, data: &[u64], first_batch: bool) -> anyhow::Result<bool>;
+}
+
+/// Trait for submitting processed hints to a sink.
+///
+/// # Arguments
+/// * `processed` - A vector of processed hints as u64 values.
+///
+/// # Returns
+/// * `Ok(())` - If hints were successfully submitted
+/// * `Err` - If submission fails
+pub trait StreamSink {
+    fn submit(&self, processed: Vec<u64>) -> anyhow::Result<()>;
+}
 
 enum ThreadCommand {
     Process,
     Shutdown,
 }
 
-/// HintsStream struct manages the processing of precompile hints and writing them to shared memory.
-pub struct HintsStream<HP: HintsProcessor + Send + Sync + 'static> {
+/// ZiskStream struct manages the processing of precompile hints and writing them to shared memory.
+pub struct ZiskStream<HP: StreamProcessor + Send + Sync + 'static> {
     /// The hints processor used to process hints before writing.
     hints_processor: Arc<HP>,
 
@@ -24,14 +46,14 @@ pub struct HintsStream<HP: HintsProcessor + Send + Sync + 'static> {
     thread_handle: Option<JoinHandle<()>>,
 }
 
-impl<HP: HintsProcessor + Send + Sync + 'static> HintsStream<HP> {
-    /// Create a new HintsStream with the given processor.
+impl<HP: StreamProcessor + Send + Sync + 'static> ZiskStream<HP> {
+    /// Create a new ZiskStream with the given processor.
     ///
     /// # Arguments
     /// * `hints_processor` - The processor used to process hints.
     ///
     /// # Returns
-    /// A new `HintsStream` instance without a running thread.
+    /// A new `ZiskStream` instance without a running thread.
     pub fn new(hints_processor: HP) -> Self {
         Self { hints_processor: Arc::new(hints_processor), tx: None, thread_handle: None }
     }
@@ -97,8 +119,8 @@ impl<HP: HintsProcessor + Send + Sync + 'static> HintsStream<HP> {
         let mut first_batch = true;
 
         while let Some(hints) = stream.next()? {
-            let hints = zisk_common::reinterpret_vec(hints)?;
-            let has_ctrl_end = hints_processor.process_hints(&hints, first_batch)?;
+            let hints = crate::reinterpret_vec(hints)?;
+            let has_ctrl_end = hints_processor.process(&hints, first_batch)?;
 
             first_batch = false;
 
@@ -132,7 +154,7 @@ impl<HP: HintsProcessor + Send + Sync + 'static> HintsStream<HP> {
     }
 }
 
-impl<HP: HintsProcessor + Send + Sync> Drop for HintsStream<HP> {
+impl<HP: StreamProcessor + Send + Sync> Drop for ZiskStream<HP> {
     fn drop(&mut self) {
         self.stop_thread();
     }

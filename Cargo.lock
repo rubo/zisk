@@ -1412,6 +1412,7 @@ dependencies = [
  "precomp-big-int",
  "precomp-keccakf",
  "precomp-sha256f",
+ "precompiles-hints",
  "proofman",
  "proofman-common",
  "proofman-util",
@@ -1427,7 +1428,6 @@ dependencies = [
  "witness",
  "zisk-common",
  "zisk-core",
- "zisk-hints",
  "zisk-pil",
  "ziskemu",
 ]
@@ -3149,6 +3149,19 @@ dependencies = [
  "lib-c",
  "num-bigint",
  "num-traits",
+]
+
+[[package]]
+name = "precompiles-hints"
+version = "0.15.0"
+dependencies = [
+ "anyhow",
+ "lib-c",
+ "precompiles-helpers",
+ "rayon",
+ "tracing",
+ "zisk-common",
+ "ziskos",
 ]
 
 [[package]]
@@ -6022,19 +6035,6 @@ dependencies = [
  "zisk-distributed-grpc-api",
  "zisk-pil",
  "zisk-sdk",
-]
-
-[[package]]
-name = "zisk-hints"
-version = "0.15.0"
-dependencies = [
- "anyhow",
- "lib-c",
- "precompiles-helpers",
- "rayon",
- "tracing",
- "zisk-common",
- "ziskos",
 ]
 
 [[package]]

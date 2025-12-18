@@ -25,6 +25,7 @@ use asm_runner::{
 };
 use fields::PrimeField64;
 use pil_std_lib::Std;
+use precompiles_hints::PrecompileHintsProcessor;
 use proofman_common::{create_pool, BufferPool, ProofCtx, ProofmanError, ProofmanResult, SetupCtx};
 use proofman_util::{timer_start_info, timer_stop_and_log_info};
 use rayon::prelude::*;
@@ -33,8 +34,7 @@ use sm_rom::{RomInstance, RomSM};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::debug;
 use witness::WitnessComponent;
-use zisk_common::io::{StreamSource, ZiskIO, ZiskStdin};
-use zisk_hints::PrecompileHintsProcessor;
+use zisk_common::io::{StreamSource, ZiskIO, ZiskStdin, ZiskStream};
 
 use crate::{DummyCounter, HintsShmem};
 use data_bus::DataBusTrait;
@@ -44,7 +44,6 @@ use zisk_common::{
     InstanceCtx, InstanceType, Plan, Stats, ZiskExecutionResult,
 };
 use zisk_common::{ChunkId, PayloadType};
-use zisk_hints::HintsStream;
 use zisk_pil::{
     RomRomTrace, ZiskPublicValues, INPUT_DATA_AIR_IDS, MAIN_AIR_IDS, MEM_AIR_IDS, ROM_AIR_IDS,
     ROM_DATA_AIR_IDS, ZISK_AIRGROUP_ID,
@@ -80,7 +79,7 @@ enum MinimalTraceExecutionMode {
     AsmWithCounter,
 }
 
-pub type StreamHintsShmem = HintsStream<PrecompileHintsProcessor<HintsShmem>>;
+pub type StreamHintsShmem = ZiskStream<PrecompileHintsProcessor<HintsShmem>>;
 
 /// The `ZiskExecutor` struct orchestrates the execution of the ZisK ROM program, managing state
 /// machines, planning, and witness computation.
@@ -204,7 +203,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         let hints_processor = PrecompileHintsProcessor::new(hints_shmem)
             .expect("Failed to create PrecompileHintsProcessor");
 
-        let hints_stream = Mutex::new(HintsStream::new(hints_processor));
+        let hints_stream = Mutex::new(ZiskStream::new(hints_processor));
 
         Self {
             stdin: Mutex::new(ZiskStdin::null()),

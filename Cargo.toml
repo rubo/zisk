@@ -31,6 +31,7 @@ members = [
     "precompiles/arith_eq",
     "precompiles/arith_eq_384",
     "precompiles/common",
+    "precompiles/hints",
     "precompiles/keccakf",
     "precompiles/sha256f",
     "precompiles/big_int",
@@ -47,7 +48,6 @@ members = [
     "distributed/crates/worker",
     "sdk",
     "ziskbuild",
-    "hints",
 ]
 
 resolver = "2"
@@ -96,7 +96,7 @@ ziskos = { path = "ziskos/entrypoint" }
 circuit = { path = "tools/circuit" }
 zisk-sdk = { path = "sdk" }
 zisk-build = { path = "ziskbuild" }
-zisk-hints = { path = "hints" }
+precompiles-hints = { path = "precompiles/hints" }
 
 # Distributed crates
 zisk-distributed-common = { path = "distributed/crates/common" }

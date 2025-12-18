@@ -29,7 +29,7 @@ tracing = { workspace = true }
 itertools = { workspace = true }
 rayon = { workspace = true }
 pil-std-lib = { workspace = true }
-zisk-hints = { workspace = true }
+precompiles-hints = { workspace = true }
 anyhow = { workspace = true }
 crossbeam = "0.8.4"
 

@@ -42,12 +42,12 @@ pub struct ZiskProve {
     pub emulator: bool,
 
     /// Input path
-    #[clap(short = 'i', long)]
-    pub input: Option<String>,
+    #[clap(short = 'i', long, alias = "input")]
+    pub inputs: Option<String>,
 
     /// Precompiles Hints path
     #[clap(short = 'h', long)]
-    pub precompile_hints_path: Option<String>,
+    pub precompile_hints: Option<String>,
 
     /// Setup folder path
     #[clap(short = 'k', long)]
@@ -113,13 +113,18 @@ pub struct ZiskProve {
 
 impl ZiskProve {
     pub fn run(&mut self) -> Result<()> {
-        print_banner();
-
-        if let Some(input) = &self.input {
-            print_banner_field("Input", input);
+        // Check if the deprecated alias was used
+        if std::env::args().any(|arg| arg == "--input") {
+            eprintln!("{}", "Warning: --input is deprecated, use --inputs instead".yellow().bold());
         }
 
-        if let Some(hints) = &self.precompile_hints_path {
+        print_banner();
+
+        if let Some(inputs) = &self.inputs {
+            print_banner_field("Input", inputs);
+        }
+
+        if let Some(hints) = &self.precompile_hints {
             print_banner_field("Prec. Hints", hints);
         }
 
@@ -135,9 +140,9 @@ impl ZiskProve {
             gpu_params.with_max_witness_stored(self.max_witness_stored.unwrap());
         }
 
-        let stdin = ZiskStdin::from_uri(self.input.as_ref())?;
+        let stdin = ZiskStdin::from_uri(self.inputs.as_ref())?;
 
-        let hints_stream = StreamSource::from_uri(self.precompile_hints_path.as_deref())?;
+        let hints_stream = StreamSource::from_uri(self.precompile_hints.as_deref())?;
 
         let emulator = if cfg!(target_os = "macos") {
             if !self.emulator {

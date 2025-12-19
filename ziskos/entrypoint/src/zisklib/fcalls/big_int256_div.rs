@@ -4,7 +4,7 @@ cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
         use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
-        use super::FCALL_BIGINT256_DIV_ID;
+        use super::FCALL_BIG_INT256_DIV_ID;
     }
 }
 
@@ -29,7 +29,7 @@ pub fn fcall_bigint256_div(a_value: &[u64; 4], b_value: &[u64; 4]) -> ([u64; 4],
     {
         ziskos_fcall_param!(a_value, 4);
         ziskos_fcall_param!(b_value, 4);
-        ziskos_fcall!(FCALL_BIGINT256_DIV_ID);
+        ziskos_fcall!(FCALL_BIG_INT256_DIV_ID);
         (
             [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()],
             [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()],

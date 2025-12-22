@@ -1,25 +1,20 @@
 #![allow(unexpected_cfgs)]
 #![allow(unused_imports)]
 
-use cfg_if::cfg_if;
-
-cfg_if! {
-    if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
-        use core::arch::asm;
-        mod fcall;
-        pub use fcall::*;
-    }
-}
-
+#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+use core::arch::asm;
+#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+mod fcall;
 mod profile;
+#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+pub use fcall::*;
+pub use profile::*;
 
 pub mod zisklib;
 
 pub mod syscalls;
 
 pub mod ziskos_definitions;
-
-pub use profile::*;
 
 #[macro_export]
 macro_rules! entrypoint {

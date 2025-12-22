@@ -3,8 +3,10 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
-        use super::FCALL_SECP256K1_FP_INV_ID;
+        use crate::{
+            ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param,
+            zisklib::{FCALL_SECP256K1_FP_INV_ID, FCALL_SECP256K1_FP_SQRT_ID}
+        };
     }
 }
 

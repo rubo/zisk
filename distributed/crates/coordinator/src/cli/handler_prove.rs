@@ -29,7 +29,7 @@ pub async fn handle(
     let channel = Channel::from_shared(coordinator_url)?.connect().await?;
     let mut client = ZiskDistributedApiClient::new(channel);
 
-    let input_mode = if inputs_uri.is_some() {
+    let inputs_mode = if inputs_uri.is_some() {
         if direct_inputs {
             InputMode::Data
         } else {
@@ -51,7 +51,7 @@ pub async fn handle(
     let launch_proof_request = LaunchProofRequest {
         data_id,
         compute_capacity,
-        input_mode: input_mode.into(),
+        inputs_mode: inputs_mode.into(),
         inputs_uri,
         hints_uri,
         simulated_node,

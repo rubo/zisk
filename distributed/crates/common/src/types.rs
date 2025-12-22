@@ -243,7 +243,7 @@ pub struct Job {
     pub duration_ms: Option<u64>,
     pub state: JobState,
     pub data_id: DataId,
-    pub input_mode: InputModeDto,
+    pub inputs_mode: InputModeDto,
     pub compute_capacity: ComputeCapacity,
     pub workers: Vec<WorkerId>,
     pub agg_worker_id: Option<WorkerId>,
@@ -259,7 +259,7 @@ pub struct Job {
 impl Job {
     pub fn new(
         data_id: DataId,
-        input_mode: InputModeDto,
+        inputs_mode: InputModeDto,
         compute_capacity: ComputeCapacity,
         selected_workers: Vec<WorkerId>,
         partitions: Vec<Vec<u32>>,
@@ -271,7 +271,7 @@ impl Job {
             duration_ms: None,
             state: JobState::Created,
             data_id,
-            input_mode,
+            inputs_mode,
             compute_capacity,
             workers: selected_workers,
             agg_worker_id: None,

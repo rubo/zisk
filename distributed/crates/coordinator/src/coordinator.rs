@@ -334,7 +334,7 @@ impl Coordinator {
             .create_job(
                 request.data_id.clone(),
                 required_compute_capacity,
-                request.input_mode,
+                request.inputs_mode,
                 request.simulated_node,
             )
             .await?;
@@ -342,7 +342,7 @@ impl Coordinator {
         info!(
             "[Job] Started {} successfully Inputs: {} Capacity: {} Workers: {}",
             job.job_id,
-            job.input_mode,
+            job.inputs_mode,
             job.compute_capacity,
             job.workers.len(),
         );
@@ -527,7 +527,7 @@ impl Coordinator {
         &self,
         data_id: DataId,
         required_compute_capacity: ComputeCapacity,
-        input_mode: InputModeDto,
+        inputs_mode: InputModeDto,
         simulated_node: Option<u32>,
     ) -> CoordinatorResult<Job> {
         let execution_mode = if let Some(node) = simulated_node {
@@ -547,7 +547,7 @@ impl Coordinator {
 
         Ok(Job::new(
             data_id,
-            input_mode,
+            inputs_mode,
             required_compute_capacity,
             selected_workers,
             partitions,
@@ -604,7 +604,7 @@ impl Coordinator {
         job: &Job,
         active_workers: &[WorkerId],
     ) -> CoordinatorResult<()> {
-        let input_source = match job.input_mode {
+        let input_source = match job.inputs_mode {
             InputModeDto::InputModePath(ref inputs_uri, ref hints_uri) => {
                 InputSourceDto::InputPath(inputs_uri.clone(), hints_uri.clone())
             }
@@ -1803,7 +1803,7 @@ impl Coordinator {
             phase2_duration.as_seconds_f32(),
             phase3_duration.as_seconds_f32(),
             steps_str,
-            job.input_mode,
+            job.inputs_mode,
             job.compute_capacity,
         );
 

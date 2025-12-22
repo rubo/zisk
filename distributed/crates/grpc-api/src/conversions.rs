@@ -153,7 +153,7 @@ impl From<SystemStatusDto> for SystemStatusResponse {
 
 impl From<LaunchProofRequestDto> for LaunchProofRequest {
     fn from(dto: LaunchProofRequestDto) -> Self {
-        let (input_mode, inputs_uri, hints_uri) = match dto.input_mode {
+        let (inputs_mode, inputs_uri, hints_uri) = match dto.inputs_mode {
             InputModeDto::InputModeNone => (InputMode::None, None, None),
             InputModeDto::InputModePath(inputs, hints) => {
                 (InputMode::Path, Some(inputs), Some(hints))
@@ -166,7 +166,7 @@ impl From<LaunchProofRequestDto> for LaunchProofRequest {
         LaunchProofRequest {
             data_id: dto.data_id.into(),
             compute_capacity: dto.compute_capacity,
-            input_mode: input_mode.into(),
+            inputs_mode: inputs_mode.into(),
             inputs_uri,
             hints_uri,
             simulated_node: dto.simulated_node,
@@ -183,7 +183,7 @@ impl TryFrom<LaunchProofRequest> for LaunchProofRequestDto {
         Ok(LaunchProofRequestDto {
             data_id: req.data_id.into(),
             compute_capacity: req.compute_capacity,
-            input_mode: match InputMode::try_from(req.input_mode).unwrap_or(InputMode::None) {
+            inputs_mode: match InputMode::try_from(req.inputs_mode).unwrap_or(InputMode::None) {
                 InputMode::None => InputModeDto::InputModeNone,
                 InputMode::Path => {
                     let inputs_uri = req.inputs_uri.ok_or_else(|| {

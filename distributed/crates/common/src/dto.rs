@@ -95,7 +95,7 @@ impl Display for InputModeDto {
 pub struct LaunchProofRequestDto {
     pub data_id: DataId,
     pub compute_capacity: u32,
-    pub input_mode: InputModeDto,
+    pub inputs_mode: InputModeDto,
     pub simulated_node: Option<u32>,
 }
 

@@ -17,13 +17,7 @@ cfg_if::cfg_if! {
 
         use crate::zisklib::fcalls_impl::utils::{biguint_from_u64_digits, n_u64_digits_from_biguint};
 
-        lazy_static! {
-            pub static ref N: BigUint = BigUint::parse_bytes(
-                b"fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141",
-                16
-            )
-            .unwrap();
-        }
+        use super::N;
 
         pub fn fcall_secp256k1_fn_inv(params: &[u64], results: &mut [u64]) -> i64 {
             // Get the input

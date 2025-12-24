@@ -3536,6 +3536,7 @@ version = "0.16.0"
 dependencies = [
  "anyhow",
  "blake3",
+ "bytemuck",
  "colored",
  "fields",
  "proofman-common",

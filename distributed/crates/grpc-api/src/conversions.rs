@@ -9,7 +9,7 @@
 //! model. All conversions implement the `From` and/or `Into` traits for idiomatic Rust usage.
 
 use crate::{
-    contribution_params::{HintsSource, InputSource},
+    contribution_params::{InputSource},
     coordinator_message::Payload,
     execute_task_request, execute_task_response, job_status_response, jobs_list_response,
     launch_proof_response, system_status_response, workers_list_response, AggParams, Challenges,
@@ -17,8 +17,9 @@ use crate::{
     ExecuteTaskRequest, ExecuteTaskResponse, Heartbeat, HeartbeatAck, InputMode, JobCancelled,
     JobStatus, JobStatusResponse, JobsList, JobsListResponse, LaunchProofRequest,
     LaunchProofResponse, Metrics, Proof, ProofList, ProveParams, Shutdown, StatusInfoResponse,
-    SystemStatus, SystemStatusResponse, TaskType, WorkerError, WorkerInfo, WorkerReconnectRequest,
-    WorkerRegisterRequest, WorkerRegisterResponse, WorkersList, WorkersListResponse,
+    StreamData, StreamPayload, StreamType, SystemStatus, SystemStatusResponse, TaskType,
+    WorkerError, WorkerInfo, WorkerReconnectRequest, WorkerRegisterRequest, WorkerRegisterResponse,
+    WorkersList, WorkersListResponse,
 };
 use zisk_distributed_common::*;
 
@@ -158,12 +159,14 @@ impl From<LaunchProofRequestDto> for LaunchProofRequest {
             InputModeDto::InputModeNone => (InputMode::None, None),
             InputModeDto::InputModeUri(inputs_uri) => (InputMode::Uri, Some(inputs_uri)),
             InputModeDto::InputModeData(inputs_uri) => (InputMode::Data, Some(inputs_uri)),
+            InputModeDto::InputModeStream(inputs_uri) => (InputMode::Stream, Some(inputs_uri)),
         };
 
         let (hints_mode, hints_uri) = match dto.hints_mode {
             InputModeDto::InputModeNone => (InputMode::None, None),
             InputModeDto::InputModeUri(hints_uri) => (InputMode::Uri, Some(hints_uri)),
             InputModeDto::InputModeData(hints_uri) => (InputMode::Data, Some(hints_uri)),
+            InputModeDto::InputModeStream(hints_uri) => (InputMode::Stream, Some(hints_uri)),
         };
 
         LaunchProofRequest {
@@ -201,6 +204,12 @@ impl TryFrom<LaunchProofRequest> for LaunchProofRequestDto {
                     })?;
                     InputModeDto::InputModeData(inputs_uri)
                 }
+                InputMode::Stream => {
+                    let inputs_uri = req.inputs_uri.ok_or_else(|| {
+                        anyhow::anyhow!("Input mode is Stream but inputs_uri is missing")
+                    })?;
+                    InputModeDto::InputModeStream(inputs_uri)
+                }
             },
             hints_mode: match InputMode::try_from(req.hints_mode).unwrap_or(InputMode::None) {
                 InputMode::None => InputModeDto::InputModeNone,
@@ -215,6 +224,12 @@ impl TryFrom<LaunchProofRequest> for LaunchProofRequestDto {
                         anyhow::anyhow!("Hints mode is Data but hints_uri is missing")
                     })?;
                     InputModeDto::InputModeData(hints_uri)
+                }
+                InputMode::Stream => {
+                    let hints_uri = req.hints_uri.ok_or_else(|| {
+                        anyhow::anyhow!("Hints mode is Stream but hints_uri is missing")
+                    })?;
+                    InputModeDto::InputModeStream(hints_uri)
                 }
             },
             simulated_node: req.simulated_node,
@@ -271,6 +286,9 @@ impl From<CoordinatorMessageDto> for CoordinatorMessage {
             }
             CoordinatorMessageDto::JobCancelled(cancel) => {
                 CoordinatorMessage { payload: Some(Payload::JobCancelled(cancel.into())) }
+            }
+            CoordinatorMessageDto::StreamData(data) => {
+                CoordinatorMessage { payload: Some(Payload::StreamData(data.into())) }
             }
         }
     }
@@ -342,19 +360,21 @@ impl From<ContributionParamsDto> for ContributionParams {
         let input_source = match dto.input_source {
             InputSourceDto::InputPath(inputs_path) => Some(InputSource::InputPath(inputs_path)),
             InputSourceDto::InputData(data) => Some(InputSource::InputData(data)),
-            InputSourceDto::InputNull => None,
+            InputSourceDto::InputStream(_) | InputSourceDto::InputNull => None,
         };
 
-        let hints_source = match dto.hints_source {
-            InputSourceDto::InputPath(hints_path) => Some(HintsSource::HintsPath(hints_path)),
-            InputSourceDto::InputData(data) => Some(HintsSource::HintsData(data)),
-            InputSourceDto::InputNull => None,
+        let (hints_path, hints_stream) = match dto.hints_source {
+            InputSourceDto::InputPath(hints_path) => (Some(hints_path), false),
+            InputSourceDto::InputData(_) => (None, false),
+            InputSourceDto::InputStream(hints_path) => (Some(hints_path), true),
+            InputSourceDto::InputNull => (None, false),
         };
 
         ContributionParams {
             data_id: dto.data_id.as_string(),
             input_source,
-            hints_source,
+            hints_path,
+            hints_stream,
             rank_id: dto.rank_id,
             total_workers: dto.total_workers,
             worker_allocation: dto.worker_allocation,
@@ -461,6 +481,60 @@ impl From<ExecuteTaskResponse> for ExecuteTaskResponseDto {
 impl From<HeartbeatAck> for HeartbeatAckDto {
     fn from(message: HeartbeatAck) -> Self {
         HeartbeatAckDto { worker_id: WorkerId::from(message.worker_id) }
+    }
+}
+
+impl From<StreamTypeDto> for StreamType {
+    fn from(dto: StreamTypeDto) -> StreamType {
+        match dto {
+            StreamTypeDto::Start => StreamType::Start,
+            StreamTypeDto::Data => StreamType::Data,
+            StreamTypeDto::End => StreamType::End,
+        }
+    }
+}
+
+impl From<StreamType> for StreamTypeDto {
+    fn from(stream_type: StreamType) -> StreamTypeDto {
+        match stream_type {
+            StreamType::Start => StreamTypeDto::Start,
+            StreamType::Data => StreamTypeDto::Data,
+            StreamType::End => StreamTypeDto::End,
+        }
+    }
+}
+
+impl From<StreamDataDto> for StreamData {
+    fn from(dto: StreamDataDto) -> Self {
+        StreamData {
+            job_id: dto.job_id.as_string(),
+            stream_type: StreamType::from(dto.stream_type) as i32,
+            payload: dto.stream_payload.map(Into::into),
+        }
+    }
+}
+
+impl From<StreamData> for StreamDataDto {
+    fn from(data: StreamData) -> Self {
+        StreamDataDto {
+            job_id: JobId::from(data.job_id),
+            stream_type: StreamType::try_from(data.stream_type)
+                .map(StreamTypeDto::from)
+                .unwrap_or(StreamTypeDto::Data),
+            stream_payload: data.payload.map(Into::into),
+        }
+    }
+}
+
+impl From<StreamPayloadDto> for StreamPayload {
+    fn from(dto: StreamPayloadDto) -> Self {
+        StreamPayload { sequence_number: dto.sequence_number, payload: dto.payload }
+    }
+}
+
+impl From<StreamPayload> for StreamPayloadDto {
+    fn from(payload: StreamPayload) -> Self {
+        StreamPayloadDto { sequence_number: payload.sequence_number, payload: payload.payload }
     }
 }
 

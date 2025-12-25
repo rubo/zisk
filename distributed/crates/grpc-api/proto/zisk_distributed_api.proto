@@ -66,6 +66,7 @@ enum InputMode {
   INPUT_MODE_NONE = 0;  // No input provided
   INPUT_MODE_URI = 1;   // Input will be provided as an URI
   INPUT_MODE_DATA = 2;  // Input data will be sent directly
+  INPUT_MODE_STREAM = 3;  // Input data will be sent as a stream
 }
 
 // ============================================================================
@@ -168,6 +169,7 @@ message CoordinatorMessage {
     WorkerRegisterResponse register_response = 3;
     ExecuteTaskRequest execute_task = 4;  
     JobCancelled job_cancelled = 5;
+    StreamData stream_data = 6;
   }
 }
 
@@ -236,10 +238,8 @@ message ContributionParams {
     string input_path = 2;
     bytes input_data = 3;
   }
-  oneof hints_source {
-    string hints_path = 4;
-    bytes hints_data = 5;
-  }
+  optional string hints_path = 4;
+  bool hints_stream = 5; // Indicates whether hints will be streamed
   uint32 rank_id = 6;
   uint32 total_workers = 7;
   repeated uint32 worker_allocation = 8;
@@ -263,6 +263,25 @@ message AggParams {
   bool test_mode = 10;
   string output_dir_path = 11;
   bool minimal_memory = 12;
+}
+
+// Stream type enumeration
+enum StreamType {
+  STREAM_TYPE_START = 0;
+  STREAM_TYPE_DATA = 1;
+  STREAM_TYPE_END = 2;
+}
+
+// Streaming messages for data transfer
+message StreamData {
+  string job_id = 1;
+  StreamType stream_type = 2;
+  optional StreamPayload payload = 3;
+}
+
+message StreamPayload {
+  uint32 sequence_number = 3;
+  bytes payload = 4;
 }
 
 message ExecuteTaskResponse {

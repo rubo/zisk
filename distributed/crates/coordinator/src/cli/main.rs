@@ -77,6 +77,10 @@ enum ZiskCoordinatorCommands {
         #[clap(short = 'x', long, default_value_t = false)]
         direct_inputs: bool,
 
+        /// Whether to send the input data directly
+        #[clap(long, default_value_t = false)]
+        direct_hints: bool,
+
         /// Compute capacity needed to generate the proof
         #[arg(long, short, help = "Compute capacity needed to generate the proof")]
         compute_capacity: u32,
@@ -98,6 +102,7 @@ async fn main() -> Result<()> {
             inputs_uri,
             hints_uri,
             direct_inputs,
+            direct_hints,
             compute_capacity,
             simulated_node,
         }) => {
@@ -108,6 +113,7 @@ async fn main() -> Result<()> {
                 inputs_uri,
                 hints_uri,
                 direct_inputs,
+                direct_hints,
                 compute_capacity,
                 simulated_node,
             )

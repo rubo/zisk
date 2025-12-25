@@ -15,6 +15,7 @@ pub async fn handle(
     inputs_uri: Option<String>,
     hints_uri: Option<String>,
     direct_inputs: bool,
+    direct_hints: bool,
     compute_capacity: u32,
     simulated_node: Option<u32>,
 ) -> Result<()> {
@@ -40,14 +41,18 @@ pub async fn handle(
     };
 
     let hints_mode = if hints_uri.is_some() {
-        if direct_inputs {
-            InputMode::Data
+        // TODO!!!! Rethink this enum usage for hints streaming
+        // InputMode::Data has sense? How to activate it?
+        if direct_hints {
+            InputMode::Stream
         } else {
             InputMode::Uri
         }
     } else {
         InputMode::None
     };
+
+    println!("hints_mode: {:?}", hints_mode);
 
     // ID will be id if present, else input file name or random UUID
     let data_id = if let Some(id) = data_id {

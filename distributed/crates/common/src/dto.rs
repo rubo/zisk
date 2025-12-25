@@ -76,6 +76,8 @@ pub enum InputModeDto {
     // Input will be provided as a path. First String is the inputs path URI,
     // second String is the precompiles hints URI
     InputModeData(String) = 2,
+    // Input will be streamed via StreamStart/Data/End messages. String contains the file path to stream.
+    InputModeStream(String) = 3,
 }
 
 impl Display for InputModeDto {
@@ -86,7 +88,10 @@ impl Display for InputModeDto {
                 write!(f, "Path({})", inputs)
             }
             InputModeDto::InputModeData(inputs) => {
-                write!(f, "Data( {})", inputs)
+                write!(f, "Data({})", inputs)
+            }
+            InputModeDto::InputModeStream(inputs) => {
+                write!(f, "Stream({})", inputs)
             }
         }
     }
@@ -124,6 +129,27 @@ pub enum CoordinatorMessageDto {
     WorkerRegisterResponse(WorkerRegisterResponseDto),
     ExecuteTaskRequest(ExecuteTaskRequestDto),
     JobCancelled(JobCancelledDto),
+    StreamData(StreamDataDto),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum StreamTypeDto {
+    Start,
+    Data,  
+    End,
+}
+
+#[derive(Debug, Clone)]
+pub struct StreamDataDto {
+    pub job_id: JobId,
+    pub stream_type: StreamTypeDto,
+    pub stream_payload: Option<StreamPayloadDto>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StreamPayloadDto {
+    pub sequence_number: u32,
+    pub payload: Vec<u8>,
 }
 
 pub struct HeartbeatDto {
@@ -173,6 +199,7 @@ pub struct ContributionParamsDto {
 pub enum InputSourceDto {
     InputPath(String),
     InputData(Vec<u8>),
+    InputStream(String),
     InputNull,
 }
 

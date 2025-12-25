@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use cargo_zisk::commands::{get_proving_key, get_witness_computation_lib};
 use proofman::{AggProofs, ContributionsInfo};
 use rom_setup::{
@@ -544,6 +544,9 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                 let stdin = ZiskStdin::from_vec(input_data);
                 prover.set_stdin(stdin);
             }
+            InputSourceDto::InputStream(_) => {
+                return Err(anyhow!("Input source is in streaming mode but stream not completed"));
+            }
             InputSourceDto::InputNull => {
                 let stdin = ZiskStdin::null();
                 prover.set_stdin(stdin);
@@ -557,6 +560,10 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             }
             InputSourceDto::InputData(hints_data) => {
                 let hints_stream = StreamSource::from_vec(hints_data);
+                prover.set_hints_stream(hints_stream)?;
+            }
+            InputSourceDto::InputStream(hints_uri) => {
+                let hints_stream = StreamSource::from_uri(hints_uri.into())?;
                 prover.set_hints_stream(hints_stream)?;
             }
             InputSourceDto::InputNull => {

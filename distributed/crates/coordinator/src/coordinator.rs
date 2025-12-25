@@ -33,7 +33,7 @@
 use crate::{
     config::Config,
     coordinator_errors::{CoordinatorError, CoordinatorResult},
-    hooks, WorkersPool,
+    hooks, PrecompileHintsRelay, WorkersPool,
 };
 
 use chrono::{DateTime, Utc};
@@ -42,6 +42,7 @@ use dashmap::DashMap;
 use proofman::ContributionsInfo;
 use std::{
     collections::HashMap,
+    hint,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -50,13 +51,14 @@ use std::{
 };
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
+use zisk_common::io::{StreamSource, ZiskStream};
 use zisk_distributed_common::{
     AggParamsDto, AggProofData, ChallengesDto, ComputeCapacity, ContributionParamsDto,
     CoordinatorMessageDto, DataId, ExecuteTaskRequestDto, ExecuteTaskRequestTypeDto,
     ExecuteTaskResponseDto, ExecuteTaskResponseResultDataDto, HeartbeatAckDto, InputModeDto,
     InputSourceDto, Job, JobExecutionMode, JobId, JobPhase, JobResult, JobResultData, JobState,
     JobStatusDto, JobsListDto, LaunchProofRequestDto, LaunchProofResponseDto, MetricsDto, ProofDto,
-    ProveParamsDto, StatusInfoDto, SystemStatusDto, WorkerErrorDto, WorkerId,
+    ProveParamsDto, StatusInfoDto, StreamTypeDto, SystemStatusDto, WorkerErrorDto, WorkerId,
     WorkerReconnectRequestDto, WorkerRegisterRequestDto, WorkerState, WorkersListDto,
 };
 
@@ -105,7 +107,7 @@ pub struct Coordinator {
     start_time_utc: DateTime<Utc>,
 
     /// Manages the pool of connected workers and their communication channels.
-    workers_pool: WorkersPool,
+    workers_pool: Arc<WorkersPool>,
 
     /// Concurrent storage for active jobs with fine-grained locking.
     jobs: DashMap<JobId, Arc<RwLock<Job>>>,
@@ -129,7 +131,7 @@ impl Coordinator {
         Self {
             config,
             start_time_utc,
-            workers_pool: WorkersPool::new(),
+            workers_pool: Arc::new(WorkersPool::new()),
             jobs: DashMap::new(),
             registrations: AtomicU64::new(0),
             reconnections: AtomicU64::new(0),
@@ -620,6 +622,10 @@ impl Coordinator {
                 })?;
                 InputSourceDto::InputData(inputs)
             }
+            InputModeDto::InputModeStream(_) => {
+                // TODO! Inputs streaming not yet supported
+                InputSourceDto::InputNull
+            }
             InputModeDto::InputModeNone => InputSourceDto::InputNull,
         };
 
@@ -636,6 +642,10 @@ impl Coordinator {
                 })?;
                 InputSourceDto::InputData(hints)
             }
+            InputModeDto::InputModeStream(hints_uri) => {
+                // Hints will be streamed separately
+                InputSourceDto::InputStream(hints_uri.clone())
+            }
             InputModeDto::InputModeNone => InputSourceDto::InputNull,
         };
 
@@ -645,6 +655,8 @@ impl Coordinator {
 
         use futures::stream::{self, StreamExt};
 
+        // TODO!!!!! Can we avoid this clone ????
+        let cloned_active_workers = active_workers.clone();
         let tasks = active_workers.into_iter().enumerate().map(|(rank_id, worker_id)| {
             let job_id = job.job_id.clone();
             let data_id = job.data_id.clone();
@@ -682,6 +694,10 @@ impl Coordinator {
             }
         });
 
+        if matches!(hints_source, InputSourceDto::InputStream(_)) {
+            self.initialize_stream(job, cloned_active_workers)?;
+        }
+
         let results: Vec<_> = stream::iter(tasks).buffer_unordered(10).collect().await;
 
         // Check for any errors
@@ -701,6 +717,79 @@ impl Coordinator {
             })?;
         }
 
+        Ok(())
+    }
+
+    fn initialize_stream(
+        &self,
+        job: &Job,
+        cloned_active_workers: Vec<WorkerId>,
+    ) -> Result<(), CoordinatorError> {
+        let hints_uri = match &job.hints_mode {
+            InputModeDto::InputModeStream(uri) => uri,
+            _ => unreachable!(),
+        };
+        let job_id_clone = job.job_id.clone();
+        let workers_clone = Arc::new(cloned_active_workers.clone());
+        let workers_pool = Arc::clone(&self.workers_pool);
+
+        // Async dispatcher - no blocking, pure async flow for maximum performance
+        let dispatcher =
+            move |sequence_number: u32, stream_type: StreamTypeDto, payload: Vec<u8>| {
+                use futures::future::join_all;
+                use zisk_distributed_common::{StreamDataDto, StreamPayloadDto};
+
+                let job_id = job_id_clone.clone();
+                let workers = Arc::clone(&workers_clone);
+                let pool = Arc::clone(&workers_pool);
+
+                Box::pin(async move {
+                    let sends = workers.iter().map(|worker_id| {
+                        let job_id = job_id.clone();
+                        let worker_id = worker_id.clone();
+                        let payload = payload.clone();
+                        let pool = Arc::clone(&pool);
+                        let stream_type = stream_type.clone();
+
+                        async move {
+                            let msg = CoordinatorMessageDto::StreamData(StreamDataDto {
+                                job_id: job_id.clone(),
+                                stream_type,
+                                stream_payload: Some(StreamPayloadDto { sequence_number, payload }),
+                            });
+
+                            if let Err(e) = pool.send_message(&worker_id, msg).await {
+                                error!(
+                                    "Failed to send hints to worker {} for job {}: {}",
+                                    worker_id, job_id, e
+                                );
+                            }
+                        }
+                    });
+
+                    join_all(sends).await;
+                })
+            };
+        let hints_relay = PrecompileHintsRelay::new(dispatcher);
+        let mut stream = ZiskStream::new(hints_relay);
+        let stream_reader = StreamSource::from_uri(Some(hints_uri)).map_err(|e| {
+            CoordinatorError::Internal(format!(
+                "Failed to create hints stream reader for job {}: {}",
+                job.job_id, e
+            ))
+        })?;
+        stream.set_hints_stream(stream_reader).map_err(|e| {
+            CoordinatorError::Internal(format!(
+                "Failed to set hints stream for job {}: {}",
+                job.job_id, e
+            ))
+        })?;
+        stream.start_stream().map_err(|e| {
+            CoordinatorError::Internal(format!(
+                "Failed to start hints stream for job {}: {}",
+                job.job_id, e
+            ))
+        })?;
         Ok(())
     }
 

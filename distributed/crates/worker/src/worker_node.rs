@@ -1,6 +1,8 @@
 use crate::{worker::ComputationResult, ProverConfig, Worker};
 use anyhow::{anyhow, Result};
 use proofman::{AggProofs, ContributionsInfo};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::path::Path;
 use std::{path::PathBuf, time::Duration};
 use tokio::sync::mpsc;
@@ -9,10 +11,11 @@ use tonic::transport::Channel;
 use tonic::Request;
 use tracing::{error, info};
 use zisk_distributed_common::{
-    AggProofData, AggregationParams, DataCtx, InputSourceDto, WorkerState,
+    AggProofData, AggregationParams, DataCtx, InputSourceDto, StreamPayloadDto, StreamTypeDto,
+    WorkerState,
 };
 use zisk_distributed_common::{DataId, JobId};
-use zisk_distributed_grpc_api::contribution_params::{HintsSource, InputSource};
+use zisk_distributed_grpc_api::contribution_params::InputSource;
 use zisk_distributed_grpc_api::execute_task_response::ResultData;
 use zisk_distributed_grpc_api::*;
 use zisk_sdk::{Asm, Emu, ZiskBackend};
@@ -102,11 +105,13 @@ impl<T: ZiskBackend + 'static> WorkerNodeMpi<T> {
 pub struct WorkerNodeGrpc<T: ZiskBackend + 'static> {
     worker_config: WorkerServiceConfig,
     worker: Worker<T>,
+
+    stream_buffers: HashMap<JobId, (u32, HashMap<u32, Vec<u8>>)>, // (job_id, (next_seq, (seq_number, data)))
 }
 
 impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
     pub async fn new(worker_config: WorkerServiceConfig, worker: Worker<T>) -> Result<Self> {
-        Ok(Self { worker_config, worker })
+        Ok(Self { worker_config, worker, stream_buffers: HashMap::new() })
     }
 
     pub fn world_rank(&self) -> i32 {
@@ -494,6 +499,9 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
                 tokio::time::sleep(Duration::from_secs(shutdown.grace_period_seconds as u64)).await;
                 return Err(anyhow!("Coordinator requested shutdown: {}", shutdown.reason));
             }
+            coordinator_message::Payload::StreamData(stream_data) => {
+                self.handle_stream_data(stream_data).await?;
+            }
         }
 
         Ok(())
@@ -532,21 +540,22 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
             }
         };
 
-        let hints_source = match params.hints_source {
-            Some(HintsSource::HintsPath(ref hints_uris)) => {
+        let hints_source = if params.hints_path.is_some() {
+            if !params.hints_stream {
                 // Validate and get the full path
                 let hints_uri = Self::validate_subdir(
                     &self.worker_config.worker.inputs_folder,
-                    &PathBuf::from(&hints_uris),
+                    &PathBuf::from(params.hints_path.as_ref().unwrap()),
                 )
                 .await?;
 
                 InputSourceDto::InputPath(hints_uri.to_string_lossy().to_string())
+            } else {
+                // Hints will be streamed - use placeholder, will be updated when stream completes
+                InputSourceDto::InputStream(params.hints_path.as_ref().unwrap().clone())
             }
-            Some(HintsSource::HintsData(data)) => InputSourceDto::InputData(data),
-            None => {
-                return Err(anyhow!("Hints source missing in ContributionParams"));
-            }
+        } else {
+            InputSourceDto::InputNull
         };
 
         let data_ctx =
@@ -730,6 +739,74 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
         self.worker.set_current_computation(
             self.worker.handle_aggregate(job, agg_params, computation_tx.clone()).await,
         );
+
+        Ok(())
+    }
+
+    async fn handle_stream_data(&mut self, stream_data: StreamData) -> Result<()> {
+        use zisk_distributed_common::StreamDataDto;
+
+        let stream_data_dto: StreamDataDto = stream_data.into();
+        let job_id = stream_data_dto.job_id;
+        let stream_type = stream_data_dto.stream_type;
+
+        println!("Job ID: {}", job_id.as_string());
+        println!("Stream Type: {:?}", stream_type);
+
+        // Check the existence of stream buffer based on stream type
+        if stream_type == StreamTypeDto::Start {
+            // Check if buffer already exists
+            match self.stream_buffers.entry(job_id.clone()) {
+                Entry::Occupied(_) => {
+                    return Err(anyhow!("Received duplicate START for job {}", job_id));
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert((1, HashMap::new()));
+                }
+            }
+
+            return Ok(());
+        } else if stream_type == StreamTypeDto::End {
+            // Ensure buffer exists
+            if !self.stream_buffers.contains_key(&job_id) {
+                return Err(
+                    anyhow!("Received {:?} without START for job {}", stream_type, job_id,),
+                );
+            }
+
+            return Ok(());
+        }
+
+        let element = self.stream_buffers.get_mut(&job_id).ok_or_else(|| {
+            anyhow!(
+                "Received stream data without START for job {} stream type {:?}",
+                job_id,
+                stream_type
+            )
+        })?;
+
+        let next_seq = &mut element.0;
+        let stream_buffer = &mut element.1;
+
+        let StreamPayloadDto { sequence_number, payload: data } =
+            stream_data_dto.stream_payload.ok_or_else(|| {
+                anyhow!("Missing stream payload for job {} stream type {:?}", job_id, stream_type)
+            })?;
+
+        // Validate sequence number
+        if sequence_number != *next_seq {
+            stream_buffer.insert(sequence_number, data);
+            return Ok(());
+        }
+
+        // If equals, process it and check for subsequent buffered chunks
+        println!("Processing stream chunk {} for job {}", sequence_number, job_id);
+        *next_seq += 1;
+
+        while let Some(_buffered_data) = stream_buffer.remove(next_seq) {
+            println!("Processing buffered stream chunk {} for job {}", next_seq, job_id);
+            *next_seq += 1;
+        }
 
         Ok(())
     }

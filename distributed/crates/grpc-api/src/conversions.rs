@@ -161,9 +161,9 @@ impl From<LaunchProofRequestDto> for LaunchProofRequest {
         };
 
         let (hints_mode, hints_uri) = match dto.hints_mode {
-            HintsModeDto::InputModeNone => (InputMode::None, None),
-            HintsModeDto::InputModeUri(hints_uri) => (InputMode::Uri, Some(hints_uri)),
-            HintsModeDto::InputModeStream(hints_uri) => (InputMode::Stream, Some(hints_uri)),
+            HintsModeDto::HintsNone => (InputMode::None, None),
+            HintsModeDto::HintsUri(hints_uri) => (InputMode::Uri, Some(hints_uri)),
+            HintsModeDto::HintsStream(hints_uri) => (InputMode::Stream, Some(hints_uri)),
         };
 
         LaunchProofRequest {
@@ -204,18 +204,18 @@ impl TryFrom<LaunchProofRequest> for LaunchProofRequestDto {
                 _ => return Err(anyhow::anyhow!("Invalid inputs_mode for LaunchProofRequestDto")),
             },
             hints_mode: match InputMode::try_from(req.hints_mode).unwrap_or(InputMode::None) {
-                InputMode::None => HintsModeDto::InputModeNone,
+                InputMode::None => HintsModeDto::HintsNone,
                 InputMode::Uri => {
                     let hints_uri = req.hints_uri.ok_or_else(|| {
                         anyhow::anyhow!("Hints mode is Path but hints_uri is missing")
                     })?;
-                    HintsModeDto::InputModeUri(hints_uri)
+                    HintsModeDto::HintsUri(hints_uri)
                 }
                 InputMode::Stream => {
                     let hints_uri = req.hints_uri.ok_or_else(|| {
                         anyhow::anyhow!("Hints mode is Stream but hints_uri is missing")
                     })?;
-                    HintsModeDto::InputModeStream(hints_uri)
+                    HintsModeDto::HintsStream(hints_uri)
                 }
                 _ => return Err(anyhow::anyhow!("Invalid hints_mode for LaunchProofRequestDto")),
             },

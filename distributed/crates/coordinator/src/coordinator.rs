@@ -626,14 +626,12 @@ impl Coordinator {
         };
 
         let hints_source = match &job.hints_mode {
-            HintsModeDto::InputModeUri(ref hints_uri) => {
-                HintsSourceDto::HintsPath(hints_uri.clone())
-            }
-            HintsModeDto::InputModeStream(hints_uri) => {
+            HintsModeDto::HintsUri(ref hints_uri) => HintsSourceDto::HintsPath(hints_uri.clone()),
+            HintsModeDto::HintsStream(hints_uri) => {
                 // Hints will be streamed separately
                 HintsSourceDto::HintsStream(hints_uri.clone())
             }
-            HintsModeDto::InputModeNone => HintsSourceDto::HintsNull,
+            HintsModeDto::HintsNone => HintsSourceDto::HintsNull,
         };
 
         // Use Arc to avoid expensive clones
@@ -713,7 +711,7 @@ impl Coordinator {
         cloned_active_workers: Vec<WorkerId>,
     ) -> Result<(), CoordinatorError> {
         let hints_uri = match &job.hints_mode {
-            HintsModeDto::InputModeStream(uri) => uri,
+            HintsModeDto::HintsStream(uri) => uri,
             _ => unreachable!(),
         };
         let job_id_clone = job.job_id.clone();

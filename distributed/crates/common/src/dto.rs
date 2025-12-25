@@ -66,14 +66,13 @@ pub struct SystemStatusDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[repr(i32)]
 pub enum InputModeDto {
     // No input provided
-    InputModeNone = 0,
+    InputModeNone,
     // Input will be provided as a path.
-    InputModeUri(String) = 1,
+    InputModeUri(String),
     // Input will be embedded directly as data.
-    InputModeData(String) = 2,
+    InputModeData(String),
 }
 
 impl Display for InputModeDto {
@@ -91,25 +90,23 @@ impl Display for InputModeDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[repr(i32)]
 pub enum HintsModeDto {
-    // No input provided
-    InputModeNone = 0,
-    // Input will be provided as a path. First String is the inputs path,
-    // second String is the precompiles hints path
-    InputModeUri(String) = 1,
-    // Input will be streamed via StreamStart/Data/End messages. String contains the file path to stream.
-    InputModeStream(String) = 2,
+    /// No hints are provided.
+    HintsNone,
+    /// Hints are provided as a complete payload referenced by a URI.
+    HintsUri(String),
+    /// Hints will be streamed from the given URI endpoint.
+    HintsStream(String),
 }
 
 impl Display for HintsModeDto {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HintsModeDto::InputModeNone => write!(f, "None"),
-            HintsModeDto::InputModeUri(inputs) => {
+            HintsModeDto::HintsNone => write!(f, "None"),
+            HintsModeDto::HintsUri(inputs) => {
                 write!(f, "Path({})", inputs)
             }
-            HintsModeDto::InputModeStream(inputs) => {
+            HintsModeDto::HintsStream(inputs) => {
                 write!(f, "Stream({})", inputs)
             }
         }

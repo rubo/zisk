@@ -30,29 +30,17 @@ pub async fn handle(
     let channel = Channel::from_shared(coordinator_url)?.connect().await?;
     let mut client = ZiskDistributedApiClient::new(channel);
 
-    let inputs_mode = if inputs_uri.is_some() {
-        if direct_inputs {
-            InputMode::Data
-        } else {
-            InputMode::Uri
-        }
-    } else {
-        InputMode::None
+    let inputs_mode = match inputs_uri {
+        None => InputMode::None,
+        Some(_) if direct_inputs => InputMode::Data,
+        Some(_) => InputMode::Uri,
     };
 
-    let hints_mode = if hints_uri.is_some() {
-        // TODO!!!! Rethink this enum usage for hints streaming
-        // InputMode::Data has sense? How to activate it?
-        if direct_hints {
-            InputMode::Stream
-        } else {
-            InputMode::Uri
-        }
-    } else {
-        InputMode::None
+    let hints_mode = match hints_uri {
+        None => InputMode::None,
+        Some(_) if direct_hints => InputMode::Stream,
+        Some(_) => InputMode::Uri,
     };
-
-    println!("hints_mode: {:?}", hints_mode);
 
     // ID will be id if present, else input file name or random UUID
     let data_id = if let Some(id) = data_id {

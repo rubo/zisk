@@ -16,7 +16,7 @@ pub async fn handle(
     inputs_uri: Option<String>,
     hints_uri: Option<String>,
     direct_inputs: bool,
-    direct_hints: bool,
+    stream_hints: bool,
     compute_capacity: u32,
     simulated_node: Option<u32>,
 ) -> Result<()> {
@@ -39,7 +39,7 @@ pub async fn handle(
 
     let hints_mode = match hints_uri {
         None => HintsMode::None,
-        Some(_) if direct_hints => HintsMode::Stream,
+        Some(_) if stream_hints => HintsMode::Stream,
         Some(_) => HintsMode::Uri,
     };
 

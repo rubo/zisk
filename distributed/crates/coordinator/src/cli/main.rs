@@ -79,7 +79,7 @@ enum ZiskCoordinatorCommands {
 
         /// Whether to send the input data directly
         #[clap(long, default_value_t = false)]
-        direct_hints: bool,
+        stream_hints: bool,
 
         /// Compute capacity needed to generate the proof
         #[arg(long, short, help = "Compute capacity needed to generate the proof")]
@@ -102,7 +102,7 @@ async fn main() -> Result<()> {
             inputs_uri,
             hints_uri,
             direct_inputs,
-            direct_hints,
+            stream_hints,
             compute_capacity,
             simulated_node,
         }) => {
@@ -113,7 +113,7 @@ async fn main() -> Result<()> {
                 inputs_uri,
                 hints_uri,
                 direct_inputs,
-                direct_hints,
+                stream_hints,
                 compute_capacity,
                 simulated_node,
             )

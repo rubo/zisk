@@ -797,11 +797,9 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
         }
 
         // If equals, process it and check for subsequent buffered chunks
-        println!("Processing stream chunk {} for job {}", sequence_number, job_id);
         *next_seq += 1;
 
         while let Some(_buffered_data) = stream_buffer.remove(next_seq) {
-            println!("Processing buffered stream chunk {} for job {}", next_seq, job_id);
             *next_seq += 1;
         }
 

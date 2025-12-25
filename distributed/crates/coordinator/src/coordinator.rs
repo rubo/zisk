@@ -55,7 +55,7 @@ use zisk_distributed_common::{
     AggParamsDto, AggProofData, ChallengesDto, ComputeCapacity, ContributionParamsDto,
     CoordinatorMessageDto, DataId, ExecuteTaskRequestDto, ExecuteTaskRequestTypeDto,
     ExecuteTaskResponseDto, ExecuteTaskResponseResultDataDto, HeartbeatAckDto, HintsModeDto,
-    HintsSourceDto, InputModeDto, InputSourceDto, Job, JobExecutionMode, JobId, JobPhase,
+    HintsSourceDto, InputSourceDto, InputsModeDto, Job, JobExecutionMode, JobId, JobPhase,
     JobResult, JobResultData, JobState, JobStatusDto, JobsListDto, LaunchProofRequestDto,
     LaunchProofResponseDto, MetricsDto, ProofDto, ProveParamsDto, StatusInfoDto, StreamTypeDto,
     SystemStatusDto, WorkerErrorDto, WorkerId, WorkerReconnectRequestDto, WorkerRegisterRequestDto,
@@ -530,7 +530,7 @@ impl Coordinator {
         &self,
         data_id: DataId,
         required_compute_capacity: ComputeCapacity,
-        inputs_mode: InputModeDto,
+        inputs_mode: InputsModeDto,
         hints_mode: HintsModeDto,
         simulated_node: Option<u32>,
     ) -> CoordinatorResult<Job> {
@@ -610,10 +610,10 @@ impl Coordinator {
         active_workers: &[WorkerId],
     ) -> CoordinatorResult<()> {
         let input_source = match job.inputs_mode {
-            InputModeDto::InputModeUri(ref inputs_uri) => {
+            InputsModeDto::InputsUri(ref inputs_uri) => {
                 InputSourceDto::InputPath(inputs_uri.clone())
             }
-            InputModeDto::InputModeData(ref inputs_uri) => {
+            InputsModeDto::InputsData(ref inputs_uri) => {
                 let inputs = tokio::fs::read(inputs_uri).await.map_err(|e| {
                     CoordinatorError::Internal(format!(
                         "Failed to read input data for job {}: {}",
@@ -622,7 +622,7 @@ impl Coordinator {
                 })?;
                 InputSourceDto::InputData(inputs)
             }
-            InputModeDto::InputModeNone => InputSourceDto::InputNull,
+            InputsModeDto::InputsNone => InputSourceDto::InputNull,
         };
 
         let hints_source = match &job.hints_mode {

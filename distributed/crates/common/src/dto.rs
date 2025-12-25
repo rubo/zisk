@@ -66,23 +66,23 @@ pub struct SystemStatusDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum InputModeDto {
-    // No input provided
-    InputModeNone,
-    // Input will be provided as a path.
-    InputModeUri(String),
-    // Input will be embedded directly as data.
-    InputModeData(String),
+pub enum InputsModeDto {
+    // No inputs are provided
+    InputsNone,
+    /// Inputs are provided as a complete payload referenced by a URI.
+    InputsUri(String),
+    /// Inputs are provided directly as data.
+    InputsData(String),
 }
 
-impl Display for InputModeDto {
+impl Display for InputsModeDto {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InputModeDto::InputModeNone => write!(f, "None"),
-            InputModeDto::InputModeUri(inputs) => {
+            InputsModeDto::InputsNone => write!(f, "None"),
+            InputsModeDto::InputsUri(inputs) => {
                 write!(f, "Path({})", inputs)
             }
-            InputModeDto::InputModeData(inputs) => {
+            InputsModeDto::InputsData(inputs) => {
                 write!(f, "Data({})", inputs)
             }
         }
@@ -116,7 +116,7 @@ impl Display for HintsModeDto {
 pub struct LaunchProofRequestDto {
     pub data_id: DataId,
     pub compute_capacity: u32,
-    pub inputs_mode: InputModeDto,
+    pub inputs_mode: InputsModeDto,
     pub hints_mode: HintsModeDto,
     pub simulated_node: Option<u32>,
 }

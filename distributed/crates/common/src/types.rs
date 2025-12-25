@@ -16,7 +16,7 @@ use std::{
 };
 use tracing::error;
 
-use crate::{HintsModeDto, HintsSourceDto, InputModeDto, InputSourceDto};
+use crate::{HintsModeDto, HintsSourceDto, InputSourceDto, InputsModeDto};
 
 /// Job ID wrapper for type safety
 #[derive(
@@ -243,7 +243,7 @@ pub struct Job {
     pub duration_ms: Option<u64>,
     pub state: JobState,
     pub data_id: DataId,
-    pub inputs_mode: InputModeDto,
+    pub inputs_mode: InputsModeDto,
     pub hints_mode: HintsModeDto,
     pub compute_capacity: ComputeCapacity,
     pub workers: Vec<WorkerId>,
@@ -260,7 +260,7 @@ pub struct Job {
 impl Job {
     pub fn new(
         data_id: DataId,
-        inputs_mode: InputModeDto,
+        inputs_mode: InputsModeDto,
         hints_mode: HintsModeDto,
         compute_capacity: ComputeCapacity,
         selected_workers: Vec<WorkerId>,

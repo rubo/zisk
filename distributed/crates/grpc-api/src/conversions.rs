@@ -155,9 +155,9 @@ impl From<SystemStatusDto> for SystemStatusResponse {
 impl From<LaunchProofRequestDto> for LaunchProofRequest {
     fn from(dto: LaunchProofRequestDto) -> Self {
         let (inputs_mode, inputs_uri) = match dto.inputs_mode {
-            InputModeDto::InputModeNone => (InputMode::None, None),
-            InputModeDto::InputModeUri(inputs_uri) => (InputMode::Uri, Some(inputs_uri)),
-            InputModeDto::InputModeData(inputs_uri) => (InputMode::Data, Some(inputs_uri)),
+            InputsModeDto::InputsNone => (InputMode::None, None),
+            InputsModeDto::InputsUri(inputs_uri) => (InputMode::Uri, Some(inputs_uri)),
+            InputsModeDto::InputsData(inputs_uri) => (InputMode::Data, Some(inputs_uri)),
         };
 
         let (hints_mode, hints_uri) = match dto.hints_mode {
@@ -188,18 +188,18 @@ impl TryFrom<LaunchProofRequest> for LaunchProofRequestDto {
             data_id: req.data_id.into(),
             compute_capacity: req.compute_capacity,
             inputs_mode: match InputMode::try_from(req.inputs_mode).unwrap_or(InputMode::None) {
-                InputMode::None => InputModeDto::InputModeNone,
+                InputMode::None => InputsModeDto::InputsNone,
                 InputMode::Uri => {
                     let inputs_uri = req.inputs_uri.ok_or_else(|| {
                         anyhow::anyhow!("Input mode is Path but inputs_uri is missing")
                     })?;
-                    InputModeDto::InputModeUri(inputs_uri)
+                    InputsModeDto::InputsUri(inputs_uri)
                 }
                 InputMode::Data => {
                     let inputs_uri = req.inputs_uri.ok_or_else(|| {
                         anyhow::anyhow!("Input mode is Data but inputs_uri is missing")
                     })?;
-                    InputModeDto::InputModeData(inputs_uri)
+                    InputsModeDto::InputsData(inputs_uri)
                 }
                 _ => return Err(anyhow::anyhow!("Invalid inputs_mode for LaunchProofRequestDto")),
             },

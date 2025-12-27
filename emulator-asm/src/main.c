@@ -1903,6 +1903,25 @@ void client_setup (void)
     }
 }
 
+typedef enum {
+    PrecompileReadMode_NoPrefix,
+    PrecompileReadMode_Prefixed
+} PrecompileReadMode;
+
+//PrecompileReadMode precompile_read_mode = PrecompileReadMode_NoPrefix;
+PrecompileReadMode precompile_read_mode = PrecompileReadMode_Prefixed;
+
+typedef enum {
+    PrecompileWriteMode_Full,
+    PrecompileWriteMode_OnePrecAtATime
+} PrecompileWriteMode;
+
+//PrecompileWriteMode precompile_write_mode = PrecompileWriteMode_Full;
+PrecompileWriteMode precompile_write_mode = PrecompileWriteMode_OnePrecAtATime;
+
+//#define PRECOMPILE_FIXED_SIZE 25 // Keccak-f state size in u64s
+#define PRECOMPILE_FIXED_SIZE 4 // SHA-256 state size in u64s
+
 void client_write_precompile_results (void)
 {
     int result;
@@ -1937,6 +1956,13 @@ void client_write_precompile_results (void)
         fflush(stderr);
         exit(-1);
     }
+    if ((precompile_data_size & 0x7) != 0)
+    {
+        printf("ERROR: Precompile results file (%s) size (%lu) is not a multiple of 8 B\n", precompile_file_name, precompile_data_size);
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
 
     // Go back to the first byte
     if (fseek(precompile_fp, 0, SEEK_SET) == -1)
@@ -1947,50 +1973,222 @@ void client_write_precompile_results (void)
         exit(-1);
     }
 
-    // Initialize precompile written address to zero
-    *precompile_written_address = 0; // in u64s
+    assert(precompile_read_mode == PrecompileReadMode_NoPrefix || precompile_read_mode == PrecompileReadMode_Prefixed);
+    assert(precompile_write_mode == PrecompileWriteMode_Full || precompile_write_mode == PrecompileWriteMode_OnePrecAtATime);
 
-    // Copy in chunks of 25*8 bytes (Keccak-f state size)
-    uint64_t precompile_read_so_far = 0;
-    uint64_t data[25];
-    while (precompile_read_so_far < (uint64_t)precompile_data_size)
-    {        
-        // Wait for server to read precompile results
-        //printf("Waiting for sem_prec_read()\n");
-        result = sem_wait(sem_prec_read);
-        if (result == -1)
+    /*************/
+    /* NO PREFIX */
+    /*************/
+
+    if (precompile_read_mode == PrecompileReadMode_NoPrefix)
+    {
+        if (precompile_write_mode == PrecompileWriteMode_Full)
         {
-            printf("ERROR: Failed calling sem_wait(sem_prec_read) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
+            // Check the precompile data size is inside the proper range
+            if (precompile_data_size > MAX_PRECOMPILE_SIZE)
+            {
+                printf("ERROR: Size of precompile results file (%s) is too long (%lu)\n", precompile_file_name, precompile_data_size);
+                fflush(stdout);
+                fflush(stderr);
+                exit(-1);
+            }
+
+            // Copy input data into input memory
+            size_t precompile_read = fread(precompile_results_address, 1, precompile_data_size, precompile_fp);
+            if (precompile_read != precompile_data_size)
+            {
+                printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, precompile_data_size);
+                fflush(stdout);
+                fflush(stderr);
+                exit(-1);
+            }
+
+            // Initialize precompile written address
+            *precompile_written_address = precompile_data_size >> 3; // in u64s
+        }
+        else if (precompile_write_mode == PrecompileWriteMode_OnePrecAtATime)
+        {
+            // Check the precompile data size is inside the proper range
+            if (precompile_data_size % (PRECOMPILE_FIXED_SIZE * 8) != 0)
+            {
+                printf("ERROR: Size of precompile results file (%s) is not a multiple %u * 8 B\n", precompile_file_name, PRECOMPILE_FIXED_SIZE);
+                fflush(stdout);
+                fflush(stderr);
+                exit(-1);
+            }
+
+            // Initialize precompile written address to zero
+            *precompile_written_address = 0; // in u64s
+
+            // Copy in chunks of PRECOMPILE_FIXED_SIZE*8 bytes (Keccak-f state size)
+            uint64_t precompile_read_so_far = 0;
+            uint64_t data[PRECOMPILE_FIXED_SIZE];
+            while (precompile_read_so_far < (uint64_t)precompile_data_size)
+            {        
+                // Wait for server to read precompile results
+                //printf("Waiting for sem_prec_read()\n");
+                result = sem_wait(sem_prec_read);
+                if (result == -1)
+                {
+                    printf("ERROR: Failed calling sem_wait(sem_prec_read) errno=%d=%s\n", errno, strerror(errno));
+                    fflush(stdout);
+                    fflush(stderr);
+                    exit(-1);
+                }
+
+                // Number of bytes to read from file and write to shared memory in every loop
+                uint64_t bytes_to_read = sizeof(data);
+
+                // Copy input data into input memory
+                size_t precompile_read = fread(data, 1, bytes_to_read, precompile_fp);
+                if (precompile_read != bytes_to_read)
+                {
+                    printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, bytes_to_read);
+                    fflush(stdout);
+                    fflush(stderr);
+                    exit(-1);
+                }
+
+                // Copy data to shared memory
+                for (int i=0; i<PRECOMPILE_FIXED_SIZE; i++)
+                {
+                    memcpy(&precompile_results_address[(precompile_read_so_far >> 3) % (MAX_PRECOMPILE_SIZE >> 3)], &data[i], 8);
+                    precompile_read_so_far += 8;
+                }
+
+                // Notify server that precompile results are available
+                *precompile_written_address = precompile_read_so_far >> 3; // in u64s
+
+                //printf("Posting sem_prec_avail() precompile_written=%lu precompile_read=%lu\n", *precompile_written_address, *precompile_read_address);
+                sem_post(sem_prec_avail);
+            }
+        }
+    }
+
+    /************/
+    /* PREFIXED */
+    /************/
+
+    else if (precompile_read_mode == PrecompileReadMode_Prefixed)
+    {
+#define CTRL_START 0x00
+#define CTRL_END 0x01
+#define CTRL_CANCEL 0x02
+#define CTRL_ERROR 0x03
+#define HINTS_TYPE_RESULT 0x04
+#define HINTS_TYPE_ECRECOVER 0x05
+#define NUM_HINT_TYPES 0x06
+
+        uint64_t precompile_read_so_far = 0;
+        uint64_t precompile_written_so_far = 0;
+
+        while (precompile_read_so_far < (uint64_t)precompile_data_size)
+        {
+            uint64_t data;
+            uint64_t bytes_to_read = sizeof(data);
+
+            // Copy input data into input memory
+            size_t precompile_read = fread(&data, 1, bytes_to_read, precompile_fp);
+            if (precompile_read != bytes_to_read)
+            {
+                printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, bytes_to_read);
+                fflush(stdout);
+                fflush(stderr);
+                exit(-1);
+            }
+            precompile_read_so_far += bytes_to_read;
+            switch (data >> 32)
+            {
+                case CTRL_START:
+                    //printf("Precompile CTRL_START\n");
+                    assert(precompile_read_so_far == 8);
+                    break;
+                case CTRL_END:
+                    //printf("Precompile CTRL_END\n");
+                    assert(precompile_read_so_far == precompile_data_size);
+                    break;
+                // case CTRL_CANCEL:
+                //     printf("Precompile CTRL_CANCEL\n");
+                //     break;
+                // case CTRL_ERROR:
+                //     printf("Precompile CTRL_ERROR\n");
+                //     break;
+                case HINTS_TYPE_RESULT:
+                {
+                    //printf("Precompile HINTS_TYPE_RESULT\n");
+                    if (precompile_write_mode == PrecompileWriteMode_OnePrecAtATime)
+                    {
+                        // Wait for server to read precompile results
+                        //printf("Waiting for sem_prec_read()\n");
+                        result = sem_wait(sem_prec_read);
+                        if (result == -1)
+                        {
+                            printf("ERROR: Failed calling sem_wait(sem_prec_read) errno=%d=%s\n", errno, strerror(errno));
+                            fflush(stdout);
+                            fflush(stderr);
+                            exit(-1);
+                        }
+                    }
+
+                    uint64_t result_length = data & 0xFFFFFFFF;
+                    if (result_length > (precompile_data_size - precompile_read_so_far))
+                    {
+                        printf("ERROR: Precompile HINTS_TYPE_RESULT length=%lu exceeds remaining file size %lu\n", result_length, precompile_data_size - precompile_read_so_far);
+                        fflush(stdout);
+                        fflush(stderr);
+                        exit(-1);
+                    }
+                    //printf("Precompile HINTS_TYPE_RESULT result_length=%lu\n", result_length);
+                    for (uint64_t i=0; i<result_length; i++)
+                    {
+                        uint64_t value;
+                        size_t precompile_read = fread(&value, 1, 8, precompile_fp);
+                        if (precompile_read != 8)
+                        {
+                            printf("ERROR: Input read (%lu) != expected read size (8)\n", precompile_read);
+                            fflush(stdout);
+                            fflush(stderr);
+                            exit(-1);
+                        }
+                        memcpy(&precompile_results_address[(precompile_written_so_far >> 3) % (MAX_PRECOMPILE_SIZE >> 3)], &value, 8);
+                        precompile_read_so_far += 8;
+                        precompile_written_so_far += 8;
+                        //printf("  Precompile result[%lu] = 0x%016lx\n", i, value);
+                    }
+
+                    if (precompile_write_mode == PrecompileWriteMode_OnePrecAtATime)
+                    {
+                        // Notify server that precompile results are available
+                        *precompile_written_address = precompile_written_so_far >> 3; // in u64s
+
+                        //printf("Posting sem_prec_avail() precompile_written=%lu precompile_read=%lu\n", *precompile_written_address, *precompile_read_address);
+                        sem_post(sem_prec_avail);
+                    }
+                }
+                break;
+                // case HINTS_TYPE_ECRECOVER:
+                //     {
+                //         // Not implemented
+                //         printf("Precompile HINTS_TYPE_ECRECOVER not implemented\n");
+                //     }
+                //     break;
+                default:
+                    printf("ERROR: Unknown precompile prefix type %lu\n", data >> 32);
+                    fflush(stdout);
+                    fflush(stderr);
+                    exit(-1);
+            }
         }
 
-        // Number of bytes to read from file and write to shared memory in every loop
-        uint64_t bytes_to_read = sizeof(data);
-
-        // // Copy input data into input memory
-        size_t precompile_read = fread(data, 1, bytes_to_read, precompile_fp);
-        if (precompile_read != bytes_to_read)
+        if (precompile_write_mode == PrecompileWriteMode_Full)
         {
-            printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, bytes_to_read);
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
+            // Notify server that precompile results are available
+            *precompile_written_address = precompile_written_so_far >> 3; // in u64s
+
+            //printf("Posting sem_prec_avail() precompile_written=%lu precompile_read=%lu\n", *precompile_written_address, *precompile_read_address);
+            sem_post(sem_prec_avail);
         }
 
-        // Copy data to shared memory
-        for (int i=0; i<25; i++)
-        {
-            memcpy(&precompile_results_address[(precompile_read_so_far >> 3) % (MAX_PRECOMPILE_SIZE >> 3)], &data[i], 8);
-            precompile_read_so_far += 8;
-        }
-
-        // Notify server that precompile results are available
-        *precompile_written_address = precompile_read_so_far >> 3; // in u64s
-
-        //printf("Posting sem_prec_avail() precompile_written=%lu precompile_read=%lu\n", *precompile_written_address, *precompile_read_address);
-        sem_post(sem_prec_avail);
     }
 
     // Close the file pointer

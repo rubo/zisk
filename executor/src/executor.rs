@@ -20,7 +20,7 @@
 //! maintaining clarity and modularity in the computation process.
 
 use asm_runner::{
-    shmem_input_name, write_input, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmServices,
+    shmem_input_name, write_input, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmServices, HintsShmem,
     MinimalTraces, PreloadedMO, PreloadedMT, PreloadedRH, SharedMemoryWriter, Task, TaskFactory,
 };
 use fields::PrimeField64;
@@ -35,7 +35,7 @@ use tracing::debug;
 use witness::WitnessComponent;
 use zisk_common::io::{StreamSource, ZiskIO, ZiskStdin, ZiskStream};
 
-use crate::{DummyCounter, HintsShmem};
+use crate::DummyCounter;
 use data_bus::DataBusTrait;
 use sm_main::{MainInstance, MainPlanner, MainSM};
 use zisk_common::{

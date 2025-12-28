@@ -1,13 +1,11 @@
 mod dummy_counter;
 mod executor;
-mod hints_shmem;
 mod sm_static_bundle;
 mod static_data_bus;
 mod static_data_bus_collect;
 
 pub use dummy_counter::*;
 pub use executor::*;
-pub use hints_shmem::*;
 pub use sm_static_bundle::*;
 pub use static_data_bus::*;
 pub use static_data_bus_collect::*;

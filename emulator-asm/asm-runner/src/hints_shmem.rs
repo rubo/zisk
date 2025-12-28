@@ -3,11 +3,11 @@
 //! It implements the HintsSink trait to receive processed hints and write them to shared memory
 //! using SharedMemoryWriter instances.
 
-use anyhow::Result;
-use asm_runner::{
+use crate::{
     sem_available_name, sem_read_name, shmem_control_reader_name, shmem_control_writer_name,
     shmem_precompile_name, AsmService, AsmServices, SharedMemoryReader, SharedMemoryWriter,
 };
+use anyhow::Result;
 use named_sem::NamedSemaphore;
 use std::sync::Mutex;
 use tracing::debug;

@@ -741,7 +741,7 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
 
     async fn handle_stream_data(&mut self, stream_data: StreamData) -> Result<()> {
         if self.worker.current_job().is_none() {
-            return Err(anyhow!("Aggregate received without current job context"));
+            return Err(anyhow!("Stream data received without current job context"));
         }
 
         let job = self.worker.current_job().clone().unwrap().clone();
@@ -752,7 +752,7 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
 
         if current_job_id != job_id {
             return Err(anyhow!(
-                "Job ID mismatch in Aggregate: expected {}, got {}",
+                "Job ID mismatch in StreamData: expected {}, got {}",
                 current_job_id.as_string(),
                 job_id
             ));

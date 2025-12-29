@@ -231,4 +231,6 @@ fn print_command_info(
 
     let std_mode = if debug { "Debug mode" } else { "Standard mode" };
     println!("{: >12} {}", "STD".bright_green().bold(), std_mode);
+
+    println!();
 }

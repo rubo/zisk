@@ -285,7 +285,6 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                 .verbose(prover_config.verbose)
                 .shared_tables(prover_config.shared_tables)
                 .gpu(prover_config.gpu_params.clone())
-                .print_command_info()
                 .build()?,
         );
 
@@ -322,7 +321,6 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                 .base_port_opt(prover_config.asm_port)
                 .unlock_mapped_memory(prover_config.unlock_mapped_memory)
                 .gpu(prover_config.gpu_params.clone())
-                .print_command_info()
                 .build()?,
         );
 

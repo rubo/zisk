@@ -126,8 +126,7 @@ impl PrecompileHint {
             ));
         }
 
-        // TODO! This creates a new Vec to own the data. Since performance is critical,
-        // TODO! consider using a slice reference instead.
+        // Create a new Vec with the hint data.
         let data = slice[idx + 1..idx + length as usize + 1].to_vec();
 
         Ok(PrecompileHint { hint_type, data })

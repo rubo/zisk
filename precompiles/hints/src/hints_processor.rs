@@ -248,7 +248,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                 {
                     let mut queue = self.state.queue.lock().unwrap();
                     let offset = seq_id - queue.next_drain_seq;
-                    queue.buffer[offset] = Some(Ok(hint.data.clone()));
+                    queue.buffer[offset] = Some(Ok(hint.data));
                 }
 
                 // Notify drainer thread
@@ -257,7 +257,6 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                 // Spawn processing task
                 let state = Arc::clone(&self.state);
                 self.pool.spawn(move || {
-                    // TODO! Is it necessary? TO increase performance maybe is enough to check error_flag only when storing result
                     // Check if we should stop due to error
                     if state.error_flag.load(Ordering::Acquire) {
                         return;

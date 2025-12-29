@@ -50,8 +50,12 @@ impl UnixSocketStreamReader {
         use std::os::unix::ffi::OsStrExt;
 
         // Create socket with SOCK_SEQPACKET
+        #[cfg(target_os = "linux")]
         let sock_fd =
             unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
+
+        #[cfg(not(target_os = "linux"))]
+        let sock_fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET, 0) };
 
         if sock_fd < 0 {
             return Err(anyhow::anyhow!(
@@ -60,12 +64,21 @@ impl UnixSocketStreamReader {
             ));
         }
 
+        // Set CLOEXEC flag on non-Linux systems
+        #[cfg(not(target_os = "linux"))]
+        {
+            let flags = unsafe { libc::fcntl(sock_fd, libc::F_GETFD) };
+            if flags >= 0 {
+                unsafe { libc::fcntl(sock_fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
+            }
+        }
+
         // Connect to the socket path
         let c_path =
             CString::new(self.path.as_os_str().as_bytes()).context("Invalid socket path")?;
 
         let mut addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-        addr.sun_family = libc::AF_UNIX as u16;
+        addr.sun_family = libc::AF_UNIX as _;
 
         let path_bytes = c_path.as_bytes_with_nul();
         if path_bytes.len() > addr.sun_path.len() {
@@ -259,8 +272,12 @@ impl UnixSocketStreamWriter {
         }
 
         // Create socket with SOCK_SEQPACKET for message boundaries
+        #[cfg(target_os = "linux")]
         let sock_fd =
             unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
+
+        #[cfg(not(target_os = "linux"))]
+        let sock_fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET, 0) };
 
         if sock_fd < 0 {
             return Err(anyhow::anyhow!(
@@ -269,12 +286,21 @@ impl UnixSocketStreamWriter {
             ));
         }
 
+        // Set CLOEXEC flag on non-Linux systems
+        #[cfg(not(target_os = "linux"))]
+        {
+            let flags = unsafe { libc::fcntl(sock_fd, libc::F_GETFD) };
+            if flags >= 0 {
+                unsafe { libc::fcntl(sock_fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
+            }
+        }
+
         // Bind to the socket path
         let c_path =
             CString::new(self.path.as_os_str().as_bytes()).context("Invalid socket path")?;
 
         let mut addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-        addr.sun_family = libc::AF_UNIX as u16;
+        addr.sun_family = libc::AF_UNIX as _;
 
         let path_bytes = c_path.as_bytes_with_nul();
         if path_bytes.len() > addr.sun_path.len() {

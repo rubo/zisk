@@ -22,7 +22,7 @@ struct ZiskCoordinatorArgs {
     port: Option<u16>,
 
     /// Directory where to save generated proofs
-    #[arg(long, help = "Directory to save generated proofs", conflicts_with = "no_save_proof")]
+    #[arg(long, help = "Directory to save generated proofs", conflicts_with = "no_save_proofs")]
     proofs_dir: Option<PathBuf>,
 
     /// Disable saving proofs

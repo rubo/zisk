@@ -23,9 +23,18 @@ cfg_if! {
 /// Note that this is a *free-input call*, meaning the Zisk VM does not automatically verify the correctness
 /// of the result. It is the caller's responsibility to ensure it.
 #[allow(unused_variables)]
-pub fn fcall_secp256k1_fn_inv(p_value: &[u64; 4]) -> [u64; 4] {
+pub fn fcall_secp256k1_fn_inv(
+    p_value: &[u64; 4],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 4] {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
-    unreachable!();
+    {
+        #[cfg(feature = "hints")]
+        {
+            unimplemented!();
+        }
+        unimplemented!(); // Change this line by returning the native result
+    }
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     {
         ziskos_fcall_param!(p_value, 4);

@@ -23,3 +23,7 @@ zisk-common = { workspace = true }
 [[bin]]
 name = "hints-socket-server"
 path = "src/bin/hints_socket_server.rs"
+
+[features]
+default = []
+hints = ["ziskos/hints"]

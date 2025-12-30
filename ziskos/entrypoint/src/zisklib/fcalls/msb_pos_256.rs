@@ -7,7 +7,11 @@ cfg_if! {
     }
 }
 #[allow(unused_variables)]
-pub fn fcall_msb_pos_256(x: &[u64; 4], y: &[u64; 4]) -> (u64, u64) {
+pub fn fcall_msb_pos_256(
+    x: &[u64; 4],
+    y: &[u64; 4],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> (u64, u64) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     unreachable!();
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]

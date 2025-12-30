@@ -16,9 +16,6 @@ use zisk_common::{
     PrecompileHint, CTRL_CANCEL, CTRL_END, CTRL_ERROR, CTRL_START, HINTS_TYPE_ECRECOVER,
     HINTS_TYPE_RESULT, NUM_HINT_TYPES,
 };
-use ziskos::syscalls::SyscallPoint256;
-
-use crate::secp256k1_ecdsa_verify;
 
 /// Ordered result buffer with drain state.
 ///
@@ -263,7 +260,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                     }
 
                     // Process the hint
-                    let result = Self::process_hint(&hint);
+                    let result = Self::process_hint(hint);
 
                     // Store result and try to drain
                     let mut queue = state.queue.lock().unwrap();
@@ -422,9 +419,10 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
     ///
     /// * `Ok(Vec<u64>)` - The processed result for this hint
     /// * `Err` - If the hint type is unknown
-    fn process_hint(hint: &PrecompileHint) -> Result<Vec<u64>> {
+    #[inline]
+    fn process_hint(hint: PrecompileHint) -> Result<Vec<u64>> {
         let result = match hint.hint_type {
-            HINTS_TYPE_RESULT => Self::process_hint_result(hint)?,
+            HINTS_TYPE_RESULT => hint.data,
             HINTS_TYPE_ECRECOVER => Self::process_hint_ecrecover(hint)?,
             _ => {
                 return Err(anyhow::anyhow!("Unknown hint type: {}", hint.hint_type));
@@ -434,17 +432,18 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
         Ok(result)
     }
 
-    /// Processes a [`HINTS_TYPE_RESULT`] hint.
-    ///
-    /// This is a pass-through handler that simply returns the hint data as-is.
-    /// Used when the hint already contains the precomputed result.
-    fn process_hint_result(hint: &PrecompileHint) -> Result<Vec<u64>> {
-        Ok(hint.data.to_vec())
-    }
-
     /// Processes a [`HINTS_TYPE_ECRECOVER`] hint.
-    fn process_hint_ecrecover(hint: &PrecompileHint) -> Result<Vec<u64>> {
-        const EXPECTED_LEN: usize = 8 + 4 + 4 + 4; // pk(8) + z(4) + r(4) + s(4)
+    #[inline]
+    fn process_hint_ecrecover(hint: PrecompileHint) -> Result<Vec<u64>> {
+        const PK_SIZE: usize = 8; // x(4) + y(4)
+        const Z_SIZE: usize = 4;
+        const R_SIZE: usize = 4;
+        const S_SIZE: usize = 4;
+        const EXPECTED_LEN: usize = PK_SIZE + Z_SIZE + R_SIZE + S_SIZE;
+
+        const Z_OFFSET: usize = PK_SIZE;
+        const R_OFFSET: usize = Z_OFFSET + Z_SIZE;
+        const S_OFFSET: usize = R_OFFSET + R_SIZE;
 
         if hint.data.len() != EXPECTED_LEN {
             return Err(anyhow::anyhow!(
@@ -454,17 +453,25 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
             ));
         }
 
+        #[allow(unused_mut)]
         let mut processed_hints = Vec::new();
 
-        // Safety: We've validated the length above
+        // Safety: We've validated that hint.len() == 20, so all slice accesses are in bounds.
         unsafe {
             let ptr = hint.data.as_ptr();
-            let pk = &*(ptr as *const SyscallPoint256);
-            let z = &*(ptr.add(8) as *const [u64; 4]);
-            let r = &*(ptr.add(12) as *const [u64; 4]);
-            let s = &*(ptr.add(16) as *const [u64; 4]);
+            let pk = &*(ptr as *const u64);
+            let z = &*(ptr.add(Z_OFFSET) as *const u64);
+            let r = &*(ptr.add(R_OFFSET) as *const u64);
+            let s = &*(ptr.add(S_OFFSET) as *const u64);
 
-            secp256k1_ecdsa_verify(pk, z, r, s, &mut processed_hints);
+            ziskos::zisklib::secp256k1_ecdsa_verify_c(
+                pk,
+                z,
+                r,
+                s,
+                #[cfg(feature = "hints")]
+                &mut processed_hints,
+            );
         }
 
         Ok(processed_hints)

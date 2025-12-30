@@ -34,7 +34,10 @@ pub struct SyscallSecp256k1AddParams<'a> {
 /// The resulting point will have both coordinates in the range of the Secp256k1 base field.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_secp256k1_add(params: &mut SyscallSecp256k1AddParams) {
+pub extern "C" fn syscall_secp256k1_add(
+    params: &mut SyscallSecp256k1AddParams,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x803, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

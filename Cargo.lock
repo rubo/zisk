@@ -6157,6 +6157,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "precompiles-helpers",
  "rand 0.8.5",
  "serde",
  "static_assertions",

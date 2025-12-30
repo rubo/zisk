@@ -12,7 +12,7 @@ name = "precompiles_hints"
 path = "src/lib.rs"
 
 [dependencies]
-ziskos = { workspace = true }
+ziskos-hints = { workspace = true }
 lib-c = { workspace = true }
 precompiles-helpers = { workspace = true }
 anyhow = { workspace = true }
@@ -23,7 +23,3 @@ zisk-common = { workspace = true }
 [[bin]]
 name = "hints-socket-server"
 path = "src/bin/hints_socket_server.rs"
-
-[features]
-default = []
-hints = ["ziskos/hints"]

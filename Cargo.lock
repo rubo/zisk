@@ -3158,7 +3158,7 @@ dependencies = [
  "rayon",
  "tracing",
  "zisk-common",
- "ziskos",
+ "ziskos-hints",
 ]
 
 [[package]]
@@ -6147,6 +6147,25 @@ dependencies = [
 
 [[package]]
 name = "ziskos"
+version = "0.16.0"
+dependencies = [
+ "bincode",
+ "cfg-if",
+ "getrandom 0.2.16",
+ "lazy_static",
+ "lib-c",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "precompiles-helpers",
+ "rand 0.8.5",
+ "serde",
+ "static_assertions",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "ziskos-hints"
 version = "0.16.0"
 dependencies = [
  "bincode",

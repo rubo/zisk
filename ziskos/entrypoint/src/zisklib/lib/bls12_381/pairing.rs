@@ -16,7 +16,11 @@ use super::{
 ///  pairingBLS12-381:
 ///          input: P ∈ G1 and Q ∈ G2
 ///          output: e(P,Q) ∈ GT
-pub fn pairing_bls12_381(p: &[u64; 12], q: &[u64; 24]) -> [u64; 72] {
+pub fn pairing_bls12_381(
+    p: &[u64; 12],
+    q: &[u64; 24],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 72] {
     // e(P, 𝒪) = e(𝒪, Q) = 1;
     if *p == IDENTITY_G1 || *q == IDENTITY_G2 {
         let mut one = [0; 72];
@@ -25,16 +29,29 @@ pub fn pairing_bls12_381(p: &[u64; 12], q: &[u64; 24]) -> [u64; 72] {
     }
 
     // Miller loop
-    let miller_loop = miller_loop_bls12_381(p, q);
+    let miller_loop = miller_loop_bls12_381(
+        p,
+        q,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Final exponentiation
-    final_exp_bls12_381(&miller_loop)
+    final_exp_bls12_381(
+        &miller_loop,
+        #[cfg(feature = "hints")]
+        hints,
+    )
 }
 
 /// Computes the optimal Ate pairing for a batch of G1 and G2 points over the BN254 curve
 /// and multiplies the results together, i.e.:
 ///     e(P₁, Q₁) · e(P₂, Q₂) · ... · e(Pₙ, Qₙ) ∈ GT
-pub fn pairing_batch_bls12_381(g1_points: &[[u64; 12]], g2_points: &[[u64; 24]]) -> [u64; 72] {
+pub fn pairing_batch_bls12_381(
+    g1_points: &[[u64; 12]],
+    g2_points: &[[u64; 24]],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 72] {
     // Since each e(Pi, Qi) := FinalExp(MillerLoop(Pi, Qi))
     // We have:
     //  e(P₁, Q₁) · e(P₂, Q₂) · ... · e(Pₙ, Qₙ) = FinalExp(MillerLoop(P₁, Q₁) · MillerLoop(P₂, Q₂) · ... · MillerLoop(Pₙ, Qₙ))
@@ -63,10 +80,19 @@ pub fn pairing_batch_bls12_381(g1_points: &[[u64; 12]], g2_points: &[[u64; 24]])
     }
 
     // Miller loop
-    let miller_loop = miller_loop_batch_bls12_381(&g1_points_ml, &g2_points_ml);
+    let miller_loop = miller_loop_batch_bls12_381(
+        &g1_points_ml,
+        &g2_points_ml,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Final exponentiation
-    final_exp_bls12_381(&miller_loop)
+    final_exp_bls12_381(
+        &miller_loop,
+        #[cfg(feature = "hints")]
+        hints,
+    )
 }
 
 /// C-compatible wrapper for pairing_verify_bls12_381
@@ -83,6 +109,7 @@ pub unsafe extern "C" fn pairing_verify_bls12_381_c(
     q1_ptr: *const u64,
     p2_ptr: *const u64,
     q2_ptr: *const u64,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> bool {
     let p1: &[u64; 12] = &*(p1_ptr as *const [u64; 12]);
     let q1: &[u64; 24] = &*(q1_ptr as *const [u64; 24]);
@@ -99,8 +126,17 @@ pub unsafe extern "C" fn pairing_verify_bls12_381_c(
     }
 
     // Checking e(P1, Q1) == e(P2, Q2) is equivalent to checking e(P1, Q1) * e(-P2, Q2) == 1
-    let p2_neg = neg_bls12_381(p2);
-    let pairing_result = pairing_batch_bls12_381(&[*p1, p2_neg], &[*q1, *q2]);
+    let p2_neg = neg_bls12_381(
+        p2,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    let pairing_result = pairing_batch_bls12_381(
+        &[*p1, p2_neg],
+        &[*q1, *q2],
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     let one = {
         let mut one = [0; 72];

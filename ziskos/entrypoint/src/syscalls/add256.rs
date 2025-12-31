@@ -29,7 +29,10 @@ pub struct SyscallAdd256Params<'a> {
 /// The caller must ensure that the data is aligned to a 64-bit boundary.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_add256(params: &mut SyscallAdd256Params) -> u64 {
+pub extern "C" fn syscall_add256(
+    params: &mut SyscallAdd256Params,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> u64 {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     unreachable!();
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]

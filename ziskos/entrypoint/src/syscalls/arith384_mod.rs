@@ -35,7 +35,10 @@ pub struct SyscallArith384ModParams<'a> {
 /// The caller must ensure that the data is aligned to a 64-bit boundary.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_arith384_mod(params: &mut SyscallArith384ModParams) {
+pub extern "C" fn syscall_arith384_mod(
+    params: &mut SyscallArith384ModParams,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x80B, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

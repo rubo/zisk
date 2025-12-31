@@ -1,13 +1,21 @@
 use crate::syscalls::{syscall_sha256_f, SyscallSha256Params};
 
-pub fn sha256f_compress(state: &mut [u32; 8], blocks: &[[u8; 64]]) {
+pub fn sha256f_compress(
+    state: &mut [u32; 8],
+    blocks: &[[u8; 64]],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     let mut state_64 = convert_u32_to_u64(state);
 
     for block in blocks {
         let input_u64 = convert_bytes_to_u64(block);
 
         let mut sha256_params = SyscallSha256Params { state: &mut state_64, input: &input_u64 };
-        syscall_sha256_f(&mut sha256_params);
+        syscall_sha256_f(
+            &mut sha256_params,
+            #[cfg(feature = "hints")]
+            hints,
+        );
     }
 
     *state = convert_u64_to_u32(&state_64);
@@ -23,6 +31,7 @@ pub unsafe extern "C" fn sha256f_compress_c(
     state_ptr: *mut u32,
     blocks_ptr: *const u8,
     num_blocks: usize,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     let state: &mut [u32; 8] = &mut *(state_ptr as *mut [u32; 8]);
     let mut state_64 = convert_u32_to_u64(state);
@@ -32,7 +41,11 @@ pub unsafe extern "C" fn sha256f_compress_c(
         let input_u64 = convert_bytes_to_u64(block);
 
         let mut sha256_params = SyscallSha256Params { state: &mut state_64, input: &input_u64 };
-        syscall_sha256_f(&mut sha256_params);
+        syscall_sha256_f(
+            &mut sha256_params,
+            #[cfg(feature = "hints")]
+            hints,
+        );
     }
 
     *state = convert_u64_to_u32(&state_64);

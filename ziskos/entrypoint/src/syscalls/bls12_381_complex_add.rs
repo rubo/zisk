@@ -35,7 +35,10 @@ pub struct SyscallBls12_381ComplexAddParams<'a> {
 /// The resulting field element will have both coordinates in the range of the BLS12-381 base field.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_bls12_381_complex_add(params: &mut SyscallBls12_381ComplexAddParams) {
+pub extern "C" fn syscall_bls12_381_complex_add(
+    params: &mut SyscallBls12_381ComplexAddParams,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x80E, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

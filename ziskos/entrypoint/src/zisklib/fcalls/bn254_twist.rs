@@ -19,6 +19,7 @@ cfg_if! {
 pub fn fcall_bn254_add_line_coeffs(
     p1_value: &[u64; 16],
     p2_value: &[u64; 16],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> ([u64; 8], [u64; 8]) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     unreachable!();
@@ -61,7 +62,10 @@ pub fn fcall_bn254_add_line_coeffs(
 /// Note that this is a *free-input call*, meaning the Zisk VM does not automatically verify the correctness
 /// of the result. It is the caller's responsibility to ensure it.
 #[allow(unused_variables)]
-pub fn fcall_bn254_dbl_line_coeffs(p_value: &[u64; 16]) -> ([u64; 8], [u64; 8]) {
+pub fn fcall_bn254_dbl_line_coeffs(
+    p_value: &[u64; 16],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> ([u64; 8], [u64; 8]) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     unreachable!();
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]

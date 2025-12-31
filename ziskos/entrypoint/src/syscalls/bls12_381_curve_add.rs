@@ -34,7 +34,10 @@ pub struct SyscallBls12_381CurveAddParams<'a> {
 /// The resulting point will have both coordinates in the range of the BLS12-381 base field.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_bls12_381_curve_add(params: &mut SyscallBls12_381CurveAddParams) {
+pub extern "C" fn syscall_bls12_381_curve_add(
+    params: &mut SyscallBls12_381CurveAddParams,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x80C, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

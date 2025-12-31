@@ -35,7 +35,10 @@ pub struct SyscallBn254ComplexMulParams<'a> {
 /// The resulting field element will have both coordinates in the range of the BN254 base field.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_bn254_complex_mul(params: &mut SyscallBn254ComplexMulParams) {
+pub extern "C" fn syscall_bn254_complex_mul(
+    params: &mut SyscallBn254ComplexMulParams,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x80A, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

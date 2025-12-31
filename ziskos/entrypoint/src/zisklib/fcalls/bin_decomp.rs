@@ -9,7 +9,10 @@ cfg_if! {
 
 /// Computes the binary decomposition of a NON-ZERO unsigned integer `x` into its bits.
 #[allow(unused_variables)]
-pub fn fcall_bin_decomp(x_val: &[u64]) -> (usize, Vec<u64>) {
+pub fn fcall_bin_decomp(
+    x_val: &[u64],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> (usize, Vec<u64>) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     unreachable!();
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]

@@ -22,6 +22,7 @@ pub fn fcall_division(
     b_value: &[u64],
     quo: &mut [u64],
     rem: &mut [u64],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> (usize, usize) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     unreachable!();

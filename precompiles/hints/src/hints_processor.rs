@@ -17,6 +17,8 @@ use zisk_common::{
     HINTS_TYPE_RESULT, NUM_HINT_TYPES,
 };
 
+use ziskos_hints::zisklib;
+
 /// Ordered result buffer with drain state.
 ///
 /// This structure maintains a VecDeque that holds processed results in order,
@@ -464,14 +466,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
             let r = &*(ptr.add(R_OFFSET) as *const u64);
             let s = &*(ptr.add(S_OFFSET) as *const u64);
 
-            ziskos::zisklib::secp256k1_ecdsa_verify_c(
-                pk,
-                z,
-                r,
-                s,
-                #[cfg(feature = "hints")]
-                &mut processed_hints,
-            );
+            zisklib::secp256k1_ecdsa_verify_c(pk, z, r, s, &mut processed_hints);
         }
 
         Ok(processed_hints)

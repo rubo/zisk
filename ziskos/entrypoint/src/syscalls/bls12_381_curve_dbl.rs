@@ -26,7 +26,10 @@ use super::point::SyscallPoint384;
 /// The resulting point will have both coordinates in the range of the BLS12-381 base field.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_bls12_381_curve_dbl(p1: &mut SyscallPoint384) {
+pub extern "C" fn syscall_bls12_381_curve_dbl(
+    p1: &mut SyscallPoint384,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x80D, p1);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

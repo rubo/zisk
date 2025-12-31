@@ -26,7 +26,10 @@ use super::point::SyscallPoint256;
 /// The resulting point will have both coordinates in the range of the BN254 base field.
 #[allow(unused_variables)]
 #[no_mangle]
-pub extern "C" fn syscall_bn254_curve_dbl(p1: &mut SyscallPoint256) {
+pub extern "C" fn syscall_bn254_curve_dbl(
+    p1: &mut SyscallPoint256,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x807, p1);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

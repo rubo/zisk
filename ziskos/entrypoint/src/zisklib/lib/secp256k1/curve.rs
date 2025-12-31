@@ -508,7 +508,8 @@ pub fn secp256k1_ecdsa_verify(
 /// - `out_ptr` must point to at least 8 u64s (will write affine x[4], y[4])
 ///
 /// Returns 1 on success, 0 if point is at infinity
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_to_affine_c")]
 pub unsafe extern "C" fn secp256k1_to_affine_c(
     p_ptr: *const u64,
     out_ptr: *mut u64,
@@ -536,7 +537,8 @@ pub unsafe extern "C" fn secp256k1_to_affine_c(
 /// - `out_ptr` must point to at least 8 u64s (will write x[4] and y[4] in little-endian)
 ///
 /// Returns 1 on success, 0 if no valid point exists
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_decompress_c")]
 pub unsafe extern "C" fn secp256k1_decompress_c(
     x_bytes_ptr: *const u8,
     y_is_odd: u8,
@@ -575,7 +577,8 @@ pub unsafe extern "C" fn secp256k1_decompress_c(
 /// - `out_ptr` must point to at least 8 u64s (will write result x[4], y[4])
 ///
 /// Returns 1 if result is point at infinity, 0 otherwise
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_double_scalar_mul_with_g_c")]
 pub unsafe extern "C" fn secp256k1_double_scalar_mul_with_g_c(
     k1_ptr: *const u64,
     k2_ptr: *const u64,
@@ -618,7 +621,8 @@ pub unsafe extern "C" fn secp256k1_double_scalar_mul_with_g_c(
 /// - `s_ptr` must point to 4 u64s (signature s)
 ///
 /// Returns 1 if signature is valid, 0 otherwise
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_ecdsa_verify_c")]
 pub unsafe extern "C" fn secp256k1_ecdsa_verify_c(
     pk_ptr: *const u64,
     z_ptr: *const u64,

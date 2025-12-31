@@ -33,7 +33,8 @@ pub struct SyscallBls12_381CurveAddParams<'a> {
 ///
 /// The resulting point will have both coordinates in the range of the BLS12-381 base field.
 #[allow(unused_variables)]
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_syscall_bls12_381_curve_add")]
 pub extern "C" fn syscall_bls12_381_curve_add(
     params: &mut SyscallBls12_381CurveAddParams,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

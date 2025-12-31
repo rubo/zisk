@@ -33,7 +33,8 @@ pub struct SyscallSecp256k1AddParams<'a> {
 ///
 /// The resulting point will have both coordinates in the range of the Secp256k1 base field.
 #[allow(unused_variables)]
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_syscall_secp256k1_add")]
 pub extern "C" fn syscall_secp256k1_add(
     params: &mut SyscallSecp256k1AddParams,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

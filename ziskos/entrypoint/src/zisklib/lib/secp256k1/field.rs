@@ -195,7 +195,8 @@ pub fn secp256k1_fp_sqrt(
 /// # Safety
 /// - `x_ptr` must point to 4 u64s
 /// - `out_ptr` must point to at least 4 u64s
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_reduce_c")]
 pub unsafe extern "C" fn secp256k1_fp_reduce_c(
     x_ptr: *const u64,
     out_ptr: *mut u64,
@@ -234,7 +235,8 @@ pub unsafe extern "C" fn secp256k1_fp_reduce_c(
 /// - `x_ptr` must point to 4 u64s
 /// - `y_ptr` must point to 4 u64s
 /// - `out_ptr` must point to at least 4 u64s
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_add_c")]
 pub unsafe extern "C" fn secp256k1_fp_add_c(
     x_ptr: *const u64,
     y_ptr: *const u64,
@@ -261,7 +263,8 @@ pub unsafe extern "C" fn secp256k1_fp_add_c(
 /// # Safety
 /// - `x_ptr` must point to 4 u64s
 /// - `out_ptr` must point to at least 4 u64s
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_negate_c")]
 pub unsafe extern "C" fn secp256k1_fp_negate_c(
     x_ptr: *const u64,
     out_ptr: *mut u64,
@@ -292,7 +295,8 @@ pub unsafe extern "C" fn secp256k1_fp_negate_c(
 /// - `x_ptr` must point to 4 u64s
 /// - `y_ptr` must point to 4 u64s
 /// - `out_ptr` must point to at least 4 u64s
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_mul_c")]
 pub unsafe extern "C" fn secp256k1_fp_mul_c(
     x_ptr: *const u64,
     y_ptr: *const u64,
@@ -320,7 +324,8 @@ pub unsafe extern "C" fn secp256k1_fp_mul_c(
 /// - `x_ptr` must point to 4 u64s
 /// - `scalar` is a single u64 value
 /// - `out_ptr` must point to at least 4 u64s
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_mul_scalar_c")]
 pub unsafe extern "C" fn secp256k1_fp_mul_scalar_c(
     x_ptr: *const u64,
     scalar: u64,

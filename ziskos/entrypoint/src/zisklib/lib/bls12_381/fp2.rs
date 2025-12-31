@@ -252,7 +252,8 @@ pub fn conjugate_fp2_bls12_381(
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
 /// - `b` must point to a valid `[u64; 12]` (96 bytes).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_add_fp2_bls12_381_c")]
 pub unsafe extern "C" fn add_fp2_bls12_381_c(
     a: *mut u64,
     b: *const u64,
@@ -275,7 +276,8 @@ pub unsafe extern "C" fn add_fp2_bls12_381_c(
 
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_dbl_fp2_bls12_381_c")]
 pub unsafe extern "C" fn dbl_fp2_bls12_381_c(
     a: *mut u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -297,7 +299,8 @@ pub unsafe extern "C" fn dbl_fp2_bls12_381_c(
 
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_neg_fp2_bls12_381_c")]
 pub unsafe extern "C" fn neg_fp2_bls12_381_c(
     a: *mut u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -320,7 +323,8 @@ pub unsafe extern "C" fn neg_fp2_bls12_381_c(
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
 /// - `b` must point to a valid `[u64; 12]` (96 bytes).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_sub_fp2_bls12_381_c")]
 pub unsafe extern "C" fn sub_fp2_bls12_381_c(
     a: *mut u64,
     b: *const u64,
@@ -344,7 +348,8 @@ pub unsafe extern "C" fn sub_fp2_bls12_381_c(
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
 /// - `b` must point to a valid `[u64; 12]` (96 bytes).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_mul_fp2_bls12_381_c")]
 pub unsafe extern "C" fn mul_fp2_bls12_381_c(
     a: *mut u64,
     b: *const u64,
@@ -367,7 +372,8 @@ pub unsafe extern "C" fn mul_fp2_bls12_381_c(
 
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_square_fp2_bls12_381_c")]
 pub unsafe extern "C" fn square_fp2_bls12_381_c(
     a: *mut u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -390,7 +396,8 @@ pub unsafe extern "C" fn square_fp2_bls12_381_c(
 /// # Safety
 /// - `a` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
 /// - Element must be non-zero.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_inv_fp2_bls12_381_c")]
 pub unsafe extern "C" fn inv_fp2_bls12_381_c(
     a: *mut u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

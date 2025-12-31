@@ -245,7 +245,8 @@ pub fn modexp_u64(
 /// - `exp_ptr` points to an array of `exp_len` u64 elements
 /// - `modulus_ptr` points to an array of `modulus_len` u64 elements
 /// - `result_ptr` points to an array of at least `modulus_len` u64 elements
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_modexp_u64_c")]
 pub unsafe extern "C" fn modexp_u64_c(
     base_ptr: *const u64,
     base_len: usize,

@@ -18,7 +18,8 @@ use crate::ziskos_syscall;
 ///
 /// The caller must ensure that the data is aligned to a 64-bit boundary.
 #[allow(unused_variables)]
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_syscall_keccak_f")]
 pub extern "C" fn syscall_keccak_f(
     state: *mut [u64; 25],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

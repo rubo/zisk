@@ -103,7 +103,8 @@ pub fn pairing_batch_bls12_381(
 /// - `q1` and `q2` must point to at least 24 u64s each
 ///
 /// Returns 1 if e(P₁, Q₁) == e(P₂, Q₂), 0 otherwise
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_pairing_verify_bls12_381_c")]
 pub unsafe extern "C" fn pairing_verify_bls12_381_c(
     p1_ptr: *const u64,
     q1_ptr: *const u64,

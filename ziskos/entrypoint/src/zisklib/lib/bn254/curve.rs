@@ -259,7 +259,8 @@ pub fn mul_bn254(
 
 /// # Safety
 /// `p` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_curve_bn254_c")]
 pub unsafe extern "C" fn is_on_curve_bn254_c(
     p_ptr: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -275,7 +276,8 @@ pub unsafe extern "C" fn is_on_curve_bn254_c(
 /// # Safety
 /// - `p` must point to a valid `[u64; 12]` (96 bytes, Jacobian G1 point).
 /// - `out` must point to a valid `[u64; 8]` (64 bytes) writable buffer.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_to_affine_bn254_c")]
 pub unsafe extern "C" fn to_affine_bn254_c(
     p_ptr: *const u64,
     out_ptr: *mut u64,
@@ -304,7 +306,8 @@ pub unsafe extern "C" fn to_affine_bn254_c(
 /// - `p1_ptr` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
 /// - `p2_ptr` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
 /// - `out_ptr` must point to a valid `[u64; 8]` (64 bytes) writable buffer.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_add_bn254_c")]
 pub unsafe extern "C" fn add_bn254_c(
     p1_ptr: *const u64,
     p2_ptr: *const u64,
@@ -335,7 +338,8 @@ pub unsafe extern "C" fn add_bn254_c(
 /// - `p_ptr` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
 /// - `k_ptr` must point to a valid `[u64; 4]` (32 bytes, scalar).
 /// - `out_ptr` must point to a valid `[u64; 8]` (64 bytes) writable buffer.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_mul_bn254_c")]
 pub unsafe extern "C" fn mul_bn254_c(
     p_ptr: *const u64,
     k_ptr: *const u64,

@@ -25,7 +25,8 @@ use super::point::SyscallPoint256;
 ///
 /// The resulting point will have both coordinates in the range of the Secp256k1 base field.
 #[allow(unused_variables)]
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_syscall_secp256k1_dbl")]
 pub extern "C" fn syscall_secp256k1_dbl(
     p1: &mut SyscallPoint256,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

@@ -245,7 +245,8 @@ pub fn wpow256(
 /// - `a` must point to a valid `[u64; 4]` (32 bytes).
 /// - `m` must point to a valid `[u64; 4]` (32 bytes).
 /// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_redmod256_c")]
 pub unsafe extern "C" fn redmod256_c(
     a: *const u64,
     m: *const u64,
@@ -276,7 +277,8 @@ pub unsafe extern "C" fn redmod256_c(
 /// - `b` must point to a valid `[u64; 4]` (32 bytes).
 /// - `m` must point to a valid `[u64; 4]` (32 bytes).
 /// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_addmod256_c")]
 pub unsafe extern "C" fn addmod256_c(
     a: *const u64,
     b: *const u64,
@@ -308,7 +310,8 @@ pub unsafe extern "C" fn addmod256_c(
 /// - `b` must point to a valid `[u64; 4]` (32 bytes).
 /// - `m` must point to a valid `[u64; 4]` (32 bytes).
 /// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_mulmod256_c")]
 pub unsafe extern "C" fn mulmod256_c(
     a: *const u64,
     b: *const u64,
@@ -339,7 +342,8 @@ pub unsafe extern "C" fn mulmod256_c(
 /// - `a` must point to a valid `[u64; 4]` (32 bytes).
 /// - `b` must point to a valid `[u64; 4]` (32 bytes).
 /// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_wmul256_c")]
 pub unsafe extern "C" fn wmul256_c(
     a: *const u64,
     b: *const u64,
@@ -372,7 +376,8 @@ pub unsafe extern "C" fn wmul256_c(
 /// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
 ///
 /// Returns `true` if overflow occurred, `false` otherwise.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_omul256_c")]
 pub unsafe extern "C" fn omul256_c(
     a: *const u64,
     b: *const u64,
@@ -410,7 +415,8 @@ pub unsafe extern "C" fn omul256_c(
 ///
 /// # Panics
 /// Panics if `b` is zero.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_divrem256_c")]
 pub unsafe extern "C" fn divrem256_c(
     a: *const u64,
     b: *const u64,
@@ -455,7 +461,8 @@ pub unsafe extern "C" fn divrem256_c(
 /// - `a` must point to a valid `[u64; 4]` (32 bytes).
 /// - `exp` must point to a valid `[u64; 4]` (32 bytes).
 /// - `result` must point to a valid `[u64; 4]` (32 bytes), used as output.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_wpow256_c")]
 pub unsafe extern "C" fn wpow256_c(
     a: *const u64,
     exp: *const u64,

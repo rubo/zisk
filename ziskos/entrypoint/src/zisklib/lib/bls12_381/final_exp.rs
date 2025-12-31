@@ -144,7 +144,8 @@ pub fn final_exp_bls12_381(
 /// # Safety
 /// - `f` must point to a valid `[u64; 72]` (576 bytes), used as both input and output.
 /// - Input must be a valid non-zero Fp12 element.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_final_exp_bls12_381_c")]
 pub unsafe extern "C" fn final_exp_bls12_381_c(
     f: *mut u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

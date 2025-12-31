@@ -634,7 +634,8 @@ pub fn utf_endomorphism_twist_bls12_381(
 ///   - 0 = success (regular point)
 ///   - 1 = success (point at infinity)
 ///   - 2 = error
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_decompress_twist_bls12_381_c")]
 pub unsafe extern "C" fn decompress_twist_bls12_381_c(
     ret: *mut u64,
     input: *const u8,
@@ -663,7 +664,8 @@ pub unsafe extern "C" fn decompress_twist_bls12_381_c(
 /// # Safety
 /// - `p` must point to a valid `[u64; 24]` (192 bytes) for the input point.
 ///   Returns true if the point is on the twist curve, false otherwise.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_curve_twist_bls12_381_c")]
 pub unsafe extern "C" fn is_on_curve_twist_bls12_381_c(
     p: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -679,7 +681,8 @@ pub unsafe extern "C" fn is_on_curve_twist_bls12_381_c(
 /// # Safety
 /// - `p` must point to a valid `[u64; 24]` (192 bytes) for the input point.
 ///   Returns true if the point is in the G2 subgroup, false otherwise.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_subgroup_twist_bls12_381_c")]
 pub unsafe extern "C" fn is_on_subgroup_twist_bls12_381_c(
     p: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -695,7 +698,8 @@ pub unsafe extern "C" fn is_on_subgroup_twist_bls12_381_c(
 /// # Safety
 /// - `p1` must point to a valid `[u64; 24]` (192 bytes), used as both input and output.
 /// - `p2` must point to a valid `[u64; 24]` (192 bytes).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_add_twist_bls12_381_c")]
 pub unsafe extern "C" fn add_twist_bls12_381_c(
     p1: *mut u64,
     p2: *const u64,
@@ -723,7 +727,8 @@ pub unsafe extern "C" fn add_twist_bls12_381_c(
 /// - `ret` must point to a valid `[u64; 24]` for the output affine point.
 /// - `p` must point to a valid `[u64; 24]` affine point.
 /// - `k` must point to a valid `[u64; 6]` scalar.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_scalar_mul_twist_bls12_381_c")]
 pub unsafe extern "C" fn scalar_mul_twist_bls12_381_c(
     ret: *mut u64,
     p: *const u64,

@@ -107,7 +107,8 @@ pub fn pairing_batch_bn254(
 ///   each being `[u64; 16]` (128 bytes per point).
 /// - `out_ptr` must point to a valid `[u64; 48]` (384 bytes) writable buffer for the GT result.
 /// - `num_points` must correctly reflect the number of points in both arrays.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_pairing_batch_bn254_c")]
 pub unsafe extern "C" fn pairing_batch_bn254_c(
     g1_ptr: *const u64,
     g2_ptr: *const u64,

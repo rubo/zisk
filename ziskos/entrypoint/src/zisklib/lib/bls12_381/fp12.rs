@@ -550,7 +550,8 @@ pub fn exp_fp12_bls12_381(
 /// # Safety
 /// - `ret` must point to a valid `[u64; 72]` for the output.
 /// - `a` and `b` must point to valid `[u64; 72]` Fp12 elements.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_mul_fp12_bls12_381_c")]
 pub unsafe extern "C" fn mul_fp12_bls12_381_c(
     ret: *mut u64,
     a: *const u64,

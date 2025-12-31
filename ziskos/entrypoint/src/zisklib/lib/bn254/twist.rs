@@ -425,7 +425,8 @@ pub fn utf_endomorphism_twist_bn254(
 
 /// # Safety
 /// `p_ptr` must point to a valid `[u64; 16]` (128 bytes, affine G2 twist point).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_curve_twist_bn254_c")]
 pub unsafe extern "C" fn is_on_curve_twist_bn254_c(
     p_ptr: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -440,7 +441,8 @@ pub unsafe extern "C" fn is_on_curve_twist_bn254_c(
 
 /// # Safety
 /// `p_ptr` must point to a valid `[u64; 16]` (128 bytes, affine G2 twist point).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_subgroup_twist_bn254_c")]
 pub unsafe extern "C" fn is_on_subgroup_twist_bn254_c(
     p_ptr: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -456,7 +458,8 @@ pub unsafe extern "C" fn is_on_subgroup_twist_bn254_c(
 /// # Safety
 /// - `p_ptr` must point to a valid `[u64; 24]` (192 bytes, Jacobian G2 twist point).
 /// - `out_ptr` must point to a valid `[u64; 16]` (128 bytes) writable buffer.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_to_affine_twist_bn254_c")]
 pub unsafe extern "C" fn to_affine_twist_bn254_c(
     p_ptr: *const u64,
     out_ptr: *mut u64,

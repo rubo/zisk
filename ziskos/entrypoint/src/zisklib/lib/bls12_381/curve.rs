@@ -486,7 +486,8 @@ pub fn sigma_endomorphism_bls12_381(
 ///   - 0 = success (regular point)
 ///   - 1 = success (point at infinity)
 ///   - 2 = error
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_decompress_bls12_381_c")]
 pub unsafe extern "C" fn decompress_bls12_381_c(
     ret: *mut u64,
     input: *const u8,
@@ -515,7 +516,8 @@ pub unsafe extern "C" fn decompress_bls12_381_c(
 /// # Safety
 /// - `p` must point to a valid `[u64; 12]` (96 bytes) for the input point.
 ///   Returns true if the point is on the curve, false otherwise.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_curve_bls12_381_c")]
 pub unsafe extern "C" fn is_on_curve_bls12_381_c(
     p: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -531,7 +533,8 @@ pub unsafe extern "C" fn is_on_curve_bls12_381_c(
 /// # Safety
 /// - `p` must point to a valid `[u64; 12]` (96 bytes) for the input point.
 ///   Returns true if the point is in the G1 subgroup, false otherwise.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_is_on_subgroup_bls12_381_c")]
 pub unsafe extern "C" fn is_on_subgroup_bls12_381_c(
     p: *const u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -547,7 +550,8 @@ pub unsafe extern "C" fn is_on_subgroup_bls12_381_c(
 /// # Safety
 /// - `p1` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
 /// - `p2` must point to a valid `[u64; 12]` (96 bytes).
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_add_bls12_381_c")]
 pub unsafe extern "C" fn add_bls12_381_c(
     p1: *mut u64,
     p2: *const u64,
@@ -574,7 +578,8 @@ pub unsafe extern "C" fn add_bls12_381_c(
 /// # Safety
 /// - `p` must point to a valid `[u64; 12]` (96 bytes), used as both input and output.
 /// - Point must be non-zero.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_dbl_bls12_381_c")]
 pub unsafe extern "C" fn dbl_bls12_381_c(
     p: *mut u64,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
@@ -597,7 +602,8 @@ pub unsafe extern "C" fn dbl_bls12_381_c(
 /// - `p` must point to a valid `[u64; 12]` (96 bytes) for the input point.
 /// - `k` must point to a valid `[u64; 6]` (48 bytes) for the scalar.
 /// - Point must be non-zero.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_scalar_mul_bls12_381_c")]
 pub unsafe extern "C" fn scalar_mul_bls12_381_c(
     ret: *mut u64,
     p: *const u64,

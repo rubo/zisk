@@ -31,7 +31,8 @@ pub struct SyscallArith256Params<'a> {
 ///
 /// The caller must ensure that the data is aligned to a 64-bit boundary.
 #[allow(unused_variables)]
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_syscall_arith256")]
 pub extern "C" fn syscall_arith256(
     params: &mut SyscallArith256Params,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,

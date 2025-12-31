@@ -577,7 +577,8 @@ fn dbl_twist_with_hints_bls12_381(
 /// - `ret` must point to a valid `[u64; 72]` for the Fp12 output.
 /// - `q` must point to a valid `[u64; 24]` for the G2 affine point.
 /// - `p` must point to a valid `[u64; 12]` for the G1 affine point.
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_miller_loop_bls12_381_c")]
 pub unsafe extern "C" fn miller_loop_bls12_381_c(
     ret: *mut u64,
     q: *const u64,

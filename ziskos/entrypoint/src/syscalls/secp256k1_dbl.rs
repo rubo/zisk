@@ -34,5 +34,15 @@ pub extern "C" fn syscall_secp256k1_dbl(
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x804, p1);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
-    unreachable!()
+    {
+        let _p1 = [p1.x, p1.y].concat().try_into().unwrap();
+        let mut p3: [u64; 8] = [0; 8];
+        precompiles_helpers::secp256k1_dbl(&_p1, &mut p3);
+        p1.x.copy_from_slice(&p3[0..4]);
+        p1.y.copy_from_slice(&p3[4..8]);
+        #[cfg(feature = "hints")]
+        {
+            hints.extend_from_slice(&p3);
+        }
+    }
 }

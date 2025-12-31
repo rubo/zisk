@@ -1,3 +1,9 @@
+# Wrapper crate around ziskos that compiles with hints feature enabled.
+# 
+# src/ is a symlink to ../ziskos/entrypoint/src/ - same source, different features.
+# Exports C symbols with "hints_" prefix to avoid linker conflicts with ziskos.
+# See README.md for details.
+
 [package]
 name = "ziskos-hints"
 version = { workspace = true }

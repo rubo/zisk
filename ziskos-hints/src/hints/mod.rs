@@ -38,10 +38,10 @@ pub fn process_ecrecover_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     // Safety: We've validated that data.len() == 20, so all slice accesses are in bounds.
     unsafe {
         let ptr = data.as_ptr();
-        let pk = &*(ptr as *const u64);
-        let z = &*(ptr.add(Z_OFFSET) as *const u64);
-        let r = &*(ptr.add(R_OFFSET) as *const u64);
-        let s = &*(ptr.add(S_OFFSET) as *const u64);
+        let pk = &*ptr;
+        let z = &*ptr.add(Z_OFFSET);
+        let r = &*ptr.add(R_OFFSET);
+        let s = &*ptr.add(S_OFFSET);
 
         zisklib::secp256k1_ecdsa_verify_c(pk, z, r, s, &mut processed_hints);
     }

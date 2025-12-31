@@ -17,8 +17,6 @@ use zisk_common::{
     HINTS_TYPE_RESULT, NUM_HINT_TYPES,
 };
 
-use ziskos_hints::zisklib;
-
 /// Ordered result buffer with drain state.
 ///
 /// This structure maintains a VecDeque that holds processed results in order,
@@ -425,7 +423,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
     fn process_hint(hint: PrecompileHint) -> Result<Vec<u64>> {
         let result = match hint.hint_type {
             HINTS_TYPE_RESULT => hint.data,
-            HINTS_TYPE_ECRECOVER => Self::process_hint_ecrecover(hint)?,
+            HINTS_TYPE_ECRECOVER => Self::process_hint_ecrecover(&hint.data)?,
             _ => {
                 return Err(anyhow::anyhow!("Unknown hint type: {}", hint.hint_type));
             }
@@ -436,40 +434,8 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
 
     /// Processes a [`HINTS_TYPE_ECRECOVER`] hint.
     #[inline]
-    fn process_hint_ecrecover(hint: PrecompileHint) -> Result<Vec<u64>> {
-        const PK_SIZE: usize = 8; // x(4) + y(4)
-        const Z_SIZE: usize = 4;
-        const R_SIZE: usize = 4;
-        const S_SIZE: usize = 4;
-        const EXPECTED_LEN: usize = PK_SIZE + Z_SIZE + R_SIZE + S_SIZE;
-
-        const Z_OFFSET: usize = PK_SIZE;
-        const R_OFFSET: usize = Z_OFFSET + Z_SIZE;
-        const S_OFFSET: usize = R_OFFSET + R_SIZE;
-
-        if hint.data.len() != EXPECTED_LEN {
-            return Err(anyhow::anyhow!(
-                "Invalid ECRECOVER hint length: expected {}, got {}",
-                EXPECTED_LEN,
-                hint.data.len()
-            ));
-        }
-
-        #[allow(unused_mut)]
-        let mut processed_hints = Vec::new();
-
-        // Safety: We've validated that hint.len() == 20, so all slice accesses are in bounds.
-        unsafe {
-            let ptr = hint.data.as_ptr();
-            let pk = &*(ptr as *const u64);
-            let z = &*(ptr.add(Z_OFFSET) as *const u64);
-            let r = &*(ptr.add(R_OFFSET) as *const u64);
-            let s = &*(ptr.add(S_OFFSET) as *const u64);
-
-            zisklib::secp256k1_ecdsa_verify_c(pk, z, r, s, &mut processed_hints);
-        }
-
-        Ok(processed_hints)
+    fn process_hint_ecrecover(data: &[u64]) -> Result<Vec<u64>> {
+        ziskos_hints::hints::process_ecrecover_hint(data).map_err(|e| anyhow::anyhow!(e))
     }
 }
 

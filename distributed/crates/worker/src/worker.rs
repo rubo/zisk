@@ -1,7 +1,7 @@
 use anyhow::Result;
 use asm_runner::HintsShmem;
 use cargo_zisk::commands::{get_proving_key, get_witness_computation_lib};
-use precompiles_hints::PrecompileHintsProcessor;
+use precompiles_hints::HintsProcessor;
 use proofman::{AggProofs, ContributionsInfo};
 use rom_setup::{
     gen_elf_hash, get_elf_bin_file_path, get_elf_data_hash, get_rom_blowup_factor_and_arity,
@@ -264,7 +264,7 @@ pub struct Worker<T: ZiskBackend + 'static> {
     prover_config: ProverConfig,
 
     stream_buffers: HashMap<JobId, (u32, HashMap<u32, Vec<u8>>)>, // (job_id, (next_seq, (seq_number, data)))
-    hints_processor: Option<PrecompileHintsProcessor<HintsShmem>>,
+    hints_processor: Option<HintsProcessor<HintsShmem>>,
 }
 
 impl<T: ZiskBackend + 'static> Worker<T> {
@@ -614,7 +614,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             let unlock_mapped_memory = self.prover_config.unlock_mapped_memory;
             let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)?;
             self.hints_processor = Some(
-                PrecompileHintsProcessor::new(hints_shmem)
+                HintsProcessor::builder(hints_shmem)
+                    .build()
                     .map_err(|e| anyhow::anyhow!("Failed to initialize hints processor: {}", e))?,
             );
         }

@@ -45,31 +45,62 @@
 //! - `0x05` (`HINTS_TYPE_ECRECOVER`): ECRECOVER inputs (currently returns empty)
 //! ```
 
+use std::fmt::Display;
+
 use anyhow::Result;
 
-/// Control code: Reset processor state and global sequence.
-pub const CTRL_START: u32 = 0x00;
+/// Hint code representing either a control code or a data hint type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum HintCode {
+    // CONTROL CODES
+    /// Control code: Reset processor state and global sequence.
+    CtrlStart = 0x00,
+    /// Control code: Wait until completion of all pending hints.
+    CtrlEnd = 0x01,
+    /// Control code: Cancel current stream and stop processing.
+    CtrlCancel = 0x02,
+    /// Control code: Signal error and stop processing.
+    CtrlError = 0x03,
 
-/// Control code: Wait until completion of all pending hints.
-pub const CTRL_END: u32 = 0x01;
+    // BUILT-IN HINT TYPES
+    /// Pass-through hint type.
+    /// When a hint has this type, the processor simply passes through the data
+    /// without any additional computation.
+    HintsTypeResult = 0x04,
+    /// Ecrecover precompile hint type.
+    HintsTypeEcrecover = 0x05,
+}
 
-/// Control code: Cancel current stream and stop processing.
-pub const CTRL_CANCEL: u32 = 0x02;
+impl TryFrom<u32> for HintCode {
+    type Error = anyhow::Error;
 
-/// Control code: Signal error and stop processing.
-pub const CTRL_ERROR: u32 = 0x03;
+    fn try_from(value: u32) -> Result<Self> {
+        match value {
+            0x00 => Ok(HintCode::CtrlStart),
+            0x01 => Ok(HintCode::CtrlEnd),
+            0x02 => Ok(HintCode::CtrlCancel),
+            0x03 => Ok(HintCode::CtrlError),
+            0x04 => Ok(HintCode::HintsTypeResult),
+            0x05 => Ok(HintCode::HintsTypeEcrecover),
+            _ => Err(anyhow::anyhow!("Invalid hint code: {:#x}", value)),
+        }
+    }
+}
 
-/// Hint type indicating that the data is already the precomputed result.
-///
-/// When a hint has this type, the processor simply passes through the data
-/// without any additional computation.
-pub const HINTS_TYPE_RESULT: u32 = 0x04;
-
-/// Hint type indicating that the data contains inputs for the ecrecover precompile.
-pub const HINTS_TYPE_ECRECOVER: u32 = 0x05;
-
-/// Number if hint types defined.
-pub const NUM_HINT_TYPES: u32 = 6;
+impl Display for HintCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            HintCode::CtrlStart => "CTRL_START",
+            HintCode::CtrlEnd => "CTRL_END",
+            HintCode::CtrlCancel => "CTRL_CANCEL",
+            HintCode::CtrlError => "CTRL_ERROR",
+            HintCode::HintsTypeResult => "HINTS_TYPE_RESULT",
+            HintCode::HintsTypeEcrecover => "HINTS_TYPE_ECRECOVER",
+        };
+        write!(f, "{}", name)
+    }
+}
 
 /// Represents a single precompile hint parsed from a `u64` slice.
 ///
@@ -77,7 +108,7 @@ pub const NUM_HINT_TYPES: u32 = 6;
 /// determines how the data should be processed by the [`PrecompileHintsProcessor`].
 pub struct PrecompileHint {
     /// The type of hint, determining how the data should be processed.
-    pub hint_type: u32,
+    pub hint_code: HintCode,
     /// The hint payload data.
     pub data: Vec<u64>,
 }
@@ -90,7 +121,7 @@ impl std::fmt::Debug for PrecompileHint {
             format!("{:?}... ({} more)", &self.data[..10], self.data.len() - 10)
         };
         f.debug_struct("PrecompileHint")
-            .field("hint_type", &self.hint_type)
+            .field("hint_type", &self.hint_code)
             .field("data", &data_display)
             .finish()
     }
@@ -115,7 +146,7 @@ impl PrecompileHint {
         }
 
         let header = slice[idx];
-        let hint_type = (header >> 32) as u32;
+        let hint_code = HintCode::try_from((header >> 32) as u32)?;
         let length = (header & 0xFFFFFFFF) as u32;
 
         if slice.len() < idx + length as usize + 1 {
@@ -129,6 +160,6 @@ impl PrecompileHint {
         // Create a new Vec with the hint data.
         let data = slice[idx + 1..idx + length as usize + 1].to_vec();
 
-        Ok(PrecompileHint { hint_type, data })
+        Ok(PrecompileHint { hint_code, data })
     }
 }

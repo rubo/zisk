@@ -25,7 +25,7 @@ use asm_runner::{
 };
 use fields::PrimeField64;
 use pil_std_lib::Std;
-use precompiles_hints::PrecompileHintsProcessor;
+use precompiles_hints::HintsProcessor;
 use proofman_common::{create_pool, BufferPool, ProofCtx, ProofmanResult, SetupCtx};
 use proofman_util::{timer_start_info, timer_stop_and_log_info};
 use rayon::prelude::*;
@@ -78,7 +78,7 @@ enum MinimalTraceExecutionMode {
     AsmWithCounter,
 }
 
-pub type StreamHintsShmem = ZiskStream<PrecompileHintsProcessor<HintsShmem>>;
+pub type StreamHintsShmem = ZiskStream<HintsProcessor<HintsShmem>>;
 
 /// The `ZiskExecutor` struct orchestrates the execution of the ZisK ROM program, managing state
 /// machines, planning, and witness computation.
@@ -199,7 +199,8 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)
             .expect("Failed to create HintsShmem");
 
-        let hints_processor = PrecompileHintsProcessor::new(hints_shmem)
+        let hints_processor = HintsProcessor::builder(hints_shmem)
+            .build()
             .expect("Failed to create PrecompileHintsProcessor");
 
         let hints_stream = Mutex::new(ZiskStream::new(hints_processor));

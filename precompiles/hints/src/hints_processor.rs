@@ -195,7 +195,7 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
             }
 
             // Check if this is a control code or data hint type
-            match HintCode::try_from(hint.hint_code)? {
+            match hint.hint_code {
                 HintCode::CtrlStart => {
                     // CTRL_START must be the first message of the first batch
                     if !first_batch {

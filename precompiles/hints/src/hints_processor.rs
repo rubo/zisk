@@ -6,16 +6,13 @@
 
 use anyhow::Result;
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use tracing::debug;
 use zisk_common::io::{StreamProcessor, StreamSink};
-use zisk_common::{
-    PrecompileHint, CTRL_CANCEL, CTRL_END, CTRL_ERROR, CTRL_START, HINTS_TYPE_ECRECOVER,
-    HINTS_TYPE_RESULT, NUM_HINT_TYPES,
-};
+use zisk_common::{HintCode, PrecompileHint};
 
 /// Ordered result buffer with drain state.
 ///
@@ -69,8 +66,8 @@ pub struct PrecompileHintsProcessor<HS: StreamSink + Send + Sync + 'static> {
     /// Shared state for parallel hint processing
     state: Arc<HintProcessorState>,
 
-    /// Optional statistics collected during hint processing.
-    stats: [AtomicUsize; NUM_HINT_TYPES as usize],
+    /// Optional statistics collected during hint processing (for debugging).
+    stats: Mutex<HashMap<HintCode, usize>>,
 
     /// The hints sink used to submit processed hints (kept for ownership).
     #[allow(dead_code)]
@@ -125,7 +122,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
         Ok(Self {
             pool,
             state,
-            stats: Default::default(),
+            stats: Mutex::new(HashMap::new()),
             hints_sink,
             drainer_thread: ManuallyDrop::new(drainer_thread),
         })
@@ -167,16 +164,11 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
             let hint = PrecompileHint::from_u64_slice(hints, idx)?;
             let length = hint.data.len();
 
-            // Validate hint type is in valid range before accessing stats array
-            if hint.hint_type >= NUM_HINT_TYPES {
-                return Err(anyhow::anyhow!("Invalid hint type: {}", hint.hint_type));
-            }
-
-            self.stats[hint.hint_type as usize].fetch_add(1, Ordering::Relaxed);
+            self.stats.lock().unwrap().entry(hint.hint_code).and_modify(|c| *c += 1).or_insert(1);
 
             // Check if this is a control code or data hint type
-            match hint.hint_type {
-                CTRL_START => {
+            match HintCode::try_from(hint.hint_code)? {
+                HintCode::CtrlStart => {
                     // CTRL_START must be the first message of the first batch
                     if !first_batch {
                         return Err(anyhow::anyhow!(
@@ -195,7 +187,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                     idx += length + 1;
                     continue;
                 }
-                CTRL_END => {
+                HintCode::CtrlEnd => {
                     // Control hint only; wait for completion then set flag
                     self.wait_for_completion()?;
                     has_ctrl_end = true;
@@ -212,19 +204,19 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                     }
                     break;
                 }
-                CTRL_CANCEL => {
+                HintCode::CtrlCancel => {
                     // Cancel current stream: set error and notify
                     self.state.error_flag.store(true, Ordering::Release);
                     self.state.drain_signal.notify_all();
                     return Err(anyhow::anyhow!("Stream cancelled"));
                 }
-                CTRL_ERROR => {
+                HintCode::CtrlError => {
                     // External error signal
                     self.state.error_flag.store(true, Ordering::Release);
                     self.state.drain_signal.notify_all();
                     return Err(anyhow::anyhow!("Stream error signalled"));
                 }
-                _ => {
+                HintCode::HintsTypeResult | HintCode::HintsTypeEcrecover => {
                     // Data hint type - process normally
                 }
             }
@@ -240,7 +232,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
             };
 
             // Handle HINTS_TYPE_RESULT synchronously - it doesn't need async processing
-            if hint.hint_type == HINTS_TYPE_RESULT {
+            if hint.hint_code == HintCode::HintsTypeResult {
                 // Immediately mark this slot as complete
                 {
                     let mut queue = self.state.queue.lock().unwrap();
@@ -299,8 +291,11 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
 
         if has_ctrl_end {
             debug!("Processed hints stats:");
-            for (i, count) in self.stats.iter().enumerate() {
-                debug!("Hint type {}: {}", i, count.load(Ordering::Relaxed));
+            let stats = self.stats.lock().unwrap();
+            let mut sorted_stats: Vec<_> = stats.iter().collect();
+            sorted_stats.sort_by_key(|(hint_code, _)| **hint_code as u32);
+            for (hint_code, count) in sorted_stats {
+                debug!("Hint type {}: {}", hint_code, count);
             }
         }
 
@@ -424,15 +419,20 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
     /// Returns an error if the hint type is unknown or if the handler fails.
     #[inline]
     fn dispatch_hint(hint: PrecompileHint) -> Result<Vec<u64>> {
-        match hint.hint_type {
+        match hint.hint_code {
+            // Control codes should not reach here
+            HintCode::CtrlStart
+            | HintCode::CtrlEnd
+            | HintCode::CtrlCancel
+            | HintCode::CtrlError => {
+                Err(anyhow::anyhow!("Control code {:?} should not be dispatched", hint.hint_code))
+            }
+
             // When hint type is HINTS_TYPE_RESULT, return the data as-is.
-            HINTS_TYPE_RESULT => Ok(hint.data),
+            HintCode::HintsTypeResult => Ok(hint.data),
 
             // Dispatch to the ECRECOVER handler.
-            HINTS_TYPE_ECRECOVER => Self::process_hint_ecrecover(&hint),
-
-            // Unknown hint type.
-            _ => Err(anyhow::anyhow!("Unknown hint type: {}", hint.hint_type)),
+            HintCode::HintsTypeEcrecover => Self::process_hint_ecrecover(&hint),
         }
     }
 
@@ -466,7 +466,7 @@ impl<HS: StreamSink + Send + Sync + 'static> StreamProcessor for PrecompileHints
 
 #[cfg(test)]
 mod tests {
-    use zisk_common::{CTRL_CANCEL, CTRL_END, CTRL_ERROR, CTRL_START, HINTS_TYPE_RESULT};
+    use zisk_common::HintCode;
 
     use super::*;
 
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn test_single_result_hint_non_blocking() {
         let p = processor();
-        let data = vec![make_header(HINTS_TYPE_RESULT, 2), 0x111, 0x222];
+        let data = vec![make_header(HintCode::HintsTypeResult as u32, 2), 0x111, 0x222];
 
         // Dispatch should succeed and be non-blocking
         assert!(p.process_hints(&data, false).is_ok());
@@ -511,11 +511,11 @@ mod tests {
     fn test_multiple_hints_ordered_output() {
         let p = processor();
         let data = vec![
-            make_header(HINTS_TYPE_RESULT, 1),
+            make_header(HintCode::HintsTypeResult as u32, 1),
             0x111,
-            make_header(HINTS_TYPE_RESULT, 1),
+            make_header(HintCode::HintsTypeResult as u32, 1),
             0x222,
-            make_header(HINTS_TYPE_RESULT, 1),
+            make_header(HintCode::HintsTypeResult as u32, 1),
             0x333,
         ];
         assert!(p.process_hints(&data, false).is_ok());
@@ -530,8 +530,8 @@ mod tests {
     #[test]
     fn test_multiple_calls_global_sequence() {
         let p = processor();
-        let data1 = vec![make_header(HINTS_TYPE_RESULT, 1), 0xAAA];
-        let data2 = vec![make_header(HINTS_TYPE_RESULT, 1), 0xBBB];
+        let data1 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0xAAA];
+        let data2 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0xBBB];
 
         assert!(p.process_hints(&data1, false).is_ok());
         assert!(p.process_hints(&data2, false).is_ok());
@@ -571,7 +571,8 @@ mod tests {
     fn test_error_stops_wait() {
         let p = processor();
         // First valid, then invalid type
-        let data = vec![make_header(HINTS_TYPE_RESULT, 1), 0x111, make_header(999, 0)];
+        let data =
+            vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x111, make_header(999, 0)];
 
         // Should error immediately when encountering invalid hint type
         let result = p.process_hints(&data, false);
@@ -594,7 +595,7 @@ mod tests {
         assert!(!p.state.error_flag.load(Ordering::Acquire));
 
         // Should be able to process new hints after reset
-        let good = vec![make_header(HINTS_TYPE_RESULT, 1), 0x42];
+        let good = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x42];
         assert!(p.process_hints(&good, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
@@ -608,7 +609,7 @@ mod tests {
         let p = processor();
 
         // First batch increments sequence
-        let batch1 = vec![make_header(HINTS_TYPE_RESULT, 1), 0x01];
+        let batch1 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x01];
         p.process_hints(&batch1, false).unwrap();
         p.wait_for_completion().unwrap();
 
@@ -619,7 +620,7 @@ mod tests {
         }
 
         // Send START control - should reset sequence
-        let start = vec![make_ctrl_header(CTRL_START, 0)];
+        let start = vec![make_ctrl_header(HintCode::CtrlStart as u32, 0)];
         p.process_hints(&start, true).unwrap();
 
         // Sequence should be reset to 0
@@ -630,10 +631,10 @@ mod tests {
         }
 
         // Process new batch
-        let batch2 = vec![make_header(HINTS_TYPE_RESULT, 1), 0x02];
+        let batch2 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x02];
         p.process_hints(&batch2, false).unwrap();
 
-        let end = vec![make_ctrl_header(CTRL_END, 0)];
+        let end = vec![make_ctrl_header(HintCode::CtrlEnd as u32, 0)];
         p.process_hints(&end, false).unwrap();
 
         // Should have processed 1 hint (starting from 0 again)
@@ -646,12 +647,16 @@ mod tests {
         let p = processor();
 
         // Dispatch hints
-        let data =
-            vec![make_header(HINTS_TYPE_RESULT, 1), 0x10, make_header(HINTS_TYPE_RESULT, 1), 0x20];
+        let data = vec![
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0x10,
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0x20,
+        ];
         p.process_hints(&data, false).unwrap();
 
         // END should wait internally
-        let end = vec![make_ctrl_header(CTRL_END, 0)];
+        let end = vec![make_ctrl_header(HintCode::CtrlEnd as u32, 0)];
         p.process_hints(&end, false).unwrap();
 
         // Buffer should already be empty
@@ -668,7 +673,7 @@ mod tests {
     #[test]
     fn test_stream_cancel_returns_error() {
         let p = processor();
-        let cancel = vec![make_ctrl_header(CTRL_CANCEL, 0)];
+        let cancel = vec![make_ctrl_header(HintCode::CtrlCancel as u32, 0)];
 
         let result = p.process_hints(&cancel, false);
         assert!(result.is_err());
@@ -681,7 +686,7 @@ mod tests {
     #[test]
     fn test_stream_error_signal_returns_error() {
         let p = processor();
-        let signal_err = vec![make_ctrl_header(CTRL_ERROR, 0)];
+        let signal_err = vec![make_ctrl_header(HintCode::CtrlError as u32, 0)];
 
         let result = p.process_hints(&signal_err, false);
         assert!(result.is_err());
@@ -703,7 +708,7 @@ mod tests {
         let mut data = Vec::with_capacity(NUM_HINTS * 2);
 
         for i in 0..NUM_HINTS {
-            data.push(make_header(HINTS_TYPE_RESULT, 1));
+            data.push(make_header(HintCode::HintsTypeResult as u32, 1));
             data.push(i as u64);
         }
 
@@ -740,7 +745,7 @@ mod tests {
         for batch_id in 0..NUM_BATCHES {
             let mut data = Vec::with_capacity(HINTS_PER_BATCH * 2);
             for i in 0..HINTS_PER_BATCH {
-                data.push(make_header(HINTS_TYPE_RESULT, 1));
+                data.push(make_header(HintCode::HintsTypeResult as u32, 1));
                 data.push((batch_id * HINTS_PER_BATCH + i) as u64);
             }
             p.process_hints(&data, false).unwrap();
@@ -777,19 +782,19 @@ mod tests {
 
         for _iter in 0..ITERATIONS {
             // Reset at start of each iteration
-            let reset = vec![make_ctrl_header(CTRL_START, 0)];
+            let reset = vec![make_ctrl_header(HintCode::CtrlStart as u32, 0)];
             p.process_hints(&reset, true).unwrap();
 
             // Process batch
             let mut data = Vec::with_capacity(HINTS_PER_ITER * 2);
             for i in 0..HINTS_PER_ITER {
-                data.push(make_header(HINTS_TYPE_RESULT, 1));
+                data.push(make_header(HintCode::HintsTypeResult as u32, 1));
                 data.push(i as u64);
             }
             p.process_hints(&data, false).unwrap();
 
             // End stream
-            let end = vec![make_ctrl_header(CTRL_END, 0)];
+            let end = vec![make_ctrl_header(HintCode::CtrlEnd as u32, 0)];
             p.process_hints(&end, false).unwrap();
         }
 

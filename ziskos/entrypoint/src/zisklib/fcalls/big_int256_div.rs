@@ -34,6 +34,7 @@ pub fn fcall_bigint256_div(
         let (quotient, remainder) = big_int256_div(a_value, b_value);
         #[cfg(feature = "hints")]
         {
+            hints.push(8);
             hints.extend_from_slice(&quotient);
             hints.extend_from_slice(&remainder);
         }

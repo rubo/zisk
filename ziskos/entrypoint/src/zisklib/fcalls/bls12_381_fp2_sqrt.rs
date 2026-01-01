@@ -33,6 +33,7 @@ pub fn fcall_bls12_381_fp2_sqrt(
         let result: [u64; 13] = bls12_381_fp2_sqrt_13(p_value);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
         result

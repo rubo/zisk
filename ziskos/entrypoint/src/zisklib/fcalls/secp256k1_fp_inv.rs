@@ -36,6 +36,7 @@ pub fn fcall_secp256k1_fp_inv(
         secp256k1_fp_inv_c(p_value, &mut result);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
         result
@@ -56,6 +57,7 @@ pub fn fcall2_secp256k1_fp_inv(p_value: &[u64; 4], #[cfg(feature = "hints")] hin
         secp256k1_fp_inv_c(p_value, &mut result);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
     }

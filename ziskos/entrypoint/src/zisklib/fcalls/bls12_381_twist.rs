@@ -33,6 +33,7 @@ pub fn fcall_bls12_381_add_line_coeffs(
         let (lambda, mu) = bls12_381_twist_add_line_coeffs(&x1, &y1, &x2, &y2);
         #[cfg(feature = "hints")]
         {
+            hints.push(24);
             hints.extend_from_slice(&lambda);
             hints.extend_from_slice(&mu);
         }
@@ -96,6 +97,7 @@ pub fn fcall_bls12_381_dbl_line_coeffs(
         let (lambda, mu) = bls12_381_twist_dbl_line_coeffs(&x, &y);
         #[cfg(feature = "hints")]
         {
+            hints.push(24);
             hints.extend_from_slice(&lambda);
             hints.extend_from_slice(&mu);
         }

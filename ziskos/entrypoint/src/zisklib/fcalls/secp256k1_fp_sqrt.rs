@@ -37,6 +37,7 @@ pub fn fcall_secp256k1_fp_sqrt(
         secp256k1_fp_sqrt(p_value, parity, &mut result);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
         result
@@ -68,6 +69,7 @@ pub fn fcall2_secp256k1_fp_sqrt(
         secp256k1_fp_sqrt(p_value, parity, &mut result);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
     }

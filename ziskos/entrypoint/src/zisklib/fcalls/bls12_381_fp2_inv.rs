@@ -33,6 +33,7 @@ pub fn fcall_bls12_381_fp2_inv(
         let result: [u64; 12] = bls12_381_fp2_inv(p_value);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
         result

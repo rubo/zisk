@@ -23,6 +23,8 @@ pub fn fcall_bin_decomp(
         let bits_u64: Vec<u64> = bits.into_iter().map(|b| b as u64).collect();
         #[cfg(feature = "hints")]
         {
+            hints.push(len_bits as u64 + 1);
+            hints.push(len_bits as u64);
             hints.extend_from_slice(&bits_u64);
         }
         return (len_bits, bits_u64);

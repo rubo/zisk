@@ -33,7 +33,10 @@ pub fn fcall_division(
         let len_rem = rem.len();
         #[cfg(feature = "hints")]
         {
+            hints.push(len_quo as u64 + len_rem as u64 + 2);
+            hints.push(len_quo as u64);
             hints.extend_from_slice(&quo);
+            hints.push(len_rem as u64);
             hints.extend_from_slice(&rem);
         }
         return (len_quo, len_rem);

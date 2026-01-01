@@ -34,6 +34,7 @@ pub fn fcall_bls12_381_fp_sqrt(
         bls12_381_fp_sqrt(p_value, &mut result);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
         result

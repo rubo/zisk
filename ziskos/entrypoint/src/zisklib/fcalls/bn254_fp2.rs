@@ -33,6 +33,7 @@ pub fn fcall_bn254_fp2_inv(
         let result: [u64; 8] = bn254_fp2_inv(p_value);
         #[cfg(feature = "hints")]
         {
+            hints.push(result.len() as u64);
             hints.extend_from_slice(&result);
         }
         result

@@ -260,7 +260,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
                     }
 
                     // Process the hint
-                    let result = Self::process_hint(hint);
+                    let result = Self::dispatch_hint(hint);
 
                     // Store result and try to drain
                     let mut queue = state.queue.lock().unwrap();
@@ -413,29 +413,33 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
     ///
     /// # Arguments
     ///
-    /// * `hint` - The parsed hint to process
+    /// * `hint` - The parsed hint to dispatch
     ///
     /// # Returns
     ///
-    /// * `Ok(Vec<u64>)` - The processed result for this hint
-    /// * `Err` - If the hint type is unknown
+    /// The result produced by the selected hint handler.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the hint type is unknown or if the handler fails.
     #[inline]
-    fn process_hint(hint: PrecompileHint) -> Result<Vec<u64>> {
-        let result = match hint.hint_type {
-            HINTS_TYPE_RESULT => hint.data,
-            HINTS_TYPE_ECRECOVER => Self::process_hint_ecrecover(&hint.data)?,
-            _ => {
-                return Err(anyhow::anyhow!("Unknown hint type: {}", hint.hint_type));
-            }
-        };
+    fn dispatch_hint(hint: PrecompileHint) -> Result<Vec<u64>> {
+        match hint.hint_type {
+            // When hint type is HINTS_TYPE_RESULT, return the data as-is.
+            HINTS_TYPE_RESULT => Ok(hint.data),
 
-        Ok(result)
+            // Dispatch to the ECRECOVER handler.
+            HINTS_TYPE_ECRECOVER => Self::process_hint_ecrecover(&hint),
+
+            // Unknown hint type.
+            _ => Err(anyhow::anyhow!("Unknown hint type: {}", hint.hint_type)),
+        }
     }
 
     /// Processes a [`HINTS_TYPE_ECRECOVER`] hint.
     #[inline]
-    fn process_hint_ecrecover(data: &[u64]) -> Result<Vec<u64>> {
-        ziskos_hints::hints::process_ecrecover_hint(data).map_err(|e| anyhow::anyhow!(e))
+    fn process_hint_ecrecover(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::hints::process_ecrecover_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
 }
 

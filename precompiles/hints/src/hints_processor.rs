@@ -726,6 +726,131 @@ mod tests {
         assert!(p.state.error_flag.load(Ordering::Acquire));
     }
 
+    #[test]
+    fn test_ctrl_start_must_be_first_in_batch() {
+        let p = processor();
+
+        // CTRL_START not at position 0 should fail
+        let data = vec![
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0x42,
+            make_ctrl_header(HintCode::CtrlStart as u32, 0),
+        ];
+
+        let result = p.process_hints(&data, true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be the first hint"));
+    }
+
+    #[test]
+    fn test_ctrl_start_only_in_first_batch() {
+        let p = processor();
+
+        // First batch is ok
+        let batch1 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x01];
+        p.process_hints(&batch1, false).unwrap();
+
+        // CTRL_START in non-first batch should fail
+        let start = vec![make_ctrl_header(HintCode::CtrlStart as u32, 0)];
+        let result = p.process_hints(&start, false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("first message in the stream"));
+    }
+
+    #[test]
+    fn test_ctrl_end_must_be_last() {
+        let p = processor();
+
+        // CTRL_END not at end should fail
+        let data = vec![
+            make_ctrl_header(HintCode::CtrlEnd as u32, 0),
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0x42,
+        ];
+
+        let result = p.process_hints(&data, false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be the last hint"));
+    }
+
+    #[test]
+    fn test_sink_receives_correct_data() {
+        use std::sync::{Arc, Mutex};
+
+        struct RecordingSink {
+            received: Arc<Mutex<Vec<Vec<u64>>>>,
+        }
+
+        impl StreamSink for RecordingSink {
+            fn submit(&self, processed: Vec<u64>) -> Result<()> {
+                self.received.lock().unwrap().push(processed);
+                Ok(())
+            }
+        }
+
+        let received = Arc::new(Mutex::new(Vec::new()));
+        let sink = RecordingSink { received: Arc::clone(&received) };
+        let p = HintsProcessor::builder(sink).num_threads(2).build().unwrap();
+
+        // Send some data
+        let data = vec![
+            make_header(HintCode::HintsTypeResult as u32, 2),
+            0xAAA,
+            0xBBB,
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0xCCC,
+        ];
+
+        p.process_hints(&data, false).unwrap();
+        p.wait_for_completion().unwrap();
+
+        // Verify sink received correct data in order
+        let received = received.lock().unwrap();
+        assert_eq!(received.len(), 2);
+        assert_eq!(received[0], vec![0xAAA, 0xBBB]);
+        assert_eq!(received[1], vec![0xCCC]);
+    }
+
+    #[test]
+    fn test_sink_error_stops_processing() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        struct FailingSink {
+            should_fail: Arc<AtomicBool>,
+        }
+
+        impl StreamSink for FailingSink {
+            fn submit(&self, _processed: Vec<u64>) -> Result<()> {
+                if self.should_fail.load(Ordering::Acquire) {
+                    Err(anyhow::anyhow!("Sink error"))
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let should_fail = Arc::new(AtomicBool::new(false));
+        let sink = FailingSink { should_fail: Arc::clone(&should_fail) };
+        let p = HintsProcessor::builder(sink).num_threads(2).build().unwrap();
+
+        // First batch succeeds
+        let data1 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x01];
+        assert!(p.process_hints(&data1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Make sink fail
+        should_fail.store(true, Ordering::Release);
+
+        // Second batch should trigger sink error
+        let data2 = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x02];
+        assert!(p.process_hints(&data2, false).is_ok());
+
+        // Wait should detect the error from drainer thread
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(p.state.error_flag.load(Ordering::Acquire));
+    }
+
     // Builder tests
     #[test]
     fn test_builder_default() {
@@ -738,6 +863,28 @@ mod tests {
         let data = vec![make_header(HintCode::HintsTypeResult as u32, 1), 0x42];
         assert!(p.process_hints(&data, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
+    }
+
+    #[test]
+    fn test_builder_stats_enabled() {
+        let p = HintsProcessor::builder(NullHints).enable_stats(true).build().unwrap();
+
+        // Stats should be Some
+        assert!(p.stats.is_some());
+
+        // Process hints
+        let data = vec![
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0x111,
+            make_header(HintCode::HintsTypeResult as u32, 1),
+            0x222,
+        ];
+        assert!(p.process_hints(&data, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Verify stats were collected
+        let stats = p.stats.as_ref().unwrap().lock().unwrap();
+        assert_eq!(stats.get(&HintCode::HintsTypeResult), Some(&2));
     }
 
     #[test]

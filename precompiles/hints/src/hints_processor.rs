@@ -244,7 +244,15 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
                     self.state.drain_signal.notify_all();
                     return Err(anyhow::anyhow!("Stream error signalled"));
                 }
-                HintCode::HintsTypeResult | HintCode::HintsTypeEcrecover => {
+                HintCode::HintsTypeResult
+                | HintCode::HintsTypeEcrecover
+                | HintCode::RedMod256
+                | HintCode::AddMod256
+                | HintCode::MulMod256
+                | HintCode::DivRem256
+                | HintCode::WPow256
+                | HintCode::OMul256
+                | HintCode::WMul256 => {
                     // Data hint type - process normally
                 }
             }
@@ -463,6 +471,17 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
 
             // Dispatch to the ECRECOVER handler.
             HintCode::HintsTypeEcrecover => Self::process_hint_ecrecover(&hint),
+
+            // TODO: Implement handlers for 256-bit operations
+            HintCode::RedMod256
+            | HintCode::AddMod256
+            | HintCode::MulMod256
+            | HintCode::DivRem256
+            | HintCode::WPow256
+            | HintCode::OMul256
+            | HintCode::WMul256 => {
+                unimplemented!("Handler for hint type {:?} is not yet implemented", hint.hint_code)
+            }
         }
     }
 

@@ -70,6 +70,20 @@ pub enum HintCode {
     HintsTypeResult = 0x04,
     /// Ecrecover precompile hint type.
     HintsTypeEcrecover = 0x05,
+    ///  Modular reduction of a 256-bit integer hint type.
+    RedMod256 = 0x06,
+    /// Modular addition of 256-bit integers hint type.
+    AddMod256 = 0x07,
+    /// Modular multiplication of 256-bit integers hint type.
+    MulMod256 = 0x08,
+    /// Division and remainder of 256-bit integers hint type.
+    DivRem256 = 0x09,
+    /// Wrapping exponentiation of 256-bit integers hint type.
+    WPow256 = 0x0A,
+    /// Overflowing multiplication of 256-bit integers hint type.
+    OMul256 = 0x0B,
+    /// Wrapping multiplication of 256-bit integers hint type.
+    WMul256 = 0x0C,
 }
 
 impl TryFrom<u32> for HintCode {
@@ -83,6 +97,13 @@ impl TryFrom<u32> for HintCode {
             0x03 => Ok(HintCode::CtrlError),
             0x04 => Ok(HintCode::HintsTypeResult),
             0x05 => Ok(HintCode::HintsTypeEcrecover),
+            0x06 => Ok(HintCode::RedMod256),
+            0x07 => Ok(HintCode::AddMod256),
+            0x08 => Ok(HintCode::MulMod256),
+            0x09 => Ok(HintCode::DivRem256),
+            0x0A => Ok(HintCode::WPow256),
+            0x0B => Ok(HintCode::OMul256),
+            0x0C => Ok(HintCode::WMul256),
             _ => Err(anyhow::anyhow!("Invalid hint code: {:#x}", value)),
         }
     }
@@ -97,6 +118,13 @@ impl Display for HintCode {
             HintCode::CtrlError => "CTRL_ERROR",
             HintCode::HintsTypeResult => "HINTS_TYPE_RESULT",
             HintCode::HintsTypeEcrecover => "HINTS_TYPE_ECRECOVER",
+            HintCode::RedMod256 => "REDMOD256",
+            HintCode::AddMod256 => "ADDMOD256",
+            HintCode::MulMod256 => "MULMOD256",
+            HintCode::DivRem256 => "DIVREM256",
+            HintCode::WPow256 => "WPOW256",
+            HintCode::OMul256 => "OMUL256",
+            HintCode::WMul256 => "WMUL256",
         };
         write!(f, "{}", name)
     }

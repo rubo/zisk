@@ -59,7 +59,7 @@ impl HintProcessorState {
 /// This struct provides methods to parse and process a stream of concatenated
 /// hints, using a dedicated Rayon thread pool for parallel processing while
 /// preserving the original order of results.
-pub struct PrecompileHintsProcessor<HS: StreamSink + Send + Sync + 'static> {
+pub struct HintsProcessor<HS: StreamSink + Send + Sync + 'static> {
     /// The thread pool used for parallel hint processing.
     pool: ThreadPool,
 
@@ -77,7 +77,7 @@ pub struct PrecompileHintsProcessor<HS: StreamSink + Send + Sync + 'static> {
     drainer_thread: ManuallyDrop<std::thread::JoinHandle<()>>,
 }
 
-impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
+impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
     const DEFAULT_NUM_THREADS: usize = 32;
 
     /// Creates a new processor with the default number of threads.
@@ -443,7 +443,7 @@ impl<HS: StreamSink + Send + Sync + 'static> PrecompileHintsProcessor<HS> {
     }
 }
 
-impl<HS: StreamSink + Send + Sync + 'static> Drop for PrecompileHintsProcessor<HS> {
+impl<HS: StreamSink + Send + Sync + 'static> Drop for HintsProcessor<HS> {
     fn drop(&mut self) {
         // Signal drainer thread to shut down
         self.state.shutdown.store(true, Ordering::Release);
@@ -458,7 +458,7 @@ impl<HS: StreamSink + Send + Sync + 'static> Drop for PrecompileHintsProcessor<H
     }
 }
 
-impl<HS: StreamSink + Send + Sync + 'static> StreamProcessor for PrecompileHintsProcessor<HS> {
+impl<HS: StreamSink + Send + Sync + 'static> StreamProcessor for HintsProcessor<HS> {
     fn process(&self, data: &[u64], first_batch: bool) -> Result<bool> {
         self.process_hints(data, first_batch)
     }
@@ -486,8 +486,8 @@ mod tests {
         make_header(ctrl, length)
     }
 
-    fn processor() -> PrecompileHintsProcessor<NullHints> {
-        PrecompileHintsProcessor::with_num_threads(2, NullHints).unwrap()
+    fn processor() -> HintsProcessor<NullHints> {
+        HintsProcessor::with_num_threads(2, NullHints).unwrap()
     }
 
     // Positive tests
@@ -701,7 +701,7 @@ mod tests {
     fn test_stress_throughput() {
         use std::time::Instant;
 
-        let p = PrecompileHintsProcessor::with_num_threads(32, NullHints).unwrap();
+        let p = HintsProcessor::with_num_threads(32, NullHints).unwrap();
 
         // Generate a large batch of hints
         const NUM_HINTS: usize = 100_000;
@@ -734,7 +734,7 @@ mod tests {
     fn test_stress_concurrent_batches() {
         use std::time::Instant;
 
-        let p = PrecompileHintsProcessor::with_num_threads(32, NullHints).unwrap();
+        let p = HintsProcessor::with_num_threads(32, NullHints).unwrap();
 
         const NUM_BATCHES: usize = 1_000;
         const HINTS_PER_BATCH: usize = 100;
@@ -773,7 +773,7 @@ mod tests {
     fn test_stress_with_resets() {
         use std::time::Instant;
 
-        let p = PrecompileHintsProcessor::with_num_threads(32, NullHints).unwrap();
+        let p = HintsProcessor::with_num_threads(32, NullHints).unwrap();
 
         const ITERATIONS: usize = 100;
         const HINTS_PER_ITER: usize = 1_000;

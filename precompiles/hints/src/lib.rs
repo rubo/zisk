@@ -1,3 +1,3 @@
 mod hints_processor;
 
-pub use hints_processor::PrecompileHintsProcessor;
+pub use hints_processor::HintsProcessor;

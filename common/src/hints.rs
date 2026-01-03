@@ -65,6 +65,7 @@ const HINT_DIVREM256: u32 = 0x09;
 const HINT_WPOW256: u32 = 0x0A;
 const HINT_OMUL256: u32 = 0x0B;
 const HINT_WMUL256: u32 = 0x0C;
+const HINT_MODEXP: u32 = 0x0D;
 
 /// Control code variants for stream control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -130,6 +131,8 @@ pub enum BuiltInHint {
     OMul256 = HINT_OMUL256,
     /// Wrapping multiplication of 256-bit integers hint type.
     WMul256 = HINT_WMUL256,
+    /// Modular exponentiation hint type.
+    ModExp = HINT_MODEXP,
 }
 
 impl Display for BuiltInHint {
@@ -144,6 +147,7 @@ impl Display for BuiltInHint {
             BuiltInHint::WPow256 => "WPOW256",
             BuiltInHint::OMul256 => "OMUL256",
             BuiltInHint::WMul256 => "WMUL256",
+            BuiltInHint::ModExp => "MODEXP",
         };
         write!(f, "{} ({:#x})", name, *self as u32)
     }
@@ -163,6 +167,7 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_WPOW256 => Ok(Self::WPow256),
             HINT_OMUL256 => Ok(Self::OMul256),
             HINT_WMUL256 => Ok(Self::WMul256),
+            HINT_MODEXP => Ok(Self::ModExp),
             _ => Err(anyhow::anyhow!("Invalid built-in hint code: {:#x}", value)),
         }
     }
@@ -225,6 +230,7 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::WPow256) => 0x0A,
             HintCode::BuiltIn(BuiltInHint::OMul256) => 0x0B,
             HintCode::BuiltIn(BuiltInHint::WMul256) => 0x0C,
+            HintCode::BuiltIn(BuiltInHint::ModExp) => 0x0D,
             HintCode::Custom(code) => code,
         }
     }

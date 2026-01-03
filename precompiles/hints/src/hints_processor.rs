@@ -244,8 +244,7 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
                 stats.lock().unwrap().entry(hint.hint_code).and_modify(|c| *c += 1).or_insert(1);
             }
 
-            // Check if this is a control code or data hint type
-
+            // Check if this is a control code
             match hint.hint_code {
                 HintCode::Ctrl(CtrlHint::Start) => {
                     // CTRL_START must be the first message of the first batch
@@ -554,6 +553,7 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
             HintCode::BuiltIn(BuiltInHint::WPow256) => Self::process_hint_wpow256(&hint),
             HintCode::BuiltIn(BuiltInHint::OMul256) => Self::process_hint_omul256(&hint),
             HintCode::BuiltIn(BuiltInHint::WMul256) => Self::process_hint_wmul256(&hint),
+            HintCode::BuiltIn(BuiltInHint::ModExp) => Self::process_hint_modexp(&hint),
 
             // Custom hints
             HintCode::Custom(code) => {
@@ -610,6 +610,12 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
     #[inline]
     fn process_hint_wmul256(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::wmul256_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    /// Processes a [`MODEXP`] hint.
+    #[inline]
+    fn process_hint_modexp(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::modexp_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
 }
 

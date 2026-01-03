@@ -47,15 +47,6 @@ pub fn modexp_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     }
     let modulus = &data[modulus_start..modulus_end];
 
-    // println!(
-    //     "\n\
-    //      MODEXP data: {:?}\n\
-    //      MODEXP base: length={} data={:?}\n\
-    //      MODEXP exp : length={} data={:?}\n\
-    //      MODEXP mod : length={} data={:?}",
-    //     data, base_len, base, exp_len, exp, modulus_len, modulus
-    // );
-
     let mut processed_hints = Vec::new();
 
     zisklib::modexp_u64(base, exp, modulus, &mut processed_hints);

@@ -74,8 +74,8 @@ const HINT_WMUL256: u32 = 0x0C;
 const HINT_MODEXP: u32 = 0x0D;
 
 // BN254 precompile hint codes
-const HINT_TO_AFFINE_BN254: u32 = 0x0E;
-const HINT_IS_ON_CURVE_BN254: u32 = 0x0F;
+const HINT_IS_ON_CURVE_BN254: u32 = 0x0E;
+const HINT_TO_AFFINE_BN254: u32 = 0x0F;
 const HINT_ADD_BN254: u32 = 0x10;
 const HINT_MUL_BN254: u32 = 0x11;
 const HINT_TO_AFFINE_TWIST_BN254: u32 = 0x12;
@@ -155,10 +155,10 @@ pub enum BuiltInHint {
     ModExp = HINT_MODEXP,
 
     // BN254 Precompile Hints
-    /// Convert to affine coordinates hint type for BN254 curve.
-    ToAffineBn254 = HINT_TO_AFFINE_BN254,
     /// Check if point is on curve hint type for BN254 curve.
     IsOnCurveBn254 = HINT_IS_ON_CURVE_BN254,
+    /// Convert to affine coordinates hint type for BN254 curve.
+    ToAffineBn254 = HINT_TO_AFFINE_BN254,
     /// Point addition hint type for BN254 curve.
     AddBn254 = HINT_ADD_BN254,
     /// Scalar multiplication hint type for BN254 curve.
@@ -186,8 +186,8 @@ impl Display for BuiltInHint {
             BuiltInHint::OMul256 => "OMUL256",
             BuiltInHint::WMul256 => "WMUL256",
             BuiltInHint::ModExp => "MODEXP",
-            BuiltInHint::ToAffineBn254 => "TO_AFFINE_BN254",
             BuiltInHint::IsOnCurveBn254 => "IS_ON_CURVE_BN254",
+            BuiltInHint::ToAffineBn254 => "TO_AFFINE_BN254",
             BuiltInHint::AddBn254 => "ADD_BN254",
             BuiltInHint::MulBn254 => "MUL_BN254",
             BuiltInHint::ToAffineTwistBn254 => "TO_AFFINE_TWIST_BN254",
@@ -214,8 +214,8 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_OMUL256 => Ok(Self::OMul256),
             HINT_WMUL256 => Ok(Self::WMul256),
             HINT_MODEXP => Ok(Self::ModExp),
-            HINT_TO_AFFINE_BN254 => Ok(Self::ToAffineBn254),
             HINT_IS_ON_CURVE_BN254 => Ok(Self::IsOnCurveBn254),
+            HINT_TO_AFFINE_BN254 => Ok(Self::ToAffineBn254),
             HINT_ADD_BN254 => Ok(Self::AddBn254),
             HINT_MUL_BN254 => Ok(Self::MulBn254),
             HINT_TO_AFFINE_TWIST_BN254 => Ok(Self::ToAffineTwistBn254),
@@ -285,8 +285,8 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::OMul256) => HINT_OMUL256,
             HintCode::BuiltIn(BuiltInHint::WMul256) => HINT_WMUL256,
             HintCode::BuiltIn(BuiltInHint::ModExp) => HINT_MODEXP,
-            HintCode::BuiltIn(BuiltInHint::ToAffineBn254) => HINT_TO_AFFINE_BN254,
             HintCode::BuiltIn(BuiltInHint::IsOnCurveBn254) => HINT_IS_ON_CURVE_BN254,
+            HintCode::BuiltIn(BuiltInHint::ToAffineBn254) => HINT_TO_AFFINE_BN254,
             HintCode::BuiltIn(BuiltInHint::AddBn254) => HINT_ADD_BN254,
             HintCode::BuiltIn(BuiltInHint::MulBn254) => HINT_MUL_BN254,
             HintCode::BuiltIn(BuiltInHint::ToAffineTwistBn254) => HINT_TO_AFFINE_TWIST_BN254,

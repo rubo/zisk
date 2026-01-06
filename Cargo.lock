@@ -6225,7 +6225,9 @@ version = "0.16.0"
 dependencies = [
  "bincode",
  "cfg-if",
+ "elliptic-curve",
  "getrandom 0.2.16",
+ "k256",
  "lazy_static",
  "lib-c",
  "num-bigint",

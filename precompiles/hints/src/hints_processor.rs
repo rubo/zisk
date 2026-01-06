@@ -554,11 +554,11 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
             HintCode::BuiltIn(BuiltInHint::OMul256) => Self::process_hint_omul256(&hint),
             HintCode::BuiltIn(BuiltInHint::WMul256) => Self::process_hint_wmul256(&hint),
             HintCode::BuiltIn(BuiltInHint::ModExp) => Self::process_hint_modexp(&hint),
-            HintCode::BuiltIn(BuiltInHint::ToAffineBn254) => {
-                Self::process_hint_to_affine_bn254(&hint)
-            }
             HintCode::BuiltIn(BuiltInHint::IsOnCurveBn254) => {
                 Self::process_hint_is_on_curve_bn254(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::ToAffineBn254) => {
+                Self::process_hint_to_affine_bn254(&hint)
             }
             HintCode::BuiltIn(BuiltInHint::AddBn254) => Self::process_hint_add_bn254(&hint),
             HintCode::BuiltIn(BuiltInHint::MulBn254) => Self::process_hint_mul_bn254(&hint),
@@ -639,13 +639,13 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
     }
 
     #[inline]
-    fn process_hint_to_affine_bn254(hint: &PrecompileHint) -> Result<Vec<u64>> {
-        ziskos_hints::handlers::to_affine_bn254_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    fn process_hint_is_on_curve_bn254(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::is_on_curve_bn254_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
 
     #[inline]
-    fn process_hint_is_on_curve_bn254(hint: &PrecompileHint) -> Result<Vec<u64>> {
-        ziskos_hints::handlers::is_on_curve_bn254_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    fn process_hint_to_affine_bn254(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::to_affine_bn254_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
 
     #[inline]

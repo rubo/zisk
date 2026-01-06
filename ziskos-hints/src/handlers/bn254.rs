@@ -149,14 +149,20 @@ pub fn pairing_batch_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
 
     // SAFETY: We've validated the length, and the memory layout of &[u64] with length num_points * 8
     // is identical to &[[u64; 8]] with length num_points
-    let g1_points: &[[u64; 8]] = unsafe {
-        std::slice::from_raw_parts(g1_points_slice.as_ptr() as *const [u64; 8], num_points)
+    let g1_points: &[[u64; G1_POINT_SIZE]] = unsafe {
+        std::slice::from_raw_parts(
+            g1_points_slice.as_ptr() as *const [u64; G1_POINT_SIZE],
+            num_points,
+        )
     };
 
     // SAFETY: We've validated the length, and the memory layout of &[u64] with length num_points * 16
     // is identical to &[[u64; 16]] with length num_points
-    let g2_points: &[[u64; 16]] = unsafe {
-        std::slice::from_raw_parts(g2_points_slice.as_ptr() as *const [u64; 16], num_points)
+    let g2_points: &[[u64; G2_POINT_SIZE]] = unsafe {
+        std::slice::from_raw_parts(
+            g2_points_slice.as_ptr() as *const [u64; G2_POINT_SIZE],
+            num_points,
+        )
     };
 
     let mut processed_hints = Vec::new();

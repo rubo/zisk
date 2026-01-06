@@ -1,4 +1,4 @@
-use crate::zisklib;
+use crate::{handlers::validate_hint_length, zisklib};
 
 // Processes a MODEXP hint.
 #[inline]
@@ -36,16 +36,11 @@ pub fn modexp_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     // Parse modulus
     let modulus_len = data[exp_end] as usize;
     let modulus_start = exp_end + 1;
-    let modulus_end = modulus_start + modulus_len;
+    let expected_len = modulus_start + modulus_len;
 
-    if data.len() != modulus_end {
-        return Err(format!(
-            "MODEXP hint data length mismatch (expected {}, got {})",
-            modulus_end,
-            data.len()
-        ));
-    }
-    let modulus = &data[modulus_start..modulus_end];
+    validate_hint_length(data, expected_len, "MODEXP")?;
+
+    let modulus = &data[modulus_start..expected_len];
 
     let mut processed_hints = Vec::new();
 

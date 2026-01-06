@@ -1,9 +1,11 @@
 mod bigint256;
+mod bls318;
 mod bn254;
 mod modexp;
 mod secp256k1;
 
 pub use bigint256::*;
+pub use bls318::*;
 pub use bn254::*;
 pub use modexp::*;
 pub use secp256k1::*;

@@ -545,7 +545,10 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
         custom_handlers: Arc<HashMap<u32, CustomHintHandler>>,
     ) -> Result<Vec<u64>> {
         match hint.hint_code {
+            // EcRecover Hint
             HintCode::BuiltIn(BuiltInHint::EcRecover) => Self::process_hint_ecrecover(&hint),
+
+            // Big Integer Arithmetic Hints
             HintCode::BuiltIn(BuiltInHint::RedMod256) => Self::process_hint_redmod256(&hint),
             HintCode::BuiltIn(BuiltInHint::AddMod256) => Self::process_hint_addmod256(&hint),
             HintCode::BuiltIn(BuiltInHint::MulMod256) => Self::process_hint_mulmod256(&hint),
@@ -553,7 +556,11 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
             HintCode::BuiltIn(BuiltInHint::WPow256) => Self::process_hint_wpow256(&hint),
             HintCode::BuiltIn(BuiltInHint::OMul256) => Self::process_hint_omul256(&hint),
             HintCode::BuiltIn(BuiltInHint::WMul256) => Self::process_hint_wmul256(&hint),
+
+            // Modular Exponentiation Hint
             HintCode::BuiltIn(BuiltInHint::ModExp) => Self::process_hint_modexp(&hint),
+
+            // BN254 hints
             HintCode::BuiltIn(BuiltInHint::IsOnCurveBn254) => {
                 Self::process_hint_is_on_curve_bn254(&hint)
             }
@@ -573,6 +580,45 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
             }
             HintCode::BuiltIn(BuiltInHint::PairingBatchBn254) => {
                 Self::process_hint_pairing_batch_bn254(&hint)
+            }
+
+            // BLS12-381 hints
+            HintCode::BuiltIn(BuiltInHint::MulFp12Bls12_381) => {
+                Self::process_hint_mul_fp_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::DecompressBls12_381) => {
+                Self::process_hint_decompress_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::IsOnCurveBls12_381) => {
+                Self::process_hint_is_on_curve_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::IsOnSubgroupBls12_381) => {
+                Self::process_hint_is_on_subgroup_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::AddBls12_381) => Self::process_hint_add_bls12_381(&hint),
+            HintCode::BuiltIn(BuiltInHint::ScalarMulBls12_381) => {
+                Self::process_hint_scalar_mul_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::DecompressTwistBls12_381) => {
+                Self::process_hint_decompress_twist_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::IsOnCurveTwistBls12_381) => {
+                Self::process_hint_is_on_curve_twist_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::IsOnSubgroupTwistBls12_381) => {
+                Self::process_hint_is_on_subgroup_twist_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::AddTwistBls12_381) => {
+                Self::process_hint_add_twist_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::ScalarMulTwistBls12_381) => {
+                Self::process_hint_scalar_mul_twist_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::MillerLoopBls12_381) => {
+                Self::process_hint_miller_loop_bls12_381(&hint)
+            }
+            HintCode::BuiltIn(BuiltInHint::FinalExpBls12_381) => {
+                Self::process_hint_final_exp_bls12_381(&hint)
             }
 
             // Custom hints
@@ -679,6 +725,80 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
     #[inline]
     fn process_hint_pairing_batch_bn254(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::pairing_batch_bn254_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_mul_fp_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::mul_fp12_bls12_381_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_decompress_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::decompress_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_is_on_curve_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::is_on_curve_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_is_on_subgroup_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::is_on_subgroup_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_add_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::add_bls12_381_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_scalar_mul_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::scalar_mul_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_decompress_twist_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::decompress_twist_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_is_on_curve_twist_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::is_on_curve_twist_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_is_on_subgroup_twist_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::is_on_subgroup_twist_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_add_twist_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::add_twist_bls12_381_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_scalar_mul_twist_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::scalar_mul_twist_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_miller_loop_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::miller_loop_bls12_381_hint(&hint.data)
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
+    #[inline]
+    fn process_hint_final_exp_bls12_381(hint: &PrecompileHint) -> Result<Vec<u64>> {
+        ziskos_hints::handlers::final_exp_bls12_381_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
 }
 

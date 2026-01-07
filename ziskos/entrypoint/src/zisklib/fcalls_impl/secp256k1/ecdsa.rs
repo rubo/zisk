@@ -13,21 +13,21 @@ pub fn fcall_secp256k1_ecdsa_verify(params: &[u64], results: &mut [u64]) -> i64 
     let r: &[u64; 4] = &params[12..16].try_into().unwrap();
     let s: &[u64; 4] = &params[16..20].try_into().unwrap();
 
-    // Get the public key
-    let pk = secp256k1_ecdsa_verify(pk, z, r, s);
+    // Get the curve point P
+    let p = secp256k1_ecdsa_verify(pk, z, r, s);
 
     // Store the result
-    results[0..8].copy_from_slice(&pk);
+    results[0..8].copy_from_slice(&p);
 
     8
 }
 
 fn secp256k1_ecdsa_verify(pk: &[u64; 8], z: &[u64; 4], r: &[u64; 4], s: &[u64; 4]) -> [u64; 8] {
-    // Verifies the signature (r, s) over the message hash z using the public key pk
-    // 1. Compute s_inv = s⁻¹ mod n
-    // 2. Compute u1 = z·s_inv mod n
-    // 3. Compute u2 = r·s_inv mod n
-    // 4. Compute the curve point p = u1·G + u2·PK
+    // Given the public key pk and the signature (r, s) over the message hash z:
+    // 1. Computes s_inv = s⁻¹ mod n
+    // 2. Computes u1 = z·s_inv mod n
+    // 3. Computes u2 = r·s_inv mod n
+    // 4. Computes and returns the curve point p = u1·G + u2·PK
     let s_inv = secp256k1_fn_inv(s);
     let u1 = secp256k1_fn_mul(z, &s_inv);
     let u2 = secp256k1_fn_mul(r, &s_inv);

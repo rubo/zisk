@@ -502,7 +502,7 @@ impl ZiskRom2Asm {
             boc: "/* ".to_string(),
             eoc: " */".to_string(),
             min_program_pc: rom.min_program_pc,
-            precompile_results: true,
+            precompile_results,
             ..Default::default()
         };
 

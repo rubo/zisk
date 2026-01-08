@@ -1,7 +1,5 @@
 use sha2::compress256;
 
-// TODO: Update when new sha2 version is available
-
 #[allow(deprecated)]
 use sha2::digest::generic_array::{typenum::U64, GenericArray};
 

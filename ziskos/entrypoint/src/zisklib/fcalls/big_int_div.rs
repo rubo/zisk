@@ -28,16 +28,20 @@ pub fn fcall_division(
 ) -> (usize, usize) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
-        big_int_div_into(a_value, b_value, &mut quo.to_vec(), &mut rem.to_vec());
-        let len_quo = quo.len();
-        let len_rem = rem.len();
+        let mut quo_vector: Vec<u64> = Vec::new();
+        let mut rem_vector: Vec<u64> = Vec::new();
+        big_int_div_into(a_value, b_value, &mut quo_vector, &mut rem_vector);
+        quo[..quo_vector.len()].copy_from_slice(&quo_vector);
+        rem[..rem_vector.len()].copy_from_slice(&rem_vector);
+        let len_quo = quo_vector.len();
+        let len_rem = rem_vector.len();
         #[cfg(feature = "hints")]
         {
             hints.push(len_quo as u64 + len_rem as u64 + 2);
             hints.push(len_quo as u64);
-            hints.extend_from_slice(quo);
+            hints.extend_from_slice(&quo_vector);
             hints.push(len_rem as u64);
-            hints.extend_from_slice(rem);
+            hints.extend_from_slice(&rem_vector);
         }
 
         (len_quo, len_rem)

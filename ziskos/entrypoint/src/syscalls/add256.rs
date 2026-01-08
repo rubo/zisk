@@ -41,8 +41,8 @@ pub extern "C" fn syscall_add256(
         {
             hints.extend_from_slice(params.c);
         }
+        cout
     }
-    unreachable!();
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall_ret_u64!(0x811, params)
 }

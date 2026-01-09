@@ -885,9 +885,9 @@ extern int _opcode_fcall(struct FcallContext * ctx)
 #endif
 #ifdef DEBUG
 #ifdef ASM_CALL_METRICS
-    if (emu_verbose) printf("_opcode_fcall() counter=%lu\n", asm_call_metrics.fcall_counter);
+    if (emu_verbose) printf("_opcode_fcall(%lu) counter=%lu\n", ctx->function_id, asm_call_metrics.fcall_counter);
 #else
-    if (emu_verbose) printf("_opcode_fcall()\n");
+    if (emu_verbose) printf("_opcode_fcall(%lu)\n", ctx->function_id);
 #endif
 #endif
 

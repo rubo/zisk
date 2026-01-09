@@ -20,8 +20,9 @@
 //! maintaining clarity and modularity in the computation process.
 
 use asm_runner::{
-    shmem_input_name, write_input, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmServices, HintsShmem,
-    MinimalTraces, PreloadedMO, PreloadedMT, PreloadedRH, SharedMemoryWriter, Task, TaskFactory,
+    shmem_input_name, write_input, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmServices, HintsFile,
+    HintsShmem, MinimalTraces, PreloadedMO, PreloadedMT, PreloadedRH, SharedMemoryWriter, Task,
+    TaskFactory,
 };
 use fields::PrimeField64;
 use pil_std_lib::Std;
@@ -79,6 +80,7 @@ enum MinimalTraceExecutionMode {
 }
 
 pub type StreamHintsShmem = ZiskStream<HintsProcessor<HintsShmem>>;
+pub type StreamHintsFile = ZiskStream<HintsProcessor<HintsFile>>;
 
 /// The `ZiskExecutor` struct orchestrates the execution of the ZisK ROM program, managing state
 /// machines, planning, and witness computation.
@@ -88,6 +90,7 @@ pub struct ZiskExecutor<F: PrimeField64> {
 
     /// Pipeline for handling precompile hints.
     hints_stream: Mutex<StreamHintsShmem>,
+    // hints_stream: Mutex<StreamHintsFile>,
 
     /// ZisK ROM, a binary file containing the ZisK program to be executed.
     pub zisk_rom: Arc<ZiskRom>,
@@ -198,6 +201,8 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         // Create hints pipeline with null hints stream initially.
         let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)
             .expect("Failed to create HintsShmem");
+        // let hints_shmem = HintsFile::new("test_modexp_results.bin".to_string())
+        //     .expect("Failed to create HintsFile");
 
         let hints_processor = HintsProcessor::builder(hints_shmem)
             .build()

@@ -1,6 +1,6 @@
 //! Miller Loop for the pairings over BN254
 
-use crate::zisklib::{eq, fcall_bn254_add_line_coeffs, fcall_bn254_dbl_line_coeffs};
+use crate::zisklib::{eq, fcall_bn254_twist_add_line_coeffs, fcall_bn254_twist_dbl_line_coeffs};
 
 use super::{
     fp::{inv_fp_bn254, mul_fp_bn254, neg_fp_bn254},
@@ -52,7 +52,7 @@ pub fn miller_loop_bn254(
     f[0] = 1;
     for &bit in LOOP_LENGTH.iter().skip(1) {
         // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(r)}
-        let (lambda, mu) = fcall_bn254_dbl_line_coeffs(
+        let (lambda, mu) = fcall_bn254_twist_dbl_line_coeffs(
             &r,
             #[cfg(feature = "hints")]
             hints,
@@ -109,7 +109,7 @@ pub fn miller_loop_bn254(
             };
 
             // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(q')}
-            let (lambda, mu) = fcall_bn254_add_line_coeffs(
+            let (lambda, mu) = fcall_bn254_twist_add_line_coeffs(
                 &r,
                 q_prime,
                 #[cfg(feature = "hints")]
@@ -164,7 +164,7 @@ pub fn miller_loop_bn254(
     );
 
     // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(utf(q))}
-    let (lambda, mu) = fcall_bn254_add_line_coeffs(
+    let (lambda, mu) = fcall_bn254_twist_add_line_coeffs(
         &r,
         &q_frob,
         #[cfg(feature = "hints")]
@@ -216,7 +216,7 @@ pub fn miller_loop_bn254(
     );
 
     // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(-utf(utf(q)))}
-    let (lambda, mu) = fcall_bn254_add_line_coeffs(
+    let (lambda, mu) = fcall_bn254_twist_add_line_coeffs(
         &r,
         &q_frob2,
         #[cfg(feature = "hints")]
@@ -299,7 +299,7 @@ pub fn miller_loop_batch_bn254(
             let r = &mut r[i];
 
             // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(r)}
-            let (lambda, mu) = fcall_bn254_dbl_line_coeffs(
+            let (lambda, mu) = fcall_bn254_twist_dbl_line_coeffs(
                 r,
                 #[cfg(feature = "hints")]
                 hints,
@@ -353,7 +353,7 @@ pub fn miller_loop_batch_bn254(
                 };
 
                 // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(q')}
-                let (lambda, mu) = fcall_bn254_add_line_coeffs(
+                let (lambda, mu) = fcall_bn254_twist_add_line_coeffs(
                     r,
                     q_prime,
                     #[cfg(feature = "hints")]
@@ -414,7 +414,7 @@ pub fn miller_loop_batch_bn254(
         );
 
         // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(utf(q))}
-        let (lambda, mu) = fcall_bn254_add_line_coeffs(
+        let (lambda, mu) = fcall_bn254_twist_add_line_coeffs(
             r,
             &q_frob,
             #[cfg(feature = "hints")]
@@ -465,7 +465,7 @@ pub fn miller_loop_batch_bn254(
         );
 
         // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(-utf(utf(q)))}
-        let (lambda, mu) = fcall_bn254_add_line_coeffs(
+        let (lambda, mu) = fcall_bn254_twist_add_line_coeffs(
             r,
             &q_frob2,
             #[cfg(feature = "hints")]

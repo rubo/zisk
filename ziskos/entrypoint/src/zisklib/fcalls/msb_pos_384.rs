@@ -1,4 +1,5 @@
 use cfg_if::cfg_if;
+
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
@@ -8,6 +9,7 @@ cfg_if! {
         use crate::zisklib::fcalls_impl::msb_pos_384::msb_pos_384;
     }
 }
+
 #[allow(unused_variables)]
 pub fn fcall_msb_pos_384(
     x: &[u64; 6],

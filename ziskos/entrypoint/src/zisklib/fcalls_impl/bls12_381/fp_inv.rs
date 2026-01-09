@@ -2,10 +2,10 @@ use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::Zero;
 
-use super::utils::{biguint_from_u64_digits, n_u64_digits_from_biguint};
+use crate::zisklib::fcalls_impl::utils::{biguint_from_u64_digits, n_u64_digits_from_biguint};
 
 lazy_static! {
-    pub static ref P: BigUint = BigUint::parse_bytes(
+    pub(crate) static ref P: BigUint = BigUint::parse_bytes(
         b"1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab",
         16
     )
@@ -31,10 +31,7 @@ pub(crate) fn bls12_381_fp_inv(a: &[u64; 6]) -> [u64; 6] {
     let inv = a_big.modinv(&P);
     match inv {
         Some(inverse) => n_u64_digits_from_biguint::<6>(&inverse),
-        None => {
-            // Handle the case where the inverse does not exist
-            panic!("Inverse does not exist");
-        }
+        None => panic!("Inverse does not exist"),
     }
 }
 

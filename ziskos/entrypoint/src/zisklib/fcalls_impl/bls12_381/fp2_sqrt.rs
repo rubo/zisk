@@ -2,10 +2,11 @@ use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
+use crate::zisklib::fcalls_impl::utils::{biguint_from_u64_digits, u64_digits_from_biguint};
+
 use super::{
-    bls12_381_fp2_inv::{bls12_381_fp2_mul, bls12_381_fp2_square},
-    bls12_381_fp_inv::{bls12_381_fp_add, bls12_381_fp_neg},
-    utils::{biguint_from_u64_digits, n_u64_digits_from_biguint},
+    fp2_inv::{bls12_381_fp2_mul, bls12_381_fp2_square},
+    fp_inv::{bls12_381_fp_add, bls12_381_fp_neg},
 };
 
 const ONE: [u64; 12] = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -27,7 +28,7 @@ const I: [u64; 12] = [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]; // 0 + 1*u
 const NQR: [u64; 12] = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]; // 1 + 1*u, a known non-quadratic residue in Fp2
 
 lazy_static! {
-    pub static ref P: BigUint = BigUint::parse_bytes(
+    pub(crate) static ref P: BigUint = BigUint::parse_bytes(
         b"1A0111EA397FE69A4B1BA7B6434BACD764774B84F38512BF6730D2A0F6B0F6241EABFFFEB153FFFFB9FEFFFFFFFFAAAB",
         16
     )

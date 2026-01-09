@@ -1,22 +1,21 @@
-//! fcall_secp256k1_fp_inv free call
 use cfg_if::cfg_if;
+
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
-        use super::FCALL_SECP256K1_FP_INV_ID;
+        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param, zisklib::FCALL_SECP256K1_FN_INV_ID};
     } else {
-        use lib_c::secp256k1_fp_inv_c;
+        use lib_c::secp256k1_fn_inv_c;
     }
 }
 
-/// Executes the multiplicative inverse computation over the base field of the `secp256k1` curve.
+/// Executes the multiplicative inverse computation over the scalar field of the `secp256k1` curve.
 ///
-/// Both `fcall_secp256k1_fp_inv` and `fcall2_secp256k1_fp_inv` perform an inversion of a 256-bit field element,
-/// represented as an array of four `u64` values.
+/// Both `fcall_secp256k1_fn_inv` and `fcall2_secp256k1_fn_inv` perform an inversion of a 256-bit
+/// scalar field element, represented as an array of four `u64` values.
 ///
-/// - `fcall_secp256k1_fp_inv` performs the inversion and **returns the result directly**.
-/// - `fcall2_secp256k1_fp_inv` performs the inversion but does **not return the result immediately**.
+/// - `fcall_secp256k1_fn_inv` performs the inversion and **returns the result directly**.
+/// - `fcall2_secp256k1_fn_inv` performs the inversion but does **not return the result immediately**.
 ///   You must explicitly retrieve the result using four (4) `fcall_get` instructions.
 ///
 /// ### Safety
@@ -26,14 +25,14 @@ cfg_if! {
 /// Note that this is a *free-input call*, meaning the Zisk VM does not automatically verify the correctness
 /// of the result. It is the caller's responsibility to ensure it.
 #[allow(unused_variables)]
-pub fn fcall_secp256k1_fp_inv(
+pub fn fcall_secp256k1_fn_inv(
     p_value: &[u64; 4],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> [u64; 4] {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
         let mut result: [u64; 4] = [0; 4];
-        secp256k1_fp_inv_c(p_value, &mut result);
+        secp256k1_fn_inv_c(p_value, &mut result);
         #[cfg(feature = "hints")]
         {
             hints.push(result.len() as u64);
@@ -44,17 +43,17 @@ pub fn fcall_secp256k1_fp_inv(
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     {
         ziskos_fcall_param!(p_value, 4);
-        ziskos_fcall!(FCALL_SECP256K1_FP_INV_ID);
+        ziskos_fcall!(FCALL_SECP256K1_FN_INV_ID);
         [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()]
     }
 }
 
 #[allow(unused_variables)]
-pub fn fcall2_secp256k1_fp_inv(p_value: &[u64; 4], #[cfg(feature = "hints")] hints: &mut Vec<u64>) {
+pub fn fcall2_secp256k1_fn_inv(p_value: &[u64; 4], #[cfg(feature = "hints")] hints: &mut Vec<u64>) {
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
         let mut result: [u64; 4] = [0; 4];
-        secp256k1_fp_inv_c(p_value, &mut result);
+        secp256k1_fn_inv_c(p_value, &mut result);
         #[cfg(feature = "hints")]
         {
             hints.push(result.len() as u64);
@@ -64,6 +63,6 @@ pub fn fcall2_secp256k1_fp_inv(p_value: &[u64; 4], #[cfg(feature = "hints")] hin
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     {
         ziskos_fcall_param!(p_value, 4);
-        ziskos_fcall!(FCALL_SECP256K1_FP_INV_ID);
+        ziskos_fcall!(FCALL_SECP256K1_FN_INV_ID);
     }
 }

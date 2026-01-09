@@ -1,6 +1,8 @@
 //! Miller loop for BLS12-381
 
-use crate::zisklib::{eq, fcall_bls12_381_add_line_coeffs, fcall_bls12_381_dbl_line_coeffs};
+use crate::zisklib::{
+    eq, fcall_bls12_381_twist_add_line_coeffs, fcall_bls12_381_twist_dbl_line_coeffs,
+};
 
 use super::{
     constants::{EXT_U_INV, X_ABS_BIN_BE},
@@ -62,7 +64,7 @@ pub fn miller_loop_bls12_381(
     };
     for &bit in X_ABS_BIN_BE.iter().skip(1) {
         // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(r)}
-        let (lambda, mu) = fcall_bls12_381_dbl_line_coeffs(
+        let (lambda, mu) = fcall_bls12_381_twist_dbl_line_coeffs(
             &r,
             #[cfg(feature = "hints")]
             hints,
@@ -109,7 +111,7 @@ pub fn miller_loop_bls12_381(
 
         if bit == 1 {
             // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(q)}
-            let (lambda, mu) = fcall_bls12_381_add_line_coeffs(
+            let (lambda, mu) = fcall_bls12_381_twist_add_line_coeffs(
                 &r,
                 q,
                 #[cfg(feature = "hints")]
@@ -224,7 +226,7 @@ pub fn miller_loop_batch_bls12_381(
             let r = &mut r[i];
 
             // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(r)}
-            let (lambda, mu) = fcall_bls12_381_dbl_line_coeffs(
+            let (lambda, mu) = fcall_bls12_381_twist_dbl_line_coeffs(
                 r,
                 #[cfg(feature = "hints")]
                 hints,
@@ -269,7 +271,7 @@ pub fn miller_loop_batch_bls12_381(
                 let q = &g2_points[i];
 
                 // Hint the coefficients (𝜆,𝜇) of the line l_{twist(r),twist(q')}
-                let (lambda, mu) = fcall_bls12_381_add_line_coeffs(
+                let (lambda, mu) = fcall_bls12_381_twist_add_line_coeffs(
                     r,
                     q,
                     #[cfg(feature = "hints")]

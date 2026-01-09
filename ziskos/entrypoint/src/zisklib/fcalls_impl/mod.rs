@@ -1,20 +1,12 @@
 pub mod big_int256_div;
 pub mod big_int_div;
 pub mod bin_decomp;
-pub mod bls12_381_fp2_inv;
-pub mod bls12_381_fp2_sqrt;
-pub mod bls12_381_fp_inv;
-pub mod bls12_381_fp_sqrt;
-pub mod bls12_381_twist;
-pub mod bn254_fp;
-pub mod bn254_fp2;
-pub mod bn254_twist;
+pub mod bls12_381;
+pub mod bn254;
 pub mod msb_pos_256;
 pub mod msb_pos_384;
 mod proxy;
-mod secp256k1_fn_inv;
-mod secp256k1_fp_inv;
-pub mod secp256k1_fp_sqrt;
+pub mod secp256k1;
 mod utils;
 
 pub use proxy::*;

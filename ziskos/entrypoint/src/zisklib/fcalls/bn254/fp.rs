@@ -1,12 +1,11 @@
-//! fcall_bn254_fp_inv free call
 use cfg_if::cfg_if;
+
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
-        use super::FCALL_BN254_FP_INV_ID;
+        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param, zisklib::FCALL_BN254_FP_INV_ID};
     } else {
-        use crate::zisklib::fcalls_impl::bn254_fp::bn254_fp_inv;
+        use crate::zisklib::fcalls_impl::bn254::bn254_fp_inv;
     }
 }
 

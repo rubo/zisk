@@ -921,7 +921,12 @@ int BigIntDivCtx (
         ctx->result[2 + quotient_size + i] = 0;
     }
 
-    return 2 + quotient_size + remainder_size;
+    uint64_t total_size = 2 + quotient_size + remainder_size;
+    assert(total_size < FCALL_RESULT_MAX_SIZE);
+
+    ctx->result_size = total_size;
+
+    return total_size;
 }
 
 /************************/
@@ -1015,6 +1020,8 @@ int BLS12_381Fp2SqrtCtx (
         );
         if (result != 0) return result;
     }
+
+    ctx->result_size = 13;
     
     return 0;
 }

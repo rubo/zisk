@@ -8053,7 +8053,7 @@ impl ZiskRom2Asm {
         );
         *code += &format!(
             "\tmov {}, [{} + {}*8] {}\n",
-            REG_AUX,
+            REG_VALUE,
             REG_ADDRESS,
             REG_AUX,
             ctx.comment_str("value = precompile_results[0]")
@@ -8061,10 +8061,10 @@ impl ZiskRom2Asm {
 
         // Copy the ui64 element from precompile_results to the destination address
         *code += &format!(
-            "\tmov {}, [{}] {}\n",
+            "\tmov {}, {} {}\n",
             reg,
-            REG_AUX,
-            ctx.comment_str("value = precompile_results[0]")
+            REG_VALUE,
+            ctx.comment_str("reg = precompile_results[0]")
         );
 
         // Increase precompile_read

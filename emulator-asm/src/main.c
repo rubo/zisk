@@ -2005,6 +2005,9 @@ void client_write_precompile_results (void)
 
             // Initialize precompile written address
             *precompile_written_address = precompile_data_size >> 3; // in u64s
+
+            //printf("Posting sem_prec_avail() precompile_written=%lu precompile_read=%lu\n", *precompile_written_address, *precompile_read_address);
+            sem_post(sem_prec_avail);
         }
         else if (precompile_write_mode == PrecompileWriteMode_OnePrecAtATime)
         {

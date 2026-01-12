@@ -52,6 +52,8 @@ pub use shmem_reader::*;
 pub use shmem_utils::*;
 pub use shmem_writer::*;
 
+const SEM_CHUNK_DONE_WAIT_DURATION: std::time::Duration = std::time::Duration::from_secs(10);
+
 fn build_name(
     prefix: &str,
     port: u16,

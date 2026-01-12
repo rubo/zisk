@@ -11,7 +11,7 @@ use tracing::{error, info};
 
 use crate::{
     sem_chunk_done_name, shmem_output_name, AsmMTChunk, AsmMTHeader, AsmRunError, AsmService,
-    AsmServices, AsmSharedMemory,
+    AsmServices, AsmSharedMemory, SEM_CHUNK_DONE_WAIT_DURATION,
 };
 
 use anyhow::{Context, Result};
@@ -133,7 +133,7 @@ impl AsmRunnerMT {
         };
 
         let exit_code = loop {
-            match sem_chunk_done.timed_wait(Duration::from_secs(10)) {
+            match sem_chunk_done.timed_wait(SEM_CHUNK_DONE_WAIT_DURATION) {
                 Ok(()) => {
                     #[cfg(feature = "stats")]
                     {

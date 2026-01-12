@@ -3,7 +3,7 @@ use zisk_common::ExecutorStatsHandle;
 
 use crate::{
     sem_chunk_done_name, shmem_output_name, AsmRHData, AsmRHHeader, AsmRunError, AsmService,
-    AsmServices, AsmSharedMemory,
+    AsmServices, AsmSharedMemory, SEM_CHUNK_DONE_WAIT_DURATION,
 };
 use anyhow::{Context, Result};
 use named_sem::NamedSemaphore;
@@ -86,7 +86,7 @@ impl AsmRunnerRH {
         asm_services.send_rom_histogram_request(max_steps)?;
 
         loop {
-            match sem_chunk_done.timed_wait(Duration::from_secs(10)) {
+            match sem_chunk_done.timed_wait(SEM_CHUNK_DONE_WAIT_DURATION) {
                 Ok(()) => {
                     // Synchronize with memory changes from the C++ side
                     fence(Ordering::Acquire);

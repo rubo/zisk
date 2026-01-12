@@ -547,7 +547,13 @@ pub fn secp256k1_triple_scalar_mul_with_g(
     // From here on, at least one of r,s,t is greater than 1
 
     // Hint the maximum length between the binary representations of r,s and t
-    let (max_limb, max_bit) = fcall_msb_pos_256_3(r, s, t);
+    let (max_limb, max_bit) = fcall_msb_pos_256_3(
+        r,
+        s,
+        t,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Perform the loop, based on the binary representation of r,s and t
 

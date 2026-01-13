@@ -14,6 +14,8 @@ pub fn is_on_curve_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
 
     zisklib::is_on_curve_bn254(p, &mut processed_hints);
 
+    //println!("is_on_curve_bn254_hint() processed_hints len={:x}", processed_hints.len());
+
     Ok(processed_hints)
 }
 
@@ -30,6 +32,8 @@ pub fn to_affine_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     let mut processed_hints = Vec::new();
 
     zisklib::to_affine_bn254(p, &mut processed_hints);
+
+    //println!("to_affine_bn254_hint() processed_hints len={:x}", processed_hints.len());
 
     Ok(processed_hints)
 }
@@ -49,6 +53,8 @@ pub fn add_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
 
     zisklib::add_bn254(p1, p2, &mut processed_hints);
 
+    //println!("add_bn254_hint() processed_hints len={:x}", processed_hints.len());
+
     Ok(processed_hints)
 }
 
@@ -67,6 +73,8 @@ pub fn mul_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
 
     zisklib::mul_bn254(p, k, &mut processed_hints);
 
+    //println!("mul_bn254_hint() processed_hints len={:x}", processed_hints.len());
+
     Ok(processed_hints)
 }
 
@@ -83,6 +91,8 @@ pub fn to_affine_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     let mut processed_hints = Vec::new();
 
     zisklib::to_affine_twist_bn254(p, &mut processed_hints);
+
+    //println!("to_affine_twist_bn254_hint() processed_hints len={:x}", processed_hints.len());
 
     Ok(processed_hints)
 }
@@ -101,6 +111,8 @@ pub fn is_on_curve_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
 
     zisklib::is_on_curve_twist_bn254(p, &mut processed_hints);
 
+    //println!("is_on_curve_twist_bn254_hint() processed_hints len={:x}", processed_hints.len());
+
     Ok(processed_hints)
 }
 
@@ -116,7 +128,9 @@ pub fn is_on_subgroup_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String>
 
     let mut processed_hints = Vec::new();
 
-    zisklib::is_on_curve_twist_bn254(p, &mut processed_hints);
+    zisklib::is_on_subgroup_twist_bn254(p, &mut processed_hints);
+
+    //println!("is_on_subgroup_twist_bn254_hint() processed_hints len={:x}", processed_hints.len());
 
     Ok(processed_hints)
 }
@@ -168,6 +182,8 @@ pub fn pairing_batch_bn254_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     let mut processed_hints = Vec::new();
 
     zisklib::pairing_batch_bn254(g1_points, g2_points, &mut processed_hints);
+
+    //println!("pairing_batch_bn254_hint() processed_hints len={:x}", processed_hints.len());
 
     Ok(processed_hints)
 }

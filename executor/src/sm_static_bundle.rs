@@ -8,6 +8,7 @@ use precomp_arith_eq_384::ArithEq384Instance;
 use precomp_arith_eq_384::ArithEq384Manager;
 use precomp_big_int::{Add256Instance, Add256Manager};
 use precomp_keccakf::{KeccakfInstance, KeccakfManager};
+use precomp_poseidon2::{Poseidon2Instance, Poseidon2Manager};
 use precomp_sha256f::{Sha256fInstance, Sha256fManager};
 use proofman_common::ProofCtx;
 use sm_arith::{ArithFullInstance, ArithSM};
@@ -23,8 +24,8 @@ use zisk_pil::ADD_256_AIR_IDS;
 use zisk_pil::{
     ARITH_AIR_IDS, ARITH_EQ_384_AIR_IDS, ARITH_EQ_AIR_IDS, BINARY_ADD_AIR_IDS, BINARY_AIR_IDS,
     BINARY_EXTENSION_AIR_IDS, INPUT_DATA_AIR_IDS, KECCAKF_AIR_IDS, MEM_AIR_IDS, MEM_ALIGN_AIR_IDS,
-    MEM_ALIGN_BYTE_AIR_IDS, MEM_ALIGN_READ_BYTE_AIR_IDS, MEM_ALIGN_WRITE_BYTE_AIR_IDS, ROM_AIR_IDS,
-    ROM_DATA_AIR_IDS, SHA_256_F_AIR_IDS, ZISK_AIRGROUP_ID,
+    MEM_ALIGN_BYTE_AIR_IDS, MEM_ALIGN_READ_BYTE_AIR_IDS, MEM_ALIGN_WRITE_BYTE_AIR_IDS,
+    POSEIDON_2_AIR_IDS, ROM_AIR_IDS, ROM_DATA_AIR_IDS, SHA_256_F_AIR_IDS, ZISK_AIRGROUP_ID,
 };
 
 use crate::StaticDataBus;
@@ -40,6 +41,7 @@ pub enum StateMachines<F: PrimeField64> {
     ArithSM(Arc<ArithSM<F>>),
     KeccakfManager(Arc<KeccakfManager<F>>),
     Sha256fManager(Arc<Sha256fManager<F>>),
+    Poseidon2Manager(Arc<Poseidon2Manager<F>>),
     ArithEqManager(Arc<ArithEqManager<F>>),
     ArithEq384Manager(Arc<ArithEq384Manager<F>>),
     Add256Manager(Arc<Add256Manager<F>>),
@@ -54,9 +56,10 @@ impl<F: PrimeField64> StateMachines<F> {
             StateMachines::ArithSM(_) => 3,
             StateMachines::KeccakfManager(_) => 4,
             StateMachines::Sha256fManager(_) => 5,
-            StateMachines::ArithEqManager(_) => 6,
-            StateMachines::ArithEq384Manager(_) => 7,
-            StateMachines::Add256Manager(_) => 8,
+            StateMachines::Poseidon2Manager(_) => 6,
+            StateMachines::ArithEqManager(_) => 7,
+            StateMachines::ArithEq384Manager(_) => 8,
+            StateMachines::Add256Manager(_) => 9,
         }
     }
 
@@ -74,6 +77,7 @@ impl<F: PrimeField64> StateMachines<F> {
             StateMachines::ArithSM(sm) => (**sm).build_planner(),
             StateMachines::KeccakfManager(sm) => (**sm).build_planner(),
             StateMachines::Sha256fManager(sm) => (**sm).build_planner(),
+            StateMachines::Poseidon2Manager(sm) => (**sm).build_planner(),
             StateMachines::ArithEqManager(sm) => (**sm).build_planner(),
             StateMachines::ArithEq384Manager(sm) => (**sm).build_planner(),
             StateMachines::Add256Manager(sm) => (**sm).build_planner(),
@@ -90,6 +94,7 @@ impl<F: PrimeField64> StateMachines<F> {
             StateMachines::ArithSM(sm) => (**sm).configure_instances(pctx, plans),
             StateMachines::KeccakfManager(sm) => (**sm).configure_instances(pctx, plans),
             StateMachines::Sha256fManager(sm) => (**sm).configure_instances(pctx, plans),
+            StateMachines::Poseidon2Manager(sm) => (**sm).configure_instances(pctx, plans),
             StateMachines::ArithEqManager(sm) => (**sm).configure_instances(pctx, plans),
             StateMachines::ArithEq384Manager(sm) => (**sm).configure_instances(pctx, plans),
             StateMachines::Add256Manager(sm) => (**sm).configure_instances(pctx, plans),
@@ -104,6 +109,7 @@ impl<F: PrimeField64> StateMachines<F> {
             StateMachines::ArithSM(sm) => (**sm).build_instance(ictx),
             StateMachines::KeccakfManager(sm) => (**sm).build_instance(ictx),
             StateMachines::Sha256fManager(sm) => (**sm).build_instance(ictx),
+            StateMachines::Poseidon2Manager(sm) => (**sm).build_instance(ictx),
             StateMachines::ArithEqManager(sm) => (**sm).build_instance(ictx),
             StateMachines::ArithEq384Manager(sm) => (**sm).build_instance(ictx),
             StateMachines::Add256Manager(sm) => (**sm).build_instance(ictx),
@@ -183,6 +189,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
         let mut arith_counter = None;
         let mut keccakf_counter = None;
         let mut sha256f_counter = None;
+        let mut poseidon2_counter = None;
         let mut arith_eq_counter = None;
         let mut arith_eq_384_counter = None;
         let mut add256_counter = None;
@@ -208,6 +215,10 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                 StateMachines::Sha256fManager(sha256_sm) => {
                     sha256f_counter = Some((sm.type_id(), sha256_sm.build_sha256f_counter()));
                 }
+                StateMachines::Poseidon2Manager(poseidon2_sm) => {
+                    poseidon2_counter =
+                        Some((sm.type_id(), poseidon2_sm.build_poseidon2_counter()));
+                }
                 StateMachines::ArithEqManager(arith_eq_sm) => {
                     arith_eq_counter = Some((sm.type_id(), arith_eq_sm.build_arith_eq_counter()));
                 }
@@ -229,6 +240,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
             arith_counter.expect("Arith counter not found"),
             keccakf_counter.expect("Keccakf counter not found"),
             sha256f_counter.expect("Sha256f counter not found"),
+            poseidon2_counter.expect("Poseidon2 counter not found"),
             arith_eq_counter.expect("ArithEq counter not found"),
             arith_eq_384_counter.expect("ArithEq384 counter not found"),
             add256_counter.expect("Add256 counter not found"),
@@ -259,6 +271,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                 let mut arith_collectors = Vec::new();
                 let mut keccakf_collectors = Vec::new();
                 let mut sha256f_collectors = Vec::new();
+                let mut poseidon2_collectors = Vec::new();
                 let mut arith_eq_collectors = Vec::new();
                 let mut arith_eq_384_collectors = Vec::new();
                 let mut add256_collectors = Vec::new();
@@ -373,6 +386,15 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                                 sha256f_instance.build_sha256f_collector(ChunkId(chunk_id));
                             sha256f_collectors.push((*global_idx, sha256f_collector));
                         }
+                        air_id if air_id == POSEIDON_2_AIR_IDS[0] => {
+                            let poseidon2_instance = secn_instance
+                                .as_any()
+                                .downcast_ref::<Poseidon2Instance<F>>()
+                                .unwrap();
+                            let poseidon2_collector =
+                                poseidon2_instance.build_poseidon2_collector(ChunkId(chunk_id));
+                            poseidon2_collectors.push((*global_idx, poseidon2_collector));
+                        }
                         air_id if air_id == ARITH_EQ_AIR_IDS[0] => {
                             let arith_eq_instance = secn_instance
                                 .as_any()
@@ -416,6 +438,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                 let mut arith_eq_384_inputs_generator = None;
                 let mut keccakf_inputs_generator = None;
                 let mut sha256f_inputs_generator = None;
+                let mut poseidon2_inputs_generator = None;
                 let mut arith_inputs_generator = None;
                 let mut add256_inputs_generator = None;
                 for (_, sm) in self.sm.values() {
@@ -430,6 +453,10 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                         StateMachines::Sha256fManager(sha256_sm) => {
                             sha256f_inputs_generator =
                                 Some(sha256_sm.build_sha256f_input_generator());
+                        }
+                        StateMachines::Poseidon2Manager(poseidon2_sm) => {
+                            poseidon2_inputs_generator =
+                                Some(poseidon2_sm.build_poseidon2_input_generator());
                         }
                         StateMachines::ArithEqManager(arith_eq_sm) => {
                             arith_eq_inputs_generator =
@@ -456,6 +483,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                     arith_collectors,
                     keccakf_collectors,
                     sha256f_collectors,
+                    poseidon2_collectors,
                     arith_eq_collectors,
                     arith_eq_384_collectors,
                     add256_collectors,
@@ -464,6 +492,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                     arith_eq_384_inputs_generator.expect("ArithEq384 input generator not found"),
                     keccakf_inputs_generator.expect("KeccakF input generator not found"),
                     sha256f_inputs_generator.expect("SHA256F input generator not found"),
+                    poseidon2_inputs_generator.expect("Poseidon2 input generator not found"),
                     arith_inputs_generator.expect("Arith input generator not found"),
                     add256_inputs_generator.expect("Add256 input generator not found"),
                 );

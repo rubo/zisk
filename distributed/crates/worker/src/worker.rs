@@ -699,7 +699,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         ProofOptions {
             verify_constraints: false,
             aggregation: false,
-            final_snark: false,
+            perf: false,
             verify_proofs: true,
             save_proofs: true,
             test_mode: false,
@@ -713,7 +713,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         ProofOptions {
             verify_constraints: false,
             aggregation: true,
-            final_snark: false,
+            perf: false,
             verify_proofs: false,
             save_proofs: false,
             test_mode: false,
@@ -728,7 +728,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             verify_constraints: agg_params.verify_constraints,
             aggregation: agg_params.aggregation,
             rma: agg_params.rma,
-            final_snark: agg_params.final_snark,
+            perf: false,
             verify_proofs: agg_params.verify_proofs,
             save_proofs: agg_params.save_proofs,
             test_mode: agg_params.test_mode,

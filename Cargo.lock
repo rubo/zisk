@@ -1039,7 +1039,6 @@ dependencies = [
 [[package]]
 name = "curves"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "fields",
  "num-bigint",
@@ -1343,6 +1342,7 @@ dependencies = [
  "precomp-arith-eq-384",
  "precomp-big-int",
  "precomp-keccakf",
+ "precomp-poseidon2",
  "precomp-sha256f",
  "proofman",
  "proofman-common",
@@ -1382,8 +1382,8 @@ dependencies = [
 [[package]]
 name = "fields"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
+ "cfg-if",
  "num-bigint",
  "paste",
  "serde",
@@ -2700,7 +2700,6 @@ dependencies = [
 [[package]]
 name = "pil-std-lib"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "colored",
  "fields",
@@ -2974,6 +2973,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "precomp-poseidon2"
+version = "0.16.0"
+dependencies = [
+ "fields",
+ "mem-common",
+ "pil-std-lib",
+ "precompiles-common",
+ "proofman",
+ "proofman-common",
+ "proofman-macros",
+ "proofman-util",
+ "rayon",
+ "sha2",
+ "sm-mem",
+ "tracing",
+ "zisk-common",
+ "zisk-core",
+ "zisk-pil",
+]
+
+[[package]]
 name = "precomp-sha256f"
 version = "0.16.0"
 dependencies = [
@@ -3049,7 +3069,6 @@ dependencies = [
 [[package]]
 name = "proofman"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "blake3",
  "borsh",
@@ -3084,7 +3103,6 @@ dependencies = [
 [[package]]
 name = "proofman-common"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "borsh",
  "colored",
@@ -3115,7 +3133,6 @@ dependencies = [
 [[package]]
 name = "proofman-hints"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "fields",
  "proofman-common",
@@ -3127,7 +3144,6 @@ dependencies = [
 [[package]]
 name = "proofman-macros"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3138,7 +3154,6 @@ dependencies = [
 [[package]]
 name = "proofman-starks-lib-c"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "crossbeam-channel",
  "tracing",
@@ -3147,7 +3162,6 @@ dependencies = [
 [[package]]
 name = "proofman-util"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "colored",
  "fields",
@@ -3158,7 +3172,6 @@ dependencies = [
 [[package]]
 name = "proofman-verifier"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "bytemuck",
  "fields",
@@ -5383,7 +5396,6 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 [[package]]
 name = "witness"
 version = "0.16.0"
-source = "git+https://github.com/0xPolygonHermez/pil2-proofman.git?branch=pre-develop-0.16.0#33f8260fdb92090280e6f09bffdef21cb38128de"
 dependencies = [
  "colored",
  "fields",
@@ -5742,6 +5754,7 @@ dependencies = [
  "precomp-arith-eq-384",
  "precomp-big-int",
  "precomp-keccakf",
+ "precomp-poseidon2",
  "precomp-sha256f",
  "proofman",
  "proofman-common",

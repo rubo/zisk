@@ -199,6 +199,7 @@ impl ZiskAsmContext {
             zisk_op,
             ZiskOp::Keccak
                 | ZiskOp::Sha256
+                | ZiskOp::Poseidon2
                 | ZiskOp::Arith256
                 | ZiskOp::Arith256Mod
                 | ZiskOp::Secp256k1Add
@@ -506,6 +507,7 @@ impl ZiskRom2Asm {
         *code += ".extern print_step\n";
         *code += ".extern opcode_keccak\n";
         *code += ".extern opcode_sha256\n";
+        *code += ".extern opcode_poseidon2\n";
         *code += ".extern opcode_arith256\n";
         *code += ".extern opcode_arith256_mod\n";
         *code += ".extern opcode_secp256k1_add\n";
@@ -5153,6 +5155,9 @@ impl ZiskRom2Asm {
                     &format!("\txor {}, {} {}\n", REG_C, REG_C, ctx.comment_str("SHA256: c = 0"));
                 ctx.c.is_saved = true;
                 ctx.flag_is_always_zero = true;
+            }
+            ZiskOp::Poseidon2 => {
+                // TODO
             }
             ZiskOp::PubOut => {
                 assert!(ctx.store_b_in_c);

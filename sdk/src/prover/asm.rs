@@ -236,7 +236,6 @@ impl AsmCoreProver {
             custom_commits_map,
             verify_constraints,
             aggregation,
-            final_snark,
             gpu_params,
             verbose.into(),
             witness_lib.get_packed_info(),

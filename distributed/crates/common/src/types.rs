@@ -441,7 +441,6 @@ pub struct AggregationParams {
     pub verify_constraints: bool,
     pub aggregation: bool,
     pub rma: bool,
-    pub final_snark: bool,
     pub verify_proofs: bool,
     pub save_proofs: bool,
     pub test_mode: bool,

@@ -29,7 +29,7 @@ pub fn secp256k1_ecdsa_verify_hint(data: &[u64]) -> Result<Vec<u64>, String> {
         return Err("Error in secp256k1_ecdsa_verify: point at infinity".to_string());
     }
 
-    let pk = unsafe { &*(data[X_Y_OFFSET] as *const [u64; X_Y_SIZE]) };
+    let pk: &[u64; X_Y_SIZE] = data[X_Y_OFFSET..X_Y_OFFSET + X_Y_SIZE].try_into().unwrap();
 
     // Extract z (32 bytes), and sig (64 bytes)
     let z_bytes: &[u8; 32] = unsafe { &*(data[Z_OFFSET..SIG_OFFSET].as_ptr() as *const [u8; 32]) };

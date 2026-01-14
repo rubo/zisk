@@ -27,6 +27,8 @@ require "dma/pil/dma_pre_post_table.pil"
 require "dma/pil/dma_64_aligned.pil"
 require "dma/pil/dma_unaligned.pil"
 
+enable_range_stats();
+
 proofval enable_input_data;
 enable_input_data * (1 - enable_input_data);
 

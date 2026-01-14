@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "2d7998bef15b4649190a77286431f9988c2c47bfa43e76da2969871654dfea59";
+pub const PILOUT_HASH: &str = "b7f913482b89b755b4830f0fe02af1f8c04fe783376b10489324799d42021761";
 
 pub const MERKLE_TREE_ARITY: u64 = 4;
 
@@ -205,7 +205,7 @@ trace_row!(MemFixedRow<F> {
 pub type MemFixed<F> = GenericTrace<MemFixedRow<F>, 4194304, 0, 6>;
 
 trace_row!(MemTraceRow<F> {
- addr:ubit(29), step:ubit(38), sel:bit, addr_changes:bit, step_dual:ubit(38), sel_dual:bit, value:[u32; 2], wr:bit, previous_step:ubit(40), increment:[ubit(18); 2], read_same_addr:bit,
+ addr:ubit(29), step:ubit(38), sel:bit, addr_changes:bit, step_dual:ubit(38), sel_dual:bit, value:[u32; 2], wr:bit, previous_step:ubit(40), l_increment:ubit(22), h_increment:u16, read_same_addr:bit,
 });
 pub type MemTrace<F> = GenericTrace<MemTraceRow<F>, 4194304, 0, 6>;
 
@@ -424,12 +424,12 @@ pub type Sha256fTracePacked<F> = GenericTrace<Sha256fTraceRowPacked<F>, 262144, 
 
 
 trace_row!(SpecifiedRangesFixedRow<F> {
- RANGE: [F; 33], __L1__: F,
+ RANGE: [F; 32], __L1__: F,
 });
 pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 1048576, 0, 22>;
 
 trace_row!(SpecifiedRangesTraceRow<F> {
- mul:[F; 33],
+ mul:[F; 32],
 });
 pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048576, 0, 22>;
 
@@ -639,7 +639,7 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
     (0, 6, PackedInfoConst {
         is_packed: true,
         num_packed_words: 4,
-        unpack_info: &[29, 38, 1, 1, 38, 1, 32, 32, 1, 40, 18, 18, 1],
+        unpack_info: &[29, 38, 1, 1, 38, 1, 32, 32, 1, 40, 22, 16, 1],
     }),
     (0, 7, PackedInfoConst {
         is_packed: true,

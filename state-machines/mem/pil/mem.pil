@@ -370,18 +370,19 @@ airtemplate Mem(const int N = 2**21, const int id = MEMORY_ID, const int RC = 2,
         }
         const expr delta_step = step - previous_step + (1 - wr);
 
-        col witness bits(18) air.increment[2];
-        increment[0] + 2**18 * increment[1] + 1 === addr_changes * (delta_addr - delta_step) + delta_step;
+        col witness bits(22) air.l_increment;
+        col witness bits(16) air.h_increment;
+        l_increment + 2**22 * h_increment + 1 === addr_changes * (delta_addr - delta_step) + delta_step;
 
         is_first_segment * SEGMENT_L1 * (1 - addr_changes) === 0;
 
-        // addr_change == 1 => [0,2^19-1] => 19 + 19 = 38 bits + 3 => 41 bits => 2 TB (limit address 32 bits)
-        // addr_change == 0 => [0,2^19-1] => 19 + 19 = 38 bits => 2 slots => 2^37 => 128 GB steps (32K main instances)
+        // addr_change == 1 => 22 + 16 = 38 bits + 3 => 41 bits => 2 TB (limit address 32 bits)
+        // addr_change == 0 => 22 + 16 = 38 bits => 4 slots => 2^36 => 32 GB steps (16K main instances)
         // 38 bits x 2^22 = 2^60 + 2^32 address = 2^61 secure.
         // using control in the middle of instance, reduce to 2^60
 
-        range_check(expression: increment[0], min: 0, max: 2**18 - 1);
-        range_check(expression: increment[1], min: 0, max: 2**18 - 1);
+        range_check(expression: l_increment, min: 0, max: 2**22 - 1);
+        range_check(expression: h_increment, min: 0, max: 2**16 - 1);
 
         // to avoid intermediate column
         col witness bits(1) air.read_same_addr;

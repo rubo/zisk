@@ -20,16 +20,38 @@ use crate::zisklib;
 /// * `Err` - If the data length is invalid
 #[inline]
 pub fn secp256k1_ecdsa_verify_hint(data: &[u64]) -> Result<Vec<u64>, String> {
-    hint_fields![X_Y: 8, INFINITY:1, Z: 4, SIG: 8];
+    hint_fields![X: 4, Y: 4, INFINITY:1, Z: 4, SIG: 8];
 
     validate_hint_length(data, EXPECTED_LEN, "SECP256K1_ECDSA_VERIFY")?;
+
+    // Reverse limb order for x and y coordinates (big-endian to little-endian)
+    let pk = [
+        data[X_OFFSET + 3].to_be(),
+        data[X_OFFSET + 2].to_be(),
+        data[X_OFFSET + 1].to_be(),
+        data[X_OFFSET + 0].to_be(),
+        data[Y_OFFSET + 3].to_be(),
+        data[Y_OFFSET + 2].to_be(),
+        data[Y_OFFSET + 1].to_be(),
+        data[Y_OFFSET + 0].to_be(),
+    ];
+
+    // Reverse limb order for signature (big-endian to little-endian)
+    let sig = [
+        data[SIG_OFFSET + 3].to_be(),
+        data[SIG_OFFSET + 2].to_be(),
+        data[SIG_OFFSET + 1].to_be(),
+        data[SIG_OFFSET + 0].to_be(),
+        data[SIG_OFFSET + 7].to_be(),
+        data[SIG_OFFSET + 6].to_be(),
+        data[SIG_OFFSET + 5].to_be(),
+        data[SIG_OFFSET + 4].to_be(),
+    ];
 
     // If the point is at infinity, return an error
     if data[INFINITY_OFFSET] != 0 {
         return Err("Error in secp256k1_ecdsa_verify: point at infinity".to_string());
     }
-
-    let pk: &[u64; X_Y_SIZE] = data[X_Y_OFFSET..X_Y_OFFSET + X_Y_SIZE].try_into().unwrap();
 
     // Extract z (32 bytes), and sig (64 bytes)
     let z_bytes: &[u8; 32] = unsafe { &*(data[Z_OFFSET..SIG_OFFSET].as_ptr() as *const [u8; 32]) };
@@ -37,7 +59,6 @@ pub fn secp256k1_ecdsa_verify_hint(data: &[u64]) -> Result<Vec<u64>, String> {
     let z_words = z_dec.to_words();
 
     // Parse signature and decode r and s
-    let sig = &data[SIG_OFFSET..];
     let sig_bytes: &[u8; 64] = unsafe { &*(sig.as_ptr() as *const [u8; 64]) };
     let sig = Signature::try_from(sig_bytes.as_slice())
         .map_err(|e| format!("Failed to parse signature: {}", e))?;
@@ -50,7 +71,7 @@ pub fn secp256k1_ecdsa_verify_hint(data: &[u64]) -> Result<Vec<u64>, String> {
 
     let mut hints = Vec::new();
 
-    zisklib::secp256k1_ecdsa_verify(pk, &z_words, &r_words, &s_words, &mut hints);
+    zisklib::secp256k1_ecdsa_verify(&pk, &z_words, &r_words, &s_words, &mut hints);
 
     Ok(hints)
 }

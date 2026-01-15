@@ -8,7 +8,7 @@ repository = { workspace = true }
 categories = { workspace = true }
 
 [dependencies]
-proofman-verifier = { path = "../../pil2-proofman/verifier", features = ["verify"] }
+proofman-verifier = { workspace = true, features = ["verify"] }
 anyhow = { workspace = true }
 
 [features]

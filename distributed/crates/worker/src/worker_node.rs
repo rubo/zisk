@@ -669,6 +669,7 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
             verify_constraints: agg_params.verify_constraints,
             aggregation: agg_params.aggregation,
             rma: agg_params.rma,
+            compressed: agg_params.compressed,
             verify_proofs: agg_params.verify_proofs,
             save_proofs: agg_params.save_proofs,
             test_mode: agg_params.test_mode,

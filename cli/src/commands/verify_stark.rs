@@ -3,7 +3,7 @@ use clap::Parser;
 use colored::Colorize;
 use proofman_common::initialize_logger;
 use std::fs;
-use zisk_verifier::verify_zisk_proof;
+use zisk_verifier::{verify_zisk_proof, verify_zisk_proof_compressed};
 
 use zisk_build::ZISK_VERSION_MESSAGE;
 
@@ -22,6 +22,9 @@ pub struct ZiskVerify {
 
     #[clap(short = 'k', long)]
     pub vk: Option<String>,
+
+    #[clap(short = 'c', long, default_value_t = false)]
+    pub compressed: bool,
 }
 
 impl ZiskVerify {
@@ -40,7 +43,11 @@ impl ZiskVerify {
 
         let vk = &self.get_verkey();
 
-        let result = verify_zisk_proof(&proof, vk);
+        let result = if self.compressed {
+            verify_zisk_proof_compressed(&proof, vk)
+        } else {
+            verify_zisk_proof(&proof, vk)
+        };
 
         let elapsed = start.elapsed();
 

@@ -32,6 +32,17 @@ int secp256k1_ecdsa_verify (
           uint64_t * result  // 8 x 64 bits
 );
 
+void secp256k1_curve_add(
+    const uint64_t * p, // 8 x 64 bits
+    const uint64_t * q, // 8 x 64 bits
+          uint64_t * r  // 8 x 64 bits
+);
+
+void secp256k1_curve_dbl(
+    const uint64_t * p, // 8 x 64 bits
+          uint64_t * r  // 8 x 64 bits
+);
+
 int secp256k1_curve_dbl_scalar_mul(
     const uint64_t * k1, // 4 x 64 bits
     const uint64_t * p1, // 8 x 64 bits

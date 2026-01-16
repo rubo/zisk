@@ -17,6 +17,8 @@ use fields::PrimeField64;
 use proofman_common::ProofCtx;
 use rayon::prelude::*;
 use sm_rom::RomSM;
+#[cfg(feature = "stats")]
+use zisk_common::ExecutorStatsEvent;
 use zisk_common::{
     io::ZiskStdin, BusDeviceMetrics, ChunkId, EmuTrace, ExecutorStatsHandle, PayloadType,
     ZiskExecutionResult,
@@ -128,9 +130,9 @@ impl EmulatorAsm {
         ZiskExecutionResult,
     ) {
         #[cfg(feature = "stats")]
-        let parent_stats_id = self.stats.next_id();
+        let parent_stats_id = stats.next_id();
         #[cfg(feature = "stats")]
-        self.stats.add_stat(
+        stats.add_stat(
             _caller_stats_id,
             parent_stats_id,
             "EXECUTE_WITH_ASSEMBLY",
@@ -140,9 +142,9 @@ impl EmulatorAsm {
 
         AsmServices::SERVICES.par_iter().enumerate().for_each(|(idx, service)| {
             #[cfg(feature = "stats")]
-            let stats_id = self.stats.next_id();
+            let stats_id = stats.next_id();
             #[cfg(feature = "stats")]
-            self.stats.add_stat(
+            stats.add_stat(
                 parent_stats_id,
                 stats_id,
                 "ASM_WRITE_INPUT",
@@ -180,7 +182,7 @@ impl EmulatorAsm {
 
             // Add to executor stats
             #[cfg(feature = "stats")]
-            self.stats.add_stat(
+            stats.add_stat(
                 parent_stats_id,
                 stats_id,
                 "ASM_WRITE_INPUT",
@@ -253,13 +255,7 @@ impl EmulatorAsm {
         }
 
         #[cfg(feature = "stats")]
-        self.stats.add_stat(
-            0,
-            parent_stats_id,
-            "EXECUTE_WITH_ASSEMBLY",
-            0,
-            ExecutorStatsEvent::End,
-        );
+        stats.add_stat(0, parent_stats_id, "EXECUTE_WITH_ASSEMBLY", 0, ExecutorStatsEvent::End);
 
         (min_traces, main_count, secn_count, Some(handle_mo), execution_result)
     }
@@ -270,9 +266,9 @@ impl EmulatorAsm {
         stats: &ExecutorStatsHandle,
     ) -> (MinimalTraces, DeviceMetricsList, NestedDeviceMetricsList) {
         #[cfg(feature = "stats")]
-        let parent_stats_id = self.stats.next_id();
+        let parent_stats_id = stats.next_id();
         #[cfg(feature = "stats")]
-        self.stats.add_stat(0, parent_stats_id, "RUN_MT_ASSEMBLY", 0, ExecutorStatsEvent::Begin);
+        stats.add_stat(0, parent_stats_id, "RUN_MT_ASSEMBLY", 0, ExecutorStatsEvent::Begin);
 
         struct CounterTask<F, DB>
         where
@@ -382,7 +378,7 @@ impl EmulatorAsm {
         }
 
         #[cfg(feature = "stats")]
-        self.stats.add_stat(0, parent_stats_id, "RUN_MT_ASSEMBLY", 0, ExecutorStatsEvent::End);
+        stats.add_stat(0, parent_stats_id, "RUN_MT_ASSEMBLY", 0, ExecutorStatsEvent::End);
         (MinimalTraces::AsmEmuTrace(asm_runner_mt), main_count, secn_count)
     }
 }

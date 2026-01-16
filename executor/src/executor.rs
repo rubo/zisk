@@ -345,7 +345,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         let witness_start_time = Instant::now();
 
         #[cfg(feature = "stats")]
-        let (_airgroup_id, air_id) = pctx.dctx_get_instance_info(global_id);
+        let (_airgroup_id, air_id) = pctx.dctx_get_instance_info(global_id)?;
         #[cfg(feature = "stats")]
         let stats_id = self.stats.next_id();
         #[cfg(feature = "stats")]
@@ -623,7 +623,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         _caller_stats_id: u64,
     ) -> ProofmanResult<()> {
         #[cfg(feature = "stats")]
-        let (_airgroup_id, air_id) = pctx.dctx_get_instance_info(global_id);
+        let (_airgroup_id, air_id) = pctx.dctx_get_instance_info(global_id)?;
         #[cfg(feature = "stats")]
         let stats_id = self.stats.next_id();
         #[cfg(feature = "stats")]

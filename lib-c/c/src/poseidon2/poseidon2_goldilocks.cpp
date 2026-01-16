@@ -110,6 +110,9 @@ void Poseidon2(Goldilocks::Element *state)
     }
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void poseidon2_hash(uint64_t *state)
 {
@@ -123,5 +126,9 @@ void poseidon2_hash(uint64_t *state)
         state[i] = Goldilocks::toU64(stateGL[i]);
     }
 }
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif

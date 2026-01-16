@@ -5157,7 +5157,111 @@ impl ZiskRom2Asm {
                 ctx.flag_is_always_zero = true;
             }
             ZiskOp::Poseidon2 => {
-                // TODO
+                // Use the memory address as the first and unique parameter
+                *code += &ctx.full_line_comment("Poseidon2: rdi = A0".to_string());
+
+                // Generate mem reads
+                if !ctx.chunk_player_mt_collect_mem() && !ctx.chunk_player_mem_reads_collect_main()
+                {
+                    // Use the memory address as the first and unique parameter
+                    *code += &format!(
+                        "\tmov rdi, {} {}\n",
+                        ctx.b.string_value,
+                        ctx.comment_str("rdi = b = address")
+                    );
+
+                    // Copy read data into mem_reads_address and advance it
+                    if ctx.minimal_trace() || ctx.zip() || ctx.mem_reads() {
+                        // If zip, check if chunk is active
+                        if ctx.zip() {
+                            *code += &format!(
+                                "\ttest {}, 1 {}\n",
+                                REG_ACTIVE_CHUNK,
+                                ctx.comment_str("active_chunk == 1 ?")
+                            );
+                            *code += &format!("\tjnz pc_{:x}_poseidon2_active_chunk\n", ctx.pc);
+                            *code +=
+                                &format!("\tjmp pc_{:x}_poseidon2_active_chunk_done\n", ctx.pc);
+                            *code += &format!("pc_{:x}_poseidon2_active_chunk:\n", ctx.pc);
+                        }
+                        *code += &format!("\tmov {REG_ADDRESS}, rdi\n");
+                        for k in 0..16 {
+                            *code += &format!(
+                                "\tmov {}, [{} + {}] {}\n",
+                                REG_VALUE,
+                                REG_ADDRESS,
+                                k * 8,
+                                ctx.comment(format!("value = mem[poseidon2_address[{k}]]"))
+                            );
+                            *code += &format!(
+                                "\tmov [{} + {}*8 + {}], {} {}\n",
+                                REG_MEM_READS_ADDRESS,
+                                REG_MEM_READS_SIZE,
+                                k * 8,
+                                REG_VALUE,
+                                ctx.comment(format!("mem_reads[{k}] = value"))
+                            );
+                        }
+
+                        // Increment chunk.steps.mem_reads_size in 16 units
+                        *code += &format!(
+                            "\tadd {}, 16 {}\n",
+                            REG_MEM_READS_SIZE,
+                            ctx.comment_str("mem_reads_size += 16")
+                        );
+
+                        if ctx.zip() {
+                            *code += &format!("pc_{:x}_poseidon2_active_chunk_done:\n", ctx.pc);
+                        }
+                    }
+
+                    // Trace 16 memory read operations
+                    if ctx.mem_op() {
+                        *code += &format!("\tmov {REG_ADDRESS}, rdi\n");
+                        Self::mem_op_array(ctx, code, REG_ADDRESS, false, 8, 16);
+                        Self::mem_op_array(ctx, code, REG_ADDRESS, true, 8, 16);
+                    }
+
+                    // Call the poseidon2 function
+                    Self::push_internal_registers(ctx, code, false);
+                    //Self::assert_rsp_is_aligned(ctx, code);
+                    *code += "\tcall _opcode_poseidon2\n";
+                    Self::pop_internal_registers(ctx, code, false);
+                    //Self::assert_rsp_is_aligned(ctx, code);
+                }
+
+                // Consume mem reads
+                if ctx.chunk_player_mem_reads_collect_main() {
+                    *code += &format!(
+                        "\tmov [{} + {}*8], {} {}\n",
+                        REG_MEM_READS_ADDRESS,
+                        REG_MEM_READS_SIZE,
+                        REG_CHUNK_PLAYER_ADDRESS,
+                        ctx.comment_str("Main[4] = precompiler data address")
+                    );
+                    *code += &format!(
+                        "\tinc {} {}\n",
+                        REG_MEM_READS_SIZE,
+                        ctx.comment_str("mem_reads_size++")
+                    );
+                }
+                if ctx.chunk_player_mt_collect_mem() || ctx.chunk_player_mem_reads_collect_main() {
+                    *code += &format!(
+                        "\tadd {}, 16*8 {}\n",
+                        REG_CHUNK_PLAYER_ADDRESS,
+                        ctx.comment_str("chunk_address += 16*8")
+                    );
+                }
+
+                // Set result
+                *code += &format!(
+                    "\txor {}, {} {}\n",
+                    REG_C,
+                    REG_C,
+                    ctx.comment_str("Poseidon2: c = 0")
+                );
+                ctx.c.is_saved = true;
+                ctx.flag_is_always_zero = true;
             }
             ZiskOp::PubOut => {
                 assert!(ctx.store_b_in_c);

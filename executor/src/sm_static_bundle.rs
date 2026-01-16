@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::NestedDeviceMetricsList;
+use crate::emu_asm::NestedDeviceMetricsList;
 use crate::StaticDataBusCollect;
 use data_bus::DataBusTrait;
 use fields::PrimeField64;

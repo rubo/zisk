@@ -166,7 +166,6 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
 
         // Step 5: Create the executor and register the secondary state machines
         let executor: ZiskExecutor<F> = ZiskExecutor::new(
-            self.elf_path.clone(),
             self.asm_path.clone(),
             self.asm_rom_path.clone(),
             zisk_rom,

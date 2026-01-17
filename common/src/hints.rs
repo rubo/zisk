@@ -58,8 +58,25 @@ const CTRL_ERROR: u32 = 0x03;
 // === BUILT-IN HINT CODES ===
 // Noop hint code
 const HINT_NOOP: u32 = 0x04;
-// Ecrecover hint code
-const HINT_ECRECOVER: u32 = 0x05;
+
+// Secp256k1 Scalar hint codes
+const HINT_SECP256K1_FN_REDUCE: u32 = 0x02000;
+const HINT_SECP256K1_FN_ADD: u32 = 0x02001;
+const HINT_SECP256K1_FN_NEG: u32 = 0x02002;
+const HINT_SECP256K1_FN_SUB: u32 = 0x02003;
+const HINT_SECP256K1_FN_MUL: u32 = 0x02004;
+const HINT_SECP256K1_FN_INV: u32 = 0x02005;
+// Secp256k1 Field hint codes
+const HINT_SECP256K1_FP_REDUCE: u32 = 0x02010;
+const HINT_SECP256K1_FP_ADD: u32 = 0x02011;
+const HINT_SECP256K1_FP_NEGATE: u32 = 0x02012;
+const HINT_SECP256K1_FP_MUL: u32 = 0x02013;
+const HINT_SECP256K1_FP_MUL_SCALAR: u32 = 0x02014;
+// Secp256k1 Curve hint codes
+const HINT_SECP256K1_TO_AFFINE: u32 = 0x02020;
+const HINT_SECP256K1_DECOMPRESS: u32 = 0x02021;
+const HINT_SECP256K1_DOUBLE_SCALAR_MUL_WITH_G: u32 = 0x02022;
+const HINT_SECP256K1_ECDSA_VERIFY: u32 = 0x02023;
 
 // Big integer arithmetic hint codes
 const HINT_REDMOD256: u32 = 0x06;
@@ -147,8 +164,37 @@ pub enum BuiltInHint {
     /// without any additional computation.
     Noop = HINT_NOOP,
 
-    /// Ecrecover hint type.
-    EcRecover = HINT_ECRECOVER,
+    // Secp256k1 hint types.
+    /// Secp256k1 scalar field reduction hint type.
+    Secp256K1FnReduce = HINT_SECP256K1_FN_REDUCE,
+    /// Secp256k1 scalar field addition hint type.
+    Secp256K1FnAdd = HINT_SECP256K1_FN_ADD,
+    /// Secp256k1 scalar field negation hint type.
+    Secp256K1FnNeg = HINT_SECP256K1_FN_NEG,
+    /// Secp256k1 scalar field subtraction hint type.
+    Secp256K1FnSub = HINT_SECP256K1_FN_SUB,
+    /// Secp256k1 scalar field multiplication hint type.
+    Secp256K1FnMul = HINT_SECP256K1_FN_MUL,
+    /// Secp256k1 scalar field inversion hint type.
+    Secp256K1FnInv = HINT_SECP256K1_FN_INV,
+    /// Secp256k1 base field reduction hint type.
+    Secp256K1FpReduce = HINT_SECP256K1_FP_REDUCE,
+    /// Secp256k1 base field addition hint type.
+    Secp256K1FpAdd = HINT_SECP256K1_FP_ADD,
+    /// Secp256k1 base field negation hint type.
+    Secp256K1FpNegate = HINT_SECP256K1_FP_NEGATE,
+    /// Secp256k1 base field multiplication hint type.
+    Secp256K1FpMul = HINT_SECP256K1_FP_MUL,
+    /// Secp256k1 base field scalar multiplication hint type.
+    Secp256K1FpMulScalar = HINT_SECP256K1_FP_MUL_SCALAR,
+    /// Secp256k1 to affine coordinates hint type.
+    Secp256K1ToAffine = HINT_SECP256K1_TO_AFFINE,
+    /// Secp256k1 point decompression hint type.
+    Secp256K1Decompress = HINT_SECP256K1_DECOMPRESS,
+    /// Secp256k1 double scalar multiplication with G hint type.
+    Secp256K1DoubleScalarMulWithG = HINT_SECP256K1_DOUBLE_SCALAR_MUL_WITH_G,
+    /// Secp256k1 ECDSA verification hint type.
+    Secp256K1EcdsaVerify = HINT_SECP256K1_ECDSA_VERIFY,
 
     // Big Integer Arithmetic Hints
     ///  Modular reduction of a 256-bit integer hint type.
@@ -222,8 +268,24 @@ impl Display for BuiltInHint {
             // Noop Hint
             BuiltInHint::Noop => "NOOP",
 
-            // Ecrecover Hint
-            BuiltInHint::EcRecover => "ECRECOVER",
+            // Secp256k1 Scalar Hints
+            BuiltInHint::Secp256K1FnReduce => "SECP256K1_FN_REDUCE",
+            BuiltInHint::Secp256K1FnAdd => "SECP256K1_FN_ADD",
+            BuiltInHint::Secp256K1FnNeg => "SECP256K1_FN_NEG",
+            BuiltInHint::Secp256K1FnSub => "SECP256K1_FN_SUB",
+            BuiltInHint::Secp256K1FnMul => "SECP256K1_FN_MUL",
+            BuiltInHint::Secp256K1FnInv => "SECP256K1_FN_INV",
+            // Secp256k1 Field Hints
+            BuiltInHint::Secp256K1FpReduce => "SECP256K1_FP_REDUCE",
+            BuiltInHint::Secp256K1FpAdd => "SECP256K1_FP_ADD",
+            BuiltInHint::Secp256K1FpNegate => "SECP256K1_FP_NEGATE",
+            BuiltInHint::Secp256K1FpMul => "SECP256K1_FP_MUL",
+            BuiltInHint::Secp256K1FpMulScalar => "SECP256K1_FP_MUL_SCALAR",
+            // Secp256k1 Curve Hints
+            BuiltInHint::Secp256K1ToAffine => "SECP256K1_TO_AFFINE",
+            BuiltInHint::Secp256K1Decompress => "SECP256K1_DECOMPRESS",
+            BuiltInHint::Secp256K1DoubleScalarMulWithG => "SECP256K1_DOUBLE_SCALAR_MUL_WITH_G",
+            BuiltInHint::Secp256K1EcdsaVerify => "SECP256K1_ECDSA_VERIFY",
 
             // Big Integer Arithmetic Hints
             BuiltInHint::RedMod256 => "REDMOD256",
@@ -274,8 +336,24 @@ impl TryFrom<u32> for BuiltInHint {
             // Noop Hint
             HINT_NOOP => Ok(Self::Noop),
 
-            // Ecrecover Hint
-            HINT_ECRECOVER => Ok(Self::EcRecover),
+            // Secp256K1 Scalar Hints
+            HINT_SECP256K1_FN_REDUCE => Ok(Self::Secp256K1FnReduce),
+            HINT_SECP256K1_FN_ADD => Ok(Self::Secp256K1FnAdd),
+            HINT_SECP256K1_FN_NEG => Ok(Self::Secp256K1FnNeg),
+            HINT_SECP256K1_FN_SUB => Ok(Self::Secp256K1FnSub),
+            HINT_SECP256K1_FN_MUL => Ok(Self::Secp256K1FnMul),
+            HINT_SECP256K1_FN_INV => Ok(Self::Secp256K1FnInv),
+            // Secp256k1 Field Hints
+            HINT_SECP256K1_FP_REDUCE => Ok(Self::Secp256K1FpReduce),
+            HINT_SECP256K1_FP_ADD => Ok(Self::Secp256K1FpAdd),
+            HINT_SECP256K1_FP_NEGATE => Ok(Self::Secp256K1FpNegate),
+            HINT_SECP256K1_FP_MUL => Ok(Self::Secp256K1FpMul),
+            HINT_SECP256K1_FP_MUL_SCALAR => Ok(Self::Secp256K1FpMulScalar),
+            // Secp256k1 Curve Hints
+            HINT_SECP256K1_TO_AFFINE => Ok(Self::Secp256K1ToAffine),
+            HINT_SECP256K1_DECOMPRESS => Ok(Self::Secp256K1Decompress),
+            HINT_SECP256K1_DOUBLE_SCALAR_MUL_WITH_G => Ok(Self::Secp256K1DoubleScalarMulWithG),
+            HINT_SECP256K1_ECDSA_VERIFY => Ok(Self::Secp256K1EcdsaVerify),
 
             // Big Integer Arithmetic Hints
             HINT_REDMOD256 => Ok(Self::RedMod256),
@@ -373,8 +451,26 @@ impl HintCode {
             // Noop Hint
             HintCode::BuiltIn(BuiltInHint::Noop) => HINT_NOOP,
 
-            // Ecrecover Hint
-            HintCode::BuiltIn(BuiltInHint::EcRecover) => HINT_ECRECOVER,
+            // Secp256K1 Scalar Hint Codes
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FnReduce) => HINT_SECP256K1_FN_REDUCE,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FnAdd) => HINT_SECP256K1_FN_ADD,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FnNeg) => HINT_SECP256K1_FN_NEG,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FnSub) => HINT_SECP256K1_FN_SUB,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FnMul) => HINT_SECP256K1_FN_MUL,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FnInv) => HINT_SECP256K1_FN_INV,
+            // Secp256k1 Field Hint Codes
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FpReduce) => HINT_SECP256K1_FP_REDUCE,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FpAdd) => HINT_SECP256K1_FP_ADD,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FpNegate) => HINT_SECP256K1_FP_NEGATE,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FpMul) => HINT_SECP256K1_FP_MUL,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1FpMulScalar) => HINT_SECP256K1_FP_MUL_SCALAR,
+            // Secp256k1 Curve Hint Codes
+            HintCode::BuiltIn(BuiltInHint::Secp256K1ToAffine) => HINT_SECP256K1_TO_AFFINE,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1Decompress) => HINT_SECP256K1_DECOMPRESS,
+            HintCode::BuiltIn(BuiltInHint::Secp256K1DoubleScalarMulWithG) => {
+                HINT_SECP256K1_DOUBLE_SCALAR_MUL_WITH_G
+            }
+            HintCode::BuiltIn(BuiltInHint::Secp256K1EcdsaVerify) => HINT_SECP256K1_ECDSA_VERIFY,
 
             // Big Integer Arithmetic Hints
             HintCode::BuiltIn(BuiltInHint::RedMod256) => HINT_REDMOD256,

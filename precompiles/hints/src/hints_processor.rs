@@ -700,51 +700,61 @@ impl<HS: StreamSink + Send + Sync + 'static> HintsProcessor<HS> {
     fn process_hint_secp256k1_fn_reduce(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fn_reduce_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FN_ADD`] hint.
     #[inline]
     fn process_hint_secp256k1_fn_add(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fn_add_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FN_NEG`] hint.
     #[inline]
     fn process_hint_secp256k1_fn_neg(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fn_neg_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FN_SUB`] hint.
     #[inline]
     fn process_hint_secp256k1_fn_sub(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fn_sub_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FN_MUL`] hint.
     #[inline]
     fn process_hint_secp256k1_fn_mul(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fn_mul_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FN_INV`] hint.
     #[inline]
     fn process_hint_secp256k1_fn_inv(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fn_inv_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FP_REDUCE`] hint.
     #[inline]
     fn process_hint_secp256k1_fp_reduce(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fp_reduce_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FP_ADD`] hint.
     #[inline]
     fn process_hint_secp256k1_fp_add(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fp_add_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FP_NEGATE`] hint.
     #[inline]
     fn process_hint_secp256k1_fp_negate(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fp_negate_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FP_MUL`] hint.
     #[inline]
     fn process_hint_secp256k1_fp_mul(hint: &PrecompileHint) -> Result<Vec<u64>> {
         ziskos_hints::handlers::secp256k1_fp_mul_hint(&hint.data).map_err(|e| anyhow::anyhow!(e))
     }
+
     /// Processes a [`SECP256K1_FP_MUL_SCALAR`] hint.
     #[inline]
     fn process_hint_secp256k1_fp_mul_scalar(hint: &PrecompileHint) -> Result<Vec<u64>> {

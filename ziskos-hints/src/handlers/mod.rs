@@ -1,5 +1,5 @@
 pub mod bigint256;
-pub mod bls318;
+pub mod bls381;
 pub mod bn254;
 pub mod modexp;
 pub mod secp256k1;

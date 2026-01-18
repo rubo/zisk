@@ -13,7 +13,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use tracing::debug;
 use zisk_common::io::{StreamProcessor, StreamSink};
 use zisk_common::{BuiltInHint, CtrlHint, HintCode, PrecompileHint};
-use ziskos_hints::handlers::{bigint256::*, bls318::*, bn254::*, modexp::*, secp256k1::*};
+use ziskos_hints::handlers::{bigint256::*, bls381::*, bn254::*, modexp::*, secp256k1::*};
 
 /// Ordered result buffer with drain state.
 ///

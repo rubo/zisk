@@ -24,7 +24,7 @@ pub struct BinaryAddInstance<F: PrimeField64> {
     binary_add_sm: Arc<BinaryAddSM<F>>,
 
     /// Collect info for each chunk ID, containing the number of rows and a skipper for collection.
-    collect_info: HashMap<ChunkId, (u64, u64, bool, CollectSkipper)>,
+    collect_info: HashMap<ChunkId, (u64, bool, CollectSkipper)>,
 
     /// Instance context.
     ictx: InstanceCtx,
@@ -58,7 +58,7 @@ impl<F: PrimeField64> BinaryAddInstance<F> {
         let meta = ictx.plan.meta.take().expect("Expected metadata in ictx.plan.meta");
 
         let collect_info = *meta
-            .downcast::<HashMap<ChunkId, (u64, u64, bool, CollectSkipper)>>()
+            .downcast::<HashMap<ChunkId, (u64, bool, CollectSkipper)>>()
             .expect("Failed to downcast ictx.plan.meta to expected type");
 
         Self { binary_add_sm, collect_info, ictx, std }
@@ -71,7 +71,7 @@ impl<F: PrimeField64> BinaryAddInstance<F> {
             "BinaryAddInstance: Unsupported air_id: {:?}",
             self.ictx.plan.air_id
         );
-        let (num_ops, _, force_execute_to_end, collect_skipper) = self.collect_info[&chunk_id];
+        let (num_ops, force_execute_to_end, collect_skipper) = self.collect_info[&chunk_id];
         BinaryAddCollector::new(
             num_ops as usize,
             collect_skipper,
@@ -142,7 +142,7 @@ impl<F: PrimeField64> Instance<F> for BinaryAddInstance<F> {
             "BinaryAddInstance: Unsupported air_id: {:?}",
             self.ictx.plan.air_id
         );
-        let (num_ops, _, force_execute_to_end, collect_skipper) = self.collect_info[&chunk_id];
+        let (num_ops, force_execute_to_end, collect_skipper) = self.collect_info[&chunk_id];
         Some(Box::new(BinaryAddCollector::new(
             num_ops as usize,
             collect_skipper,

@@ -16,6 +16,12 @@ pub struct ZiskExecutionResult {
     pub steps: u64,
 }
 
+impl ZiskExecutionResult {
+    pub fn new(steps: u64) -> Self {
+        Self { steps }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Stats {
     pub airgroup_id: usize,

@@ -31,13 +31,14 @@ pub fn secp256k1_ecdsa_verify(
     s: &[u64; 4],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> bool {
-    // Ecdsa verification computes P = [s⁻¹·z (mod n)]G + [s⁻¹·r (mod n)]PK
-    // We can equivalently hint p, check it's correct and verify that
-    //   [z]G + [r]pk + [-s]P == 𝒪,
+    // Ecdsa verification computes (x, y) = [s⁻¹·z (mod n)]G + [s⁻¹·r (mod n)]PK
+    // and checks that x ≡ r (mod n)
+    // We can equivalently hint y, and verify that
+    //   [z]G + [r]PK + [-s](r,y) == 𝒪,
     // saving us from expensive fn arithmetic
 
     // Hint the result
-    let p = fcall_secp256k1_ecdsa_verify(
+    let coords = fcall_secp256k1_ecdsa_verify(
         pk,
         z,
         r,
@@ -45,15 +46,16 @@ pub fn secp256k1_ecdsa_verify(
         #[cfg(feature = "hints")]
         hints,
     );
+    let point = [r[0], r[1], r[2], r[3], coords[4], coords[5], coords[6], coords[7]];
 
     // Check the recovered point is valid
     assert!(secp256k1_is_on_curve(
-        &p,
+        &point,
         #[cfg(feature = "hints")]
         hints,
     )); // Note: Identity point would be raised here
 
-    // Check that [z]G + [r]pk + [-s]P == 𝒪
+    // Check that [z]G + [r]PK + [-s](r,y) == 𝒪
     let neg_s = secp256k1_fn_neg(
         s,
         #[cfg(feature = "hints")]
@@ -64,13 +66,11 @@ pub fn secp256k1_ecdsa_verify(
         r,
         &neg_s,
         pk,
-        &p,
+        &point,
         #[cfg(feature = "hints")]
         hints,
     )
     .is_none()
-    .then_some(())
-    .is_some()
 }
 
 // ==================== C FFI Functions ====================

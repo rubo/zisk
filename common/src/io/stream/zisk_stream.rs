@@ -7,7 +7,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::io::{StreamRead, StreamSource};
 
-pub trait StreamProcessor {
+pub trait StreamProcessor: Send + Sync + 'static {
     /// Process data and return the processed result along with a flag indicating if CTRL_END was encountered.
     ///
     /// # Returns
@@ -25,7 +25,7 @@ pub trait StreamProcessor {
 /// # Returns
 /// * `Ok(())` - If hints were successfully submitted
 /// * `Err` - If submission fails
-pub trait StreamSink {
+pub trait StreamSink: Send + Sync + 'static {
     fn submit(&self, processed: Vec<u64>) -> anyhow::Result<()>;
 }
 
@@ -35,9 +35,9 @@ enum ThreadCommand {
 }
 
 /// ZiskStream struct manages the processing of precompile hints and writing them to shared memory.
-pub struct ZiskStream<HP: StreamProcessor + Send + Sync + 'static> {
+pub struct ZiskStream {
     /// The hints processor used to process hints before writing.
-    hints_processor: Arc<HP>,
+    hints_processor: Arc<dyn StreamProcessor>,
 
     /// Channel sender to communicate with the background thread.
     tx: Option<Sender<ThreadCommand>>,
@@ -46,7 +46,7 @@ pub struct ZiskStream<HP: StreamProcessor + Send + Sync + 'static> {
     thread_handle: Option<JoinHandle<()>>,
 }
 
-impl<HP: StreamProcessor + Send + Sync + 'static> ZiskStream<HP> {
+impl ZiskStream {
     /// Create a new ZiskStream with the given processor.
     ///
     /// # Arguments
@@ -54,7 +54,7 @@ impl<HP: StreamProcessor + Send + Sync + 'static> ZiskStream<HP> {
     ///
     /// # Returns
     /// A new `ZiskStream` instance without a running thread.
-    pub fn new(hints_processor: HP) -> Self {
+    pub fn new(hints_processor: impl StreamProcessor) -> Self {
         Self { hints_processor: Arc::new(hints_processor), tx: None, thread_handle: None }
     }
 
@@ -101,11 +101,11 @@ impl<HP: StreamProcessor + Send + Sync + 'static> ZiskStream<HP> {
     /// Background thread function that processes hints when requested.
     fn background_thread(
         mut stream: StreamSource,
-        hints_processor: Arc<HP>,
+        hints_processor: Arc<dyn StreamProcessor>,
         rx: Receiver<ThreadCommand>,
     ) {
         while let Ok(ThreadCommand::Process) = rx.recv() {
-            if let Err(e) = Self::process_stream(&mut stream, &hints_processor) {
+            if let Err(e) = Self::process_stream(&mut stream, &*hints_processor) {
                 tracing::error!("Error processing hints in background thread: {:?}", e);
             }
         }
@@ -115,7 +115,10 @@ impl<HP: StreamProcessor + Send + Sync + 'static> ZiskStream<HP> {
     /// Process all hints from the stream.
     ///
     /// Processes hints in batches until CTRL_END is encountered or the stream ends.
-    fn process_stream(stream: &mut StreamSource, hints_processor: &HP) -> Result<()> {
+    fn process_stream(
+        stream: &mut StreamSource,
+        hints_processor: &dyn StreamProcessor,
+    ) -> Result<()> {
         let mut first_batch = true;
 
         while let Some(hints) = stream.next()? {
@@ -154,7 +157,7 @@ impl<HP: StreamProcessor + Send + Sync + 'static> ZiskStream<HP> {
     }
 }
 
-impl<HP: StreamProcessor + Send + Sync> Drop for ZiskStream<HP> {
+impl Drop for ZiskStream {
     fn drop(&mut self) {
         self.stop_thread();
     }

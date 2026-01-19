@@ -264,7 +264,7 @@ pub struct Worker<T: ZiskBackend + 'static> {
     prover_config: ProverConfig,
 
     stream_buffers: HashMap<JobId, (u32, HashMap<u32, Vec<u8>>)>, // (job_id, (next_seq, (seq_number, data)))
-    hints_processor: Option<HintsProcessor<HintsShmem>>,
+    hints_processor: Option<HintsProcessor>,
 }
 
 impl<T: ZiskBackend + 'static> Worker<T> {

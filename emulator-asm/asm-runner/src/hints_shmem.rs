@@ -107,7 +107,6 @@ impl HintsShmem {
         unlock_mapped_memory: bool,
     ) -> Result<Vec<ServiceResources>> {
         debug!("Initializing resources for precompile hints");
-
         resources_names
             .iter()
             .map(|names: &ServiceResourceNames| -> Result<ServiceResources> {

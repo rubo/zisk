@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use crate::NestedDeviceMetricsList;
-use crate::StaticDataBusCollect;
+use crate::{NestedDeviceMetricsList, StaticDataBusCollect};
 use data_bus::DataBusTrait;
 use fields::PrimeField64;
 use precomp_arith_eq::{ArithEqInstance, ArithEqManager};

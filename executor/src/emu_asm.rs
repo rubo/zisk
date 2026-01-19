@@ -115,7 +115,7 @@ impl EmulatorAsm {
     /// * `ZiskExecutionResult` - The result of executing the ZisK ROM.
     #[allow(clippy::type_complexity)]
     pub fn execute<F: PrimeField64>(
-        &mut self,
+        &self,
         stdin: &Mutex<ZiskStdin>,
         pctx: &ProofCtx<F>,
         sm_bundle: &StaticSMBundle<F>,
@@ -372,7 +372,7 @@ impl EmulatorAsm {
 
 impl<F: PrimeField64> crate::Emulator<F> for EmulatorAsm {
     fn execute(
-        &mut self,
+        &self,
         stdin: &Mutex<ZiskStdin>,
         pctx: &ProofCtx<F>,
         sm_bundle: &StaticSMBundle<F>,

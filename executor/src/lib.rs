@@ -27,7 +27,7 @@ use zisk_common::{io::ZiskStdin, ExecutorStatsHandle, ZiskExecutionResult};
 pub trait Emulator<F: PrimeField64>: Send + Sync {
     /// Execute the emulator
     fn execute(
-        &mut self,
+        &self,
         stdin: &Mutex<ZiskStdin>,
         pctx: &ProofCtx<F>,
         sm_bundle: &StaticSMBundle<F>,
@@ -57,7 +57,7 @@ impl EmulatorKind {
 
 impl<F: PrimeField64> Emulator<F> for EmulatorKind {
     fn execute(
-        &mut self,
+        &self,
         stdin: &Mutex<ZiskStdin>,
         pctx: &ProofCtx<F>,
         sm_bundle: &StaticSMBundle<F>,

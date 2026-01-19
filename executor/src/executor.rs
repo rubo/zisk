@@ -77,7 +77,7 @@ pub struct ZiskExecutor<F: PrimeField64> {
     stdin: Mutex<ZiskStdin>,
 
     /// The emulator backend used for execution.
-    emulator: Mutex<EmulatorKind>,
+    emulator: EmulatorKind,
 
     /// Chunk size for processing.
     chunk_size: u64,
@@ -135,7 +135,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
     ) -> Self {
         Self {
             stdin: Mutex::new(ZiskStdin::null()),
-            emulator: Mutex::new(emulator),
+            emulator,
             chunk_size,
             hints_stream: Mutex::new(hints_stream),
             zisk_rom,
@@ -760,7 +760,7 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
         timer_start_info!(COMPUTE_MINIMAL_TRACE);
 
         let (min_traces, main_count, mut secn_count, handle_mo, execution_result) =
-            self.emulator.lock().unwrap().execute(
+            self.emulator.execute(
                 &self.stdin,
                 &pctx,
                 &self.sm_bundle,
@@ -964,7 +964,7 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
         #[cfg(feature = "stats")]
         self.stats.add_stat(0, parent_stats_id, "CALCULATE_WITNESS", 0, ExecutorStatsEvent::Begin);
 
-        let is_asm_emulator = self.emulator.lock().unwrap().is_asm_emulator();
+        let is_asm_emulator = self.emulator.is_asm_emulator();
 
         let pool = create_pool(n_cores);
         pool.install(|| -> ProofmanResult<()> {
@@ -1074,7 +1074,7 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
         }
         let secn_instances_guard = self.secn_instances.read().unwrap();
 
-        let is_asm_emulator = self.emulator.lock().unwrap().is_asm_emulator();
+        let is_asm_emulator = self.emulator.is_asm_emulator();
 
         let mut secn_instances = HashMap::new();
         for &global_id in global_ids {

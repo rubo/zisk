@@ -194,7 +194,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         };
 
         // Create hints pipeline with null hints stream initially.
-        /// Debug flag: true = HintsShmem (shared memory), false = HintsFile (file output)
+        // Debug flag: true = HintsShmem (shared memory), false = HintsFile (file output)
         const USE_SHARED_MEMORY_HINTS: bool = true;
 
         let hints_processor = if USE_SHARED_MEMORY_HINTS {

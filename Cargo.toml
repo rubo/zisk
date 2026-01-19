@@ -42,7 +42,6 @@ members = [
     "ziskclib",
     "common",
     "tools/circuit",
-    "server",
     "distributed/crates/coordinator",
     "distributed/crates/grpc-api",
     "distributed/crates/common",
@@ -82,7 +81,6 @@ precomp-sha256f = { path = "precompiles/sha256f" }
 precomp-big-int = { path = "precompiles/big_int" }
 riscv = { path = "riscv" }
 rom-setup = { path = "rom-setup" }
-server = { path = "server" }
 sm-arith = { path = "state-machines/arith" }
 sm-binary = { path = "state-machines/binary" }
 sm-main = { path = "state-machines/main" }

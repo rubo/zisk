@@ -632,7 +632,6 @@ dependencies = [
  "rom-setup",
  "serde",
  "serde_json",
- "server",
  "sysinfo 0.37.2",
  "target-lexicon",
  "tokio",
@@ -4090,32 +4089,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "server"
-version = "0.16.0"
-dependencies = [
- "anyhow",
- "asm-runner",
- "bytemuck",
- "clap",
- "colored",
- "executor",
- "fields",
- "libloading",
- "mpi",
- "named-sem",
- "proofman",
- "proofman-common",
- "serde",
- "serde_json",
- "tracing",
- "uuid",
- "witness",
- "zisk-common",
- "zisk-witness",
- "zstd",
-]
-
-[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6134,6 +6107,7 @@ name = "zisk-witness"
 version = "0.16.0"
 dependencies = [
  "anyhow",
+ "asm-runner",
  "data-bus",
  "env_logger",
  "executor",
@@ -6145,6 +6119,7 @@ dependencies = [
  "precomp-big-int",
  "precomp-keccakf",
  "precomp-sha256f",
+ "precompiles-hints",
  "proofman",
  "proofman-common",
  "proofman-macros",

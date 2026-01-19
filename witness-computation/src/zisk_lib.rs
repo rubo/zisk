@@ -4,7 +4,10 @@
 //! This module leverages `WitnessLibrary` to orchestrate the setup of state machines,
 //! program conversion, and execution pipelines to generate required witnesses.
 
-use executor::{StateMachines, StaticSMBundle, ZiskExecutor};
+use asm_runner::HintsShmem;
+use executor::{
+    EmulatorAsm, EmulatorKind, EmulatorRust, StateMachines, StaticSMBundle, ZiskExecutor,
+};
 use fields::{Goldilocks, PrimeField64};
 use pil_std_lib::Std;
 use precomp_arith_eq::ArithEqManager;
@@ -12,6 +15,7 @@ use precomp_arith_eq_384::ArithEq384Manager;
 use precomp_big_int::Add256Manager;
 use precomp_keccakf::KeccakfManager;
 use precomp_sha256f::Sha256fManager;
+use precompiles_hints::HintsProcessor;
 use proofman::register_std;
 use proofman_common::{PackedInfo, ProofmanResult};
 use sm_arith::ArithSM;
@@ -20,7 +24,10 @@ use sm_mem::Mem;
 use sm_rom::RomSM;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use witness::{WitnessLibrary, WitnessManager};
-use zisk_common::{io::ZiskStdin, ExecutorStats, ZiskExecutionResult, ZiskLib, ZiskWitnessLibrary};
+use zisk_common::{
+    io::{ZiskStdin, ZiskStream},
+    ExecutorStats, ZiskExecutionResult, ZiskLib, ZiskWitnessLibrary,
+};
 use zisk_core::{Riscv2zisk, CHUNK_SIZE};
 #[cfg(feature = "packed")]
 use zisk_pil::PACKED_INFO;
@@ -36,8 +43,8 @@ use anyhow::Result;
 
 pub struct WitnessLib<F: PrimeField64> {
     elf_path: PathBuf,
-    asm_path: Option<PathBuf>,
-    asm_rom_path: Option<PathBuf>,
+    asm_mt_path: Option<PathBuf>,
+    asm_rh_path: Option<PathBuf>,
     executor: Option<Arc<ZiskExecutor<F>>>,
     chunk_size: u64,
     base_port: Option<u16>,
@@ -51,8 +58,8 @@ pub struct WitnessLib<F: PrimeField64> {
 fn init_library(
     verbose_mode: proofman_common::VerboseMode,
     elf_path: PathBuf,
-    asm_path: Option<PathBuf>,
-    asm_rom_path: Option<PathBuf>,
+    asm_mt_path: Option<PathBuf>,
+    asm_rh_path: Option<PathBuf>,
     base_port: Option<u16>,
     unlock_mapped_memory: bool,
     shared_tables: bool,
@@ -61,8 +68,8 @@ fn init_library(
 
     let result = Box::new(WitnessLib {
         elf_path,
-        asm_path,
-        asm_rom_path,
+        asm_mt_path,
+        asm_rh_path,
         executor: None,
         chunk_size,
         base_port,
@@ -89,6 +96,8 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
     /// # Panics
     /// Panics if the `Riscv2zisk` conversion fails or if required paths cannot be resolved.
     fn register_witness(&mut self, wcm: &WitnessManager<F>) -> ProofmanResult<()> {
+        assert_eq!(self.asm_mt_path.is_some(), self.asm_rh_path.is_some());
+
         let world_rank = wcm.get_world_rank();
         let local_rank = wcm.get_local_rank();
 
@@ -105,7 +114,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         let std = Std::new(wcm.get_pctx(), wcm.get_sctx(), self.shared_tables)?;
         register_std(wcm, &std);
 
-        let rom_sm = RomSM::new(zisk_rom.clone(), self.asm_rom_path.clone());
+        let rom_sm = RomSM::new(zisk_rom.clone(), self.asm_rh_path.clone());
         let binary_sm = BinarySM::new(std.clone());
         let arith_sm = ArithSM::new(std.clone());
         let mem_sm = Mem::new(std.clone());
@@ -133,7 +142,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         ];
 
         let sm_bundle = StaticSMBundle::new(
-            self.asm_path.is_some(),
+            self.asm_mt_path.is_some(),
             vec![
                 (vec![(ZISK_AIRGROUP_ID, ROM_AIR_IDS[0])], StateMachines::RomSM(rom_sm.clone())),
                 (mem_instances, StateMachines::MemSM(mem_sm.clone())),
@@ -166,23 +175,42 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
             ],
         );
 
-        // Step 5: Create the executor and register the secondary state machines
-        let executor: ZiskExecutor<F> = ZiskExecutor::new(
-            self.elf_path.clone(),
-            self.asm_path.clone(),
-            self.asm_rom_path.clone(),
+        let is_asm_emulator = self.asm_mt_path.is_some();
+        let emulator = if is_asm_emulator {
+            EmulatorKind::Asm(EmulatorAsm::new(
+                zisk_rom.clone(),
+                self.asm_mt_path.clone(),
+                world_rank,
+                local_rank,
+                self.base_port,
+                self.unlock_mapped_memory,
+                self.chunk_size,
+                Some(rom_sm.clone()),
+            ))
+        } else {
+            EmulatorKind::Rust(EmulatorRust::new(zisk_rom.clone(), self.chunk_size))
+        };
+
+        // Create hints pipeline with null hints stream initially.
+        let hints_shmem = HintsShmem::new(self.base_port, local_rank, self.unlock_mapped_memory)
+            .expect("Failed to create HintsShmem");
+        // let hints_shmem = HintsFile::new("test_modexp_results.bin".to_string())
+        //     .expect("Failed to create HintsFile");
+
+        let hints_processor = HintsProcessor::builder(hints_shmem)
+            .build()
+            .expect("Failed to create PrecompileHintsProcessor");
+
+        let hints_stream = ZiskStream::new(hints_processor);
+
+        let executor = Arc::new(ZiskExecutor::new(
             zisk_rom,
             std,
             sm_bundle,
-            Some(rom_sm.clone()),
             self.chunk_size,
-            world_rank,
-            local_rank,
-            self.base_port,
-            self.unlock_mapped_memory,
-        );
-
-        let executor = Arc::new(executor);
+            emulator,
+            hints_stream,
+        ));
 
         // Step 7: Register the executor as a component in the Witness Manager
         wcm.register_component(executor.clone());

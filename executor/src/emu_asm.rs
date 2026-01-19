@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, Mutex},
     thread::JoinHandle,
 };
@@ -65,7 +64,6 @@ impl EmulatorAsm {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         zisk_rom: Arc<ZiskRom>,
-        _asm_path: PathBuf,
         world_rank: i32,
         local_rank: i32,
         base_port: Option<u16>,

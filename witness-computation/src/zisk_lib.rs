@@ -181,7 +181,6 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
             debug!("Using ASM emulator");
             EmulatorKind::Asm(EmulatorAsm::new(
                 zisk_rom.clone(),
-                self.asm_mt_path.as_ref().unwrap().clone(),
                 world_rank,
                 local_rank,
                 self.base_port,

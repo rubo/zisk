@@ -13,6 +13,7 @@ use precomp_arith_eq::ArithEqManager;
 use precomp_arith_eq_384::ArithEq384Manager;
 use precomp_big_int::Add256Manager;
 use precomp_keccakf::KeccakfManager;
+use precomp_poseidon2::Poseidon2Manager;
 use precomp_sha256f::Sha256fManager;
 use proofman::register_std;
 use proofman_common::{PackedInfo, ProofmanResult};
@@ -30,8 +31,8 @@ use zisk_pil::{
     ADD_256_AIR_IDS, ARITH_AIR_IDS, ARITH_EQ_384_AIR_IDS, ARITH_EQ_AIR_IDS, BINARY_ADD_AIR_IDS,
     BINARY_AIR_IDS, BINARY_EXTENSION_AIR_IDS, INPUT_DATA_AIR_IDS, KECCAKF_AIR_IDS, MEM_AIR_IDS,
     MEM_ALIGN_AIR_IDS, MEM_ALIGN_BYTE_AIR_IDS, MEM_ALIGN_READ_BYTE_AIR_IDS,
-    MEM_ALIGN_WRITE_BYTE_AIR_IDS, ROM_AIR_IDS, ROM_DATA_AIR_IDS, SHA_256_F_AIR_IDS,
-    ZISK_AIRGROUP_ID,
+    MEM_ALIGN_WRITE_BYTE_AIR_IDS, POSEIDON_2_AIR_IDS, ROM_AIR_IDS, ROM_DATA_AIR_IDS,
+    SHA_256_F_AIR_IDS, ZISK_AIRGROUP_ID,
 };
 
 pub struct WitnessLib<F: PrimeField64> {
@@ -114,6 +115,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         // Step 4: Initialize the precompiles state machines
         let keccakf_sm = KeccakfManager::new(std.clone());
         let sha256f_sm = Sha256fManager::new(std.clone());
+        let poseidon2_sm = Poseidon2Manager::new();
         let arith_eq_sm = ArithEqManager::new(std.clone());
         let arith_eq_384_sm = ArithEq384Manager::new(std.clone());
         let add256_sm = Add256Manager::new(std.clone());
@@ -152,6 +154,10 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
                 (
                     vec![(ZISK_AIRGROUP_ID, SHA_256_F_AIR_IDS[0])],
                     StateMachines::Sha256fManager(sha256f_sm.clone()),
+                ),
+                (
+                    vec![(ZISK_AIRGROUP_ID, POSEIDON_2_AIR_IDS[0])],
+                    StateMachines::Poseidon2Manager(poseidon2_sm.clone()),
                 ),
                 (
                     vec![(ZISK_AIRGROUP_ID, ARITH_EQ_AIR_IDS[0])],

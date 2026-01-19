@@ -35,6 +35,7 @@ const COMPLEX_OVER_384_BITS_SIZE: usize = 2 * DATA_384_BITS_SIZE;
 
 // use OPERATION_BUS_DATA_SIZE because a = step, b = addr
 pub const OPERATION_BUS_KECCAKF_DATA_SIZE: usize = OPERATION_BUS_DATA_SIZE + 25;
+pub const OPERATION_BUS_POSEIDON2_DATA_SIZE: usize = OPERATION_BUS_DATA_SIZE + 16;
 pub const OPERATION_BUS_SHA256F_DATA_SIZE: usize =
     OPERATION_BUS_DATA_SIZE + 2 * INDIRECTION_SIZE + 3 * DATA_256_BITS_SIZE;
 pub const OPERATION_BUS_ARITH_256_DATA_SIZE: usize =
@@ -93,6 +94,7 @@ pub type OperationData<D> = [D; OPERATION_BUS_DATA_SIZE];
 /// Type alias for precompiles operation data payload.
 pub type OperationKeccakData<D> = [D; OPERATION_BUS_KECCAKF_DATA_SIZE];
 pub type OperationSha256Data<D> = [D; OPERATION_BUS_SHA256F_DATA_SIZE];
+pub type OperationPoseidon2Data<D> = [D; OPERATION_BUS_POSEIDON2_DATA_SIZE];
 pub type OperationArith256Data<D> = [D; OPERATION_BUS_ARITH_256_DATA_SIZE];
 pub type OperationArith256ModData<D> = [D; OPERATION_BUS_ARITH_256_MOD_DATA_SIZE];
 pub type OperationSecp256k1AddData<D> = [D; OPERATION_BUS_SECP256K1_ADD_DATA_SIZE];
@@ -114,6 +116,7 @@ pub enum ExtOperationData<D> {
     OperationData(OperationData<D>),
     OperationKeccakData(OperationKeccakData<D>),
     OperationSha256Data(OperationSha256Data<D>),
+    OperationPoseidon2Data(OperationPoseidon2Data<D>),
     OperationArith256Data(OperationArith256Data<D>),
     OperationArith256ModData(OperationArith256ModData<D>),
     OperationSecp256k1AddData(OperationSecp256k1AddData<D>),
@@ -134,6 +137,7 @@ pub enum ExtOperationData<D> {
 
 const KECCAK_OP: u8 = ZiskOp::Keccak.code();
 const SHA256_OP: u8 = ZiskOp::Sha256.code();
+const POSEIDON2_OP: u8 = ZiskOp::Poseidon2.code();
 const ARITH256_OP: u8 = ZiskOp::Arith256.code();
 const ARITH256_MOD_OP: u8 = ZiskOp::Arith256Mod.code();
 const SECP256K1_ADD_OP: u8 = ZiskOp::Secp256k1Add.code();
@@ -170,6 +174,11 @@ impl<D: Copy + Into<u64>> TryFrom<&[D]> for ExtOperationData<D> {
                 let array: OperationSha256Data<D> =
                     data.try_into().map_err(|_| "Invalid OperationSha256Data size")?;
                 Ok(ExtOperationData::OperationSha256Data(array))
+            }
+            POSEIDON2_OP => {
+                let array: OperationPoseidon2Data<D> =
+                    data.try_into().map_err(|_| "Invalid OperationPoseidon2Data size")?;
+                Ok(ExtOperationData::OperationPoseidon2Data(array))
             }
             ARITH256_OP => {
                 let array: OperationArith256Data<D> =
@@ -319,6 +328,14 @@ impl OperationBusData<u64> {
                 data[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
                 data[OPERATION_BUS_DATA_SIZE..].copy_from_slice(&ctx.precompiled.input_data);
                 ExtOperationData::OperationSha256Data(data)
+            }
+
+            ZiskOperationType::Poseidon2 => {
+                let mut data =
+                    unsafe { uninit_array::<OPERATION_BUS_POSEIDON2_DATA_SIZE>().assume_init() };
+                data[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
+                data[OPERATION_BUS_DATA_SIZE..].copy_from_slice(&ctx.precompiled.input_data);
+                ExtOperationData::OperationPoseidon2Data(data)
             }
 
             ZiskOperationType::ArithEq => match inst.op {
@@ -495,6 +512,14 @@ impl OperationBusData<u64> {
                 &buffer[..OPERATION_BUS_SHA256F_DATA_SIZE]
             }
 
+            ZiskOperationType::Poseidon2 => {
+                debug_assert_eq!(ctx.precompiled.input_data.len(), 16);
+                buffer[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
+                buffer[OPERATION_BUS_DATA_SIZE..OPERATION_BUS_POSEIDON2_DATA_SIZE]
+                    .copy_from_slice(&ctx.precompiled.input_data);
+                &buffer[..OPERATION_BUS_POSEIDON2_DATA_SIZE]
+            }
+
             ZiskOperationType::ArithEq => match inst.op {
                 ARITH256_OP => {
                     let len = OPERATION_BUS_DATA_SIZE + ctx.precompiled.input_data.len();
@@ -647,6 +672,7 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationData(d) => d[OP] as u8,
             ExtOperationData::OperationKeccakData(d) => d[OP] as u8,
             ExtOperationData::OperationSha256Data(d) => d[OP] as u8,
+            ExtOperationData::OperationPoseidon2Data(d) => d[OP] as u8,
             ExtOperationData::OperationArith256Data(d) => d[OP] as u8,
             ExtOperationData::OperationArith256ModData(d) => d[OP] as u8,
             ExtOperationData::OperationSecp256k1AddData(d) => d[OP] as u8,
@@ -679,6 +705,7 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationData(d) => d[OP_TYPE],
             ExtOperationData::OperationKeccakData(d) => d[OP_TYPE],
             ExtOperationData::OperationSha256Data(d) => d[OP_TYPE],
+            ExtOperationData::OperationPoseidon2Data(d) => d[OP_TYPE],
             ExtOperationData::OperationArith256Data(d) => d[OP_TYPE],
             ExtOperationData::OperationArith256ModData(d) => d[OP_TYPE],
             ExtOperationData::OperationSecp256k1AddData(d) => d[OP_TYPE],
@@ -711,6 +738,7 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationData(d) => d[A],
             ExtOperationData::OperationKeccakData(d) => d[A],
             ExtOperationData::OperationSha256Data(d) => d[A],
+            ExtOperationData::OperationPoseidon2Data(d) => d[A],
             ExtOperationData::OperationArith256Data(d) => d[A],
             ExtOperationData::OperationArith256ModData(d) => d[A],
             ExtOperationData::OperationSecp256k1AddData(d) => d[A],
@@ -743,6 +771,7 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationData(d) => d[B],
             ExtOperationData::OperationKeccakData(d) => d[B],
             ExtOperationData::OperationSha256Data(d) => d[B],
+            ExtOperationData::OperationPoseidon2Data(d) => d[B],
             ExtOperationData::OperationArith256Data(d) => d[B],
             ExtOperationData::OperationArith256ModData(d) => d[B],
             ExtOperationData::OperationSecp256k1AddData(d) => d[B],

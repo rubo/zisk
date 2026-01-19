@@ -11,6 +11,7 @@
 
 use ziskos::zisklib::fcall_proxy;
 
+use fields::{poseidon2_hash, Goldilocks, Poseidon16, PrimeField64};
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -46,6 +47,7 @@ pub enum OpType {
     BinaryE,
     Keccak,
     Sha256,
+    Poseidon2,
     PubOut,
     ArithEq,
     Fcall,
@@ -62,6 +64,7 @@ impl From<OpType> for ZiskOperationType {
             OpType::BinaryE => ZiskOperationType::BinaryE,
             OpType::Keccak => ZiskOperationType::Keccak,
             OpType::Sha256 => ZiskOperationType::Sha256,
+            OpType::Poseidon2 => ZiskOperationType::Poseidon2,
             OpType::PubOut => ZiskOperationType::PubOut,
             OpType::ArithEq => ZiskOperationType::ArithEq,
             OpType::Fcall => ZiskOperationType::Fcall,
@@ -82,6 +85,7 @@ impl Display for OpType {
             Self::BinaryE => write!(f, "BinaryE"),
             Self::Keccak => write!(f, "Keccak"),
             Self::Sha256 => write!(f, "Sha256"),
+            Self::Poseidon2 => write!(f, "Poseidon2"),
             Self::PubOut => write!(f, "PubOut"),
             Self::ArithEq => write!(f, "Arith256"),
             Self::Fcall => write!(f, "Fcall"),
@@ -104,6 +108,7 @@ impl FromStr for OpType {
             "be" => Ok(Self::BinaryE),
             "k" => Ok(Self::Keccak),
             "s" => Ok(Self::Sha256),
+            "p" => Ok(Self::Poseidon2),
             "aeq" => Ok(Self::ArithEq),
             "fcall" => Ok(Self::Fcall),
             "aeq384" => Ok(Self::ArithEq384),
@@ -318,6 +323,7 @@ const ARITHA32_COST: u64 = 95;
 const ARITHAM32_COST: u64 = 95;
 const KECCAK_COST: u64 = (((93846 * 86) - 1) / 63) + 1;
 const SHA256_COST: u64 = 72 * 121;
+const POSEIDON2_COST: u64 = 14 * 75;
 const ARITH_EQ_COST: u64 = 85 * 16;
 const FCALL_COST: u64 = INTERNAL_COST;
 const ARITH_EQ_384_COST: u64 = 79 * 24;
@@ -400,6 +406,7 @@ define_ops! {
     (Fcall, "fcall", Fcall, FCALL_COST, 0xf7, 0, 0, opc_fcall, op_fcall, ops_none),
     (FcallGet, "fcall_get", Fcall, FCALL_COST, 0xf8, 0, 0, opc_fcall_get, op_fcall_get, ops_none),
     (Sha256, "sha256", Sha256, SHA256_COST, 0xf9, 112, 112, opc_sha256, op_sha256, ops_sha256),
+    (Poseidon2, "poseidon2", Poseidon2, POSEIDON2_COST, 0xe1, 128, 128, opc_poseidon2, op_poseidon2, ops_poseidon2),
     (Bn254CurveAdd, "bn254_curve_add", ArithEq, ARITH_EQ_COST, 0xfa, 144, 64, opc_bn254_curve_add, op_bn254_curve_add, ops_bn254_curve_add),
     (Bn254CurveDbl, "bn254_curve_dbl", ArithEq, ARITH_EQ_COST, 0xfb, 64, 64, opc_bn254_curve_dbl, op_bn254_curve_dbl, ops_bn254_curve_dbl),
     (Bn254ComplexAdd, "bn254_complex_add", ArithEq, ARITH_EQ_COST, 0xfc, 144, 64, opc_bn254_complex_add, op_bn254_complex_add, ops_bn254_complex_add),
@@ -1290,6 +1297,98 @@ pub fn op_sha256(_a: u64, _b: u64) -> (u64, bool) {
 #[inline(always)]
 pub fn ops_sha256(ctx: &InstContext, stats: &mut dyn OpStats) {
     precompiled_stats_data(ctx, stats, &[4, 8], &[], 1);
+}
+
+/// Performs a Poseidon2 hash over a 16 elements stored in memory at the address
+/// specified by register A0, and stores the output state in the same memory address
+#[inline(always)]
+pub fn opc_poseidon2(ctx: &mut InstContext) {
+    // Get address from b (a = step)
+    let address = ctx.b;
+    if address & 0x7 != 0 {
+        panic!("opc_poseidon2() found address not aligned to 8 bytes");
+    }
+
+    // Allocate room for 16 u64 = 128 bytes = 1024 bits
+    const WORDS: usize = 16;
+    let mut data = [0u64; WORDS];
+
+    // Get input data from memory or from the precompiled context
+    match ctx.emulation_mode {
+        EmulationMode::Mem => {
+            // Read data from the memory address
+            for (i, d) in data.iter_mut().enumerate() {
+                *d = ctx.mem.read(address + (8 * i as u64), 8);
+            }
+
+            // Call poseidon2
+            let data_gl = data.map(Goldilocks::new);
+            let res_gl = poseidon2_hash::<Goldilocks, Poseidon16, 16>(&data_gl);
+            for (i, d) in data.iter_mut().enumerate() {
+                *d = res_gl[i].as_canonical_u64();
+            }
+
+            // Write data to the memory address
+            for (i, d) in data.iter().enumerate() {
+                ctx.mem.write(address + (8 * i as u64), *d, 8);
+            }
+        }
+        EmulationMode::GenerateMemReads => {
+            // Read data from the memory address
+            for (i, d) in data.iter_mut().enumerate() {
+                *d = ctx.mem.read(address + (8 * i as u64), 8);
+            }
+
+            // Copy data to the precompiled context
+            ctx.precompiled.input_data.clear();
+            for (i, d) in data.iter_mut().enumerate() {
+                ctx.precompiled.input_data.push(*d);
+            }
+
+            // Call poseidon2
+            let data_gl = data.map(Goldilocks::new);
+            let res_gl = poseidon2_hash::<Goldilocks, Poseidon16, 16>(&data_gl);
+            for (i, d) in data.iter_mut().enumerate() {
+                *d = res_gl[i].as_canonical_u64();
+            }
+
+            // Write data to the memory address
+            for (i, d) in data.iter().enumerate() {
+                ctx.mem.write(address + (8 * i as u64), *d, 8);
+            }
+
+            // Write data to the precompiled context
+            ctx.precompiled.output_data.clear();
+            for (i, d) in data.iter_mut().enumerate() {
+                ctx.precompiled.output_data.push(*d);
+            }
+        }
+        EmulationMode::ConsumeMemReads => {
+            // Check input data has the expected length
+            if ctx.precompiled.input_data.len() != WORDS {
+                panic!(
+                    "opc_poseidon2() found ctx.precompiled.input_data.len={} != {}",
+                    ctx.precompiled.input_data.len(),
+                    WORDS
+                );
+            }
+        }
+    }
+
+    ctx.c = 0;
+    ctx.flag = false;
+}
+
+/// Unimplemented.  Poseidon2 can only be called from the system call context via InstContext.
+/// This is provided just for completeness.
+#[inline(always)]
+pub fn op_poseidon2(_a: u64, _b: u64) -> (u64, bool) {
+    unimplemented!("op_poseidon2() is not implemented");
+}
+
+#[inline(always)]
+pub fn ops_poseidon2(ctx: &InstContext, stats: &mut dyn OpStats) {
+    precompiled_stats_direct_data(ctx, stats, 16, 16);
 }
 
 #[inline(always)]

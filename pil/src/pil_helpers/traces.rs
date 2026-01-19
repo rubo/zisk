@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "d2072d6b50a3327861b544ec82fe2e3ba83386f69bc0b044d7b227cac13bdcdf";
+pub const PILOUT_HASH: &str = "92d0e6393f156ecee7a7d087ce5b417d708dd0023de05bcdf569ff0daed5c287";
 
 pub const MERKLE_TREE_ARITY: u64 = 4;
 
@@ -62,11 +62,13 @@ pub const KECCAKF_AIR_IDS: &[usize] = &[16];
 
 pub const SHA_256_F_AIR_IDS: &[usize] = &[17];
 
-pub const SPECIFIED_RANGES_AIR_IDS: &[usize] = &[18];
+pub const POSEIDON_2_AIR_IDS: &[usize] = &[18];
 
-pub const VIRTUAL_TABLE_0_AIR_IDS: &[usize] = &[19];
+pub const SPECIFIED_RANGES_AIR_IDS: &[usize] = &[19];
 
-pub const VIRTUAL_TABLE_1_AIR_IDS: &[usize] = &[20];
+pub const VIRTUAL_TABLE_0_AIR_IDS: &[usize] = &[20];
+
+pub const VIRTUAL_TABLE_1_AIR_IDS: &[usize] = &[21];
 
 
 //PUBLICS
@@ -359,37 +361,51 @@ pub type Sha256fTrace<F> = GenericTrace<Sha256fTraceRow<F>, 262144, 0, 17>;
 pub type Sha256fTracePacked<F> = GenericTrace<Sha256fTraceRowPacked<F>, 262144, 0, 17>;
 
 
+trace_row!(Poseidon2FixedRow<F> {
+ CLK_0: F, __L1__: F,
+});
+pub type Poseidon2Fixed<F> = GenericTrace<Poseidon2FixedRow<F>, 131072, 0, 18>;
+
+trace_row!(Poseidon2TraceRow<F> {
+ in_use_clk_0:bit, in_use:bit, chunks:[[u32; 2]; 16], step_addr:ubit(40),
+});
+pub type Poseidon2Trace<F> = GenericTrace<Poseidon2TraceRow<F>, 131072, 0, 18>;
+
+
+pub type Poseidon2TracePacked<F> = GenericTrace<Poseidon2TraceRowPacked<F>, 131072, 0, 18>;
+
+
 trace_row!(SpecifiedRangesFixedRow<F> {
  RANGE: [F; 33], __L1__: F,
 });
-pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 1048576, 0, 18>;
+pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 1048576, 0, 19>;
 
 trace_row!(SpecifiedRangesTraceRow<F> {
  mul:[F; 33],
 });
-pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048576, 0, 18>;
+pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048576, 0, 19>;
 
 
 trace_row!(VirtualTable0FixedRow<F> {
  UID: [F; 8], column: [F; 43], __L1__: F,
 });
-pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 2097152, 0, 19>;
+pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 2097152, 0, 20>;
 
 trace_row!(VirtualTable0TraceRow<F> {
  multiplicity:[F; 8],
 });
-pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 2097152, 0, 19>;
+pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 2097152, 0, 20>;
 
 
 trace_row!(VirtualTable1FixedRow<F> {
  UID: [F; 8], column: [F; 64], __L1__: F,
 });
-pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 2097152, 0, 20>;
+pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 2097152, 0, 21>;
 
 trace_row!(VirtualTable1TraceRow<F> {
  multiplicity:[F; 8],
 });
-pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 2097152, 0, 20>;
+pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 2097152, 0, 21>;
 
 
 trace_row!(RomRomTraceRow<F> {
@@ -510,6 +526,10 @@ values!(Sha256fAirGroupValues<F> {
  gsum_result: FieldExtension<F>,
 });
 
+values!(Poseidon2AirGroupValues<F> {
+ gsum_result: FieldExtension<F>,
+});
+
 values!(SpecifiedRangesAirGroupValues<F> {
  gsum_result: FieldExtension<F>,
 });
@@ -607,5 +627,10 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
         is_packed: true,
         num_packed_words: 3,
         unpack_info: &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 8, 4, 40, 1, 1],
+    }),
+    (0, 18, PackedInfoConst {
+        is_packed: true,
+        num_packed_words: 17,
+        unpack_info: &[1, 1, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 40],
     }),
 ];

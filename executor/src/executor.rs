@@ -19,16 +19,15 @@
 //! By structuring these phases, the `ZiskExecutor` ensures high-performance execution while
 //! maintaining clarity and modularity in the computation process.
 
-use asm_runner::{HintsFile, HintsShmem, MinimalTraces};
+use asm_runner::MinimalTraces;
 use fields::PrimeField64;
 use pil_std_lib::Std;
-use precompiles_hints::HintsProcessor;
 use proofman_common::{create_pool, BufferPool, ProofCtx, ProofmanResult, SetupCtx};
 use proofman_util::{timer_start_info, timer_stop_and_log_info};
 use sm_rom::RomInstance;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use witness::WitnessComponent;
-use zisk_common::io::{StreamSink, StreamSource, ZiskStdin, ZiskStream};
+use zisk_common::io::{StreamSource, ZiskStdin, ZiskStream};
 
 use data_bus::DataBusTrait;
 use sm_main::{MainInstance, MainPlanner, MainSM};
@@ -68,15 +67,12 @@ enum MinimalTraceExecutionMode {
     AsmWithCounter,
 }
 
-pub type StreamHintsShmem = ZiskStream<HintsProcessor<HintsShmem>>;
-pub type StreamHintsFile = ZiskStream<HintsProcessor<HintsFile>>;
-
 /// The maximum number of steps to execute in the emulator or assembly runner.
 pub const MAX_NUM_STEPS: u64 = 1 << 32;
 
 /// The `ZiskExecutor` struct orchestrates the execution of the ZisK ROM program, managing state
 /// machines, planning, and witness computation.
-pub struct ZiskExecutor<F: PrimeField64, HS: StreamSink> {
+pub struct ZiskExecutor<F: PrimeField64> {
     /// Standard input for the ZisK program execution.
     stdin: Mutex<ZiskStdin>,
 
@@ -87,8 +83,8 @@ pub struct ZiskExecutor<F: PrimeField64, HS: StreamSink> {
     chunk_size: u64,
 
     /// Pipeline for handling precompile hints.
-    hints_stream: Mutex<ZiskStream<HintsProcessor<HS>>>,
-    // hints_stream: Mutex<StreamHintsFile>,
+    hints_stream: Mutex<Option<ZiskStream>>,
+
     /// ZisK ROM, a binary file containing the ZisK program to be executed.
     zisk_rom: Arc<ZiskRom>,
 
@@ -122,11 +118,12 @@ pub struct ZiskExecutor<F: PrimeField64, HS: StreamSink> {
     stats: ExecutorStatsHandle,
 }
 
-impl<F: PrimeField64, HS: StreamSink> ZiskExecutor<F, HS> {
+impl<F: PrimeField64> ZiskExecutor<F> {
     /// Creates a new instance of the `ZiskExecutor`.
     ///
     /// # Arguments
     /// * `zisk_rom` - An `Arc`-wrapped ZisK ROM instance.
+    /// * `hints_stream` - Optional hints stream for processing precompile hints.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         zisk_rom: Arc<ZiskRom>,
@@ -134,7 +131,7 @@ impl<F: PrimeField64, HS: StreamSink> ZiskExecutor<F, HS> {
         sm_bundle: StaticSMBundle<F>,
         chunk_size: u64,
         emulator: EmulatorKind,
-        hints_stream: ZiskStream<HintsProcessor<HS>>,
+        hints_stream: Option<ZiskStream>,
     ) -> Self {
         Self {
             stdin: Mutex::new(ZiskStdin::null()),
@@ -160,7 +157,11 @@ impl<F: PrimeField64, HS: StreamSink> ZiskExecutor<F, HS> {
     }
 
     pub fn set_hints_stream(&self, stream: StreamSource) -> Result<()> {
-        self.hints_stream.lock().unwrap().set_hints_stream(stream)
+        if let Some(hints_stream) = self.hints_stream.lock().unwrap().as_mut() {
+            hints_stream.set_hints_stream(stream)
+        } else {
+            Err(anyhow::anyhow!("No hints stream configured"))
+        }
     }
 
     #[allow(clippy::type_complexity)]
@@ -725,7 +726,7 @@ impl<F: PrimeField64, HS: StreamSink> ZiskExecutor<F, HS> {
     }
 }
 
-impl<F: PrimeField64, HS: StreamSink> WitnessComponent<F> for ZiskExecutor<F, HS> {
+impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
     /// Executes the ZisK ROM program and calculate the plans for main and secondary state machines.
     ///
     /// # Arguments
@@ -749,8 +750,10 @@ impl<F: PrimeField64, HS: StreamSink> WitnessComponent<F> for ZiskExecutor<F, HS
         self.stats.set_start_time(Instant::now());
 
         // Process and write precompile atomically
-        if let Ok(mut hints_stream) = self.hints_stream.lock() {
-            let _ = hints_stream.start_stream();
+        if let Ok(mut hints_stream_guard) = self.hints_stream.lock() {
+            if let Some(hints_stream) = hints_stream_guard.as_mut() {
+                let _ = hints_stream.start_stream();
+            }
         }
 
         // Process the ROM to collect the Minimal Traces

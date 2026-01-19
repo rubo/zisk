@@ -59,14 +59,14 @@ impl HintProcessorState {
 pub type CustomHintHandler = Arc<dyn Fn(&[u64]) -> Result<Vec<u64>> + Send + Sync>;
 
 /// Builder for configuring and constructing a [`HintsProcessor`].
-pub struct HintsProcessorBuilder<HS: StreamSink> {
-    hints_sink: HS,
+pub struct HintsProcessorBuilder {
+    hints_sink: Arc<dyn StreamSink>,
     num_threads: usize,
     enable_stats: bool,
     custom_handlers: HashMap<u32, CustomHintHandler>,
 }
 
-impl<HS: StreamSink> HintsProcessorBuilder<HS> {
+impl HintsProcessorBuilder {
     /// Sets the number of worker threads in the thread pool.
     pub fn num_threads(mut self, num_threads: usize) -> Self {
         self.num_threads = num_threads;
@@ -110,14 +110,14 @@ impl<HS: StreamSink> HintsProcessorBuilder<HS> {
     ///
     /// * `Ok(HintsProcessor)` - Successfully constructed processor
     /// * `Err` - If the thread pool fails to initialize
-    pub fn build(self) -> Result<HintsProcessor<HS>> {
+    pub fn build(self) -> Result<HintsProcessor> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(self.num_threads)
             .build()
             .map_err(|e| anyhow::anyhow!("Failed to create thread pool: {}", e))?;
 
         let state = Arc::new(HintProcessorState::new());
-        let hints_sink = Arc::new(self.hints_sink);
+        let hints_sink = self.hints_sink;
 
         // Spawn drainer thread
         let drainer_state = Arc::clone(&state);
@@ -143,7 +143,7 @@ impl<HS: StreamSink> HintsProcessorBuilder<HS> {
 /// This struct provides methods to parse and process a stream of concatenated
 /// hints, using a dedicated Rayon thread pool for parallel processing while
 /// preserving the original order of results.
-pub struct HintsProcessor<HS: StreamSink> {
+pub struct HintsProcessor {
     /// The thread pool used for parallel hint processing.
     pool: ThreadPool,
 
@@ -157,7 +157,7 @@ pub struct HintsProcessor<HS: StreamSink> {
 
     /// The hints sink used to submit processed hints (kept for ownership).
     #[allow(dead_code)]
-    hints_sink: Arc<HS>,
+    hints_sink: Arc<dyn StreamSink>,
 
     /// Handle to the drainer thread (wrapped in ManuallyDrop to join in Drop)
     drainer_thread: ManuallyDrop<std::thread::JoinHandle<()>>,
@@ -166,14 +166,14 @@ pub struct HintsProcessor<HS: StreamSink> {
     custom_handlers: Arc<HashMap<u32, CustomHintHandler>>,
 }
 
-impl<HS: StreamSink> HintsProcessor<HS> {
+impl HintsProcessor {
     const DEFAULT_NUM_THREADS: usize = 1;
 
     /// Creates a builder for configuring a [`HintsProcessor`].
     ///
     /// # Arguments
     ///
-    /// * `hints_sink` - The sink used to submit processed hints
+    /// * `hints_sink` - The sink used to submit processed hints (any type implementing StreamSink)
     ///
     /// # Examples
     ///
@@ -183,9 +183,9 @@ impl<HS: StreamSink> HintsProcessor<HS> {
     ///     .enable_stats(false)
     ///     .build()?;
     /// ```
-    pub fn builder(hints_sink: HS) -> HintsProcessorBuilder<HS> {
+    pub fn builder(hints_sink: impl StreamSink) -> HintsProcessorBuilder {
         HintsProcessorBuilder {
-            hints_sink,
+            hints_sink: Arc::new(hints_sink),
             num_threads: Self::DEFAULT_NUM_THREADS,
             enable_stats: false,
             custom_handlers: HashMap::new(),
@@ -376,7 +376,7 @@ impl<HS: StreamSink> HintsProcessor<HS> {
             return;
         }
 
-        println!("Hint processed {:?}:", hint);
+        // println!("Hint processed {:?}:", hint);
 
         // Check if we should stop due to error - but still need to fill the slot
         let result = if state.error_flag.load(Ordering::Acquire) {
@@ -429,7 +429,7 @@ impl<HS: StreamSink> HintsProcessor<HS> {
     }
 
     /// Drainer thread that waits for hints to complete and drains ready results from queue.
-    fn drainer_thread(state: Arc<HintProcessorState>, hints_sink: Arc<HS>) {
+    fn drainer_thread(state: Arc<HintProcessorState>, hints_sink: Arc<dyn StreamSink>) {
         loop {
             let mut queue = state.queue.lock().unwrap();
 
@@ -636,7 +636,7 @@ impl<HS: StreamSink> HintsProcessor<HS> {
     }
 }
 
-impl<HS: StreamSink> Drop for HintsProcessor<HS> {
+impl Drop for HintsProcessor {
     fn drop(&mut self) {
         // Signal drainer thread to shut down
         self.state.shutdown.store(true, Ordering::Release);
@@ -651,7 +651,7 @@ impl<HS: StreamSink> Drop for HintsProcessor<HS> {
     }
 }
 
-impl<HS: StreamSink> StreamProcessor for HintsProcessor<HS> {
+impl StreamProcessor for HintsProcessor {
     fn process(&self, data: &[u64], first_batch: bool) -> Result<bool> {
         self.process_hints(data, first_batch)
     }
@@ -679,7 +679,7 @@ mod tests {
         make_header(ctrl, length)
     }
 
-    fn processor() -> HintsProcessor<NullHints> {
+    fn processor() -> HintsProcessor {
         HintsProcessor::builder(NullHints).num_threads(2).build().unwrap()
     }
 

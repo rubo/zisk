@@ -139,56 +139,20 @@ impl EmulatorAsm {
             ExecutorStatsEvent::Begin,
         );
 
+        #[cfg(feature = "stats")]
+        let stats_id = stats.next_id();
+        #[cfg(feature = "stats")]
+        stats.add_stat(parent_stats_id, stats_id, "ASM_WRITE_INPUT", 0, ExecutorStatsEvent::Begin);
+
         AsmServices::SERVICES.par_iter().enumerate().for_each(|(idx, service)| {
-            #[cfg(feature = "stats")]
-            let stats_id = stats.next_id();
-            #[cfg(feature = "stats")]
-            stats.add_stat(
-                parent_stats_id,
-                stats_id,
-                "ASM_WRITE_INPUT",
-                0,
-                ExecutorStatsEvent::Begin,
-            );
-
-            let port = if let Some(base_port) = self.base_port {
-                AsmServices::port_for(service, base_port, self.local_rank)
-            } else {
-                AsmServices::default_port(service, self.local_rank)
-            };
-
-            let shmem_input_name =
-                AsmSharedMemory::<AsmMTHeader>::shmem_input_name(port, *service, self.local_rank);
-
             let mut input_writer = self.shmem_input_writer[idx].lock().unwrap();
-            if input_writer.is_none() {
-                tracing::info!(
-                    "Initializing SharedMemoryWriter for service {:?} at '{}'",
-                    service,
-                    shmem_input_name
-                );
-                *input_writer = Some(
-                    SharedMemoryWriter::new(
-                        &shmem_input_name,
-                        MAX_INPUT_SIZE as usize,
-                        self.unlock_mapped_memory,
-                    )
-                    .expect("Failed to create SharedMemoryWriter"),
-                );
-            }
+            input_writer.get_or_insert_with(|| self.create_shmem_writer(service));
 
             write_input(&mut stdin.lock().unwrap(), input_writer.as_ref().unwrap());
-
-            // Add to executor stats
-            #[cfg(feature = "stats")]
-            stats.add_stat(
-                parent_stats_id,
-                stats_id,
-                "ASM_WRITE_INPUT",
-                0,
-                ExecutorStatsEvent::End,
-            );
         });
+
+        #[cfg(feature = "stats")]
+        stats.add_stat(parent_stats_id, stats_id, "ASM_WRITE_INPUT", 0, ExecutorStatsEvent::End);
 
         let chunk_size = self.chunk_size;
         let (world_rank, local_rank, base_port) =
@@ -257,6 +221,30 @@ impl EmulatorAsm {
         stats.add_stat(0, parent_stats_id, "EXECUTE_WITH_ASSEMBLY", 0, ExecutorStatsEvent::End);
 
         (min_traces, main_count, secn_count, Some(handle_mo), execution_result)
+    }
+
+    fn create_shmem_writer(&self, service: &asm_runner::AsmService) -> SharedMemoryWriter {
+        let port = if let Some(base_port) = self.base_port {
+            AsmServices::port_for(service, base_port, self.local_rank)
+        } else {
+            AsmServices::default_port(service, self.local_rank)
+        };
+
+        let shmem_input_name =
+            AsmSharedMemory::<AsmMTHeader>::shmem_input_name(port, *service, self.local_rank);
+
+        tracing::info!(
+            "Initializing SharedMemoryWriter for service {:?} at '{}'",
+            service,
+            shmem_input_name
+        );
+
+        SharedMemoryWriter::new(
+            &shmem_input_name,
+            MAX_INPUT_SIZE as usize,
+            self.unlock_mapped_memory,
+        )
+        .expect("Failed to create SharedMemoryWriter")
     }
 
     fn run_mt_assembly<F: PrimeField64>(

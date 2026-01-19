@@ -53,6 +53,16 @@ pub fn fcall_bls12_381_fp2_sqrt(params: &[u64], results: &mut [u64]) -> i64 {
     let a: &[u64; 12] = &params[0..12].try_into().unwrap();
 
     // Perform the square root
+    let _results = bls12_381_fp2_sqrt_13(a);
+    results[0..13].copy_from_slice(&_results);
+
+    13
+}
+
+pub fn bls12_381_fp2_sqrt_13(a: &[u64; 12]) -> [u64; 13] {
+    let mut results = [0u64; 13];
+
+    // Perform the square root
     let (sqrt, is_qr) = bls12_381_fp2_sqrt(a);
     results[0] = is_qr as u64;
     if !is_qr {

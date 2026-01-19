@@ -17,7 +17,7 @@ pub fn fcall_bls12_381_fp2_sqrt(params: &[u64], results: &mut [u64]) -> i64 {
 
     // Perform the square root
     let _results = bls12_381_fp2_sqrt_13(a);
-    results.copy_from_slice(&_results);
+    results[0..13].copy_from_slice(&_results);
 
     13
 }

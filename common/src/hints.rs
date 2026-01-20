@@ -91,29 +91,29 @@ const HINT_WMUL256: u32 = 0x0C;
 const HINT_MODEXP: u32 = 0x0D;
 
 // BN254 hint codes
-const HINT_IS_ON_CURVE_BN254: u32 = 0x0E;
-const HINT_TO_AFFINE_BN254: u32 = 0x0F;
-const HINT_ADD_BN254: u32 = 0x10;
-const HINT_MUL_BN254: u32 = 0x11;
-const HINT_TO_AFFINE_TWIST_BN254: u32 = 0x12;
-const HINT_IS_ON_CURVE_TWIST_BN254: u32 = 0x13;
-const HINT_IS_ON_SUBGROUP_TWIST_BN254: u32 = 0x14;
-const HINT_PAIRING_BATCH_BN254: u32 = 0x15;
+const HINT_BN254_IS_ON_CURVE: u32 = 0x0E;
+const HINT_BN254_TO_AFFINE: u32 = 0x0F;
+const HINT_BN254_ADD: u32 = 0x10;
+const HINT_BN254_MUL: u32 = 0x11;
+const HINT_BN254_TO_AFFINE_TWIST: u32 = 0x12;
+const HINT_BN254_IS_ON_CURVE_TWIST: u32 = 0x13;
+const HINT_BN254_IS_ON_SUBGROUP_TWIST: u32 = 0x14;
+const HINT_BN254_PAIRING_BATCH: u32 = 0x15;
 
 // BLS12-381 hint codes
-const HINT_MUL_FP12_BLS12_381: u32 = 0x16;
-const HINT_DECOMPRESS_BLS12_381: u32 = 0x17;
-const HINT_IS_ON_CURVE_BLS12_381: u32 = 0x18;
-const HINT_IS_ON_SUBGROUP_BLS12_381: u32 = 0x19;
-const HINT_ADD_BLS12_381: u32 = 0x1A;
-const HINT_SCALAR_MUL_BLS12_381: u32 = 0x1B;
-const HINT_DECOMPRESS_TWIST_BLS12_381: u32 = 0x1C;
-const HINT_IS_ON_CURVE_TWIST_BLS12_381: u32 = 0x1D;
-const HINT_IS_ON_SUBGROUP_TWIST_BLS12_381: u32 = 0x1E;
-const HINT_ADD_TWIST_BLS12_381: u32 = 0x1F;
-const HINT_SCALAR_MUL_TWIST_BLS12_381: u32 = 0x20;
-const HINT_MILLER_LOOP_BLS12_381: u32 = 0x21;
-const HINT_FINAL_EXP_BLS12_381: u32 = 0x22;
+const HINT_BLS12_381_MUL_FP12: u32 = 0x16;
+const HINT_BLS12_381_DECOMPRESS: u32 = 0x17;
+const HINT_BLS12_381_IS_ON_CURVE: u32 = 0x18;
+const HINT_BLS12_381_IS_ON_SUBGROUP: u32 = 0x19;
+const HINT_BLS12_381_ADD: u32 = 0x1A;
+const HINT_BLS12_381_SCALAR_MUL: u32 = 0x1B;
+const HINT_BLS12_381_DECOMPRESS_TWIST: u32 = 0x1C;
+const HINT_BLS12_381_IS_ON_CURVE_TWIST: u32 = 0x1D;
+const HINT_BLS12_381_IS_ON_SUBGROUP_TWIST: u32 = 0x1E;
+const HINT_BLS12_381_ADD_TWIST: u32 = 0x1F;
+const HINT_BLS12_381_SCALAR_MUL_TWIST: u32 = 0x20;
+const HINT_BLS12_381_MILLER_LOOP: u32 = 0x21;
+const HINT_BLS12_381_FINAL_EXP: u32 = 0x22;
 
 /// Control code variants for stream control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -217,49 +217,49 @@ pub enum BuiltInHint {
 
     // BN254 Precompile Hints
     /// Check if point is on curve hint type for BN254 curve.
-    IsOnCurveBn254 = HINT_IS_ON_CURVE_BN254,
+    Bn254IsOnCurve = HINT_BN254_IS_ON_CURVE,
     /// Convert to affine coordinates hint type for BN254 curve.
-    ToAffineBn254 = HINT_TO_AFFINE_BN254,
+    Bn254ToAffine = HINT_BN254_TO_AFFINE,
     /// Point addition hint type for BN254 curve.
-    AddBn254 = HINT_ADD_BN254,
+    Bn254Add = HINT_BN254_ADD,
     /// Scalar multiplication hint type for BN254 curve.
-    MulBn254 = HINT_MUL_BN254,
+    Bn254Mul = HINT_BN254_MUL,
     /// Convert to affine coordinates hint type for BN254 twist.
-    ToAffineTwistBn254 = HINT_TO_AFFINE_TWIST_BN254,
+    Bn254ToAffineTwist = HINT_BN254_TO_AFFINE_TWIST,
     /// Check if point is on curve hint type for BN254 twist.
-    IsOnCurveTwistBn254 = HINT_IS_ON_CURVE_TWIST_BN254,
+    Bn254IsOnCurveTwist = HINT_BN254_IS_ON_CURVE_TWIST,
     /// Check if point is in subgroup hint type for BN254 twist.
-    IsOnSubgroupTwistBn254 = HINT_IS_ON_SUBGROUP_TWIST_BN254,
+    Bn254IsOnSubgroupTwist = HINT_BN254_IS_ON_SUBGROUP_TWIST,
     /// Pairing batch computation hint type for BN254 curve.
-    PairingBatchBn254 = HINT_PAIRING_BATCH_BN254,
+    Bn254PairingBatch = HINT_BN254_PAIRING_BATCH,
 
     // BLS12-381 Precompile Hints
     /// Multiplication in Fp12 hint type for BLS12-381 curve.
-    MulFp12Bls12_381 = HINT_MUL_FP12_BLS12_381,
+    Bls12_381MulFp12 = HINT_BLS12_381_MUL_FP12,
     /// Point decompression hint type for BLS12-381 curve.
-    DecompressBls12_381 = HINT_DECOMPRESS_BLS12_381,
+    Bls12_381Decompress = HINT_BLS12_381_DECOMPRESS,
     /// Check if point is on curve hint type for BLS12-381 curve.
-    IsOnCurveBls12_381 = HINT_IS_ON_CURVE_BLS12_381,
+    Bls12_381IsOnCurve = HINT_BLS12_381_IS_ON_CURVE,
     /// Check if point is in subgroup hint type for BLS12-381 curve.
-    IsOnSubgroupBls12_381 = HINT_IS_ON_SUBGROUP_BLS12_381,
+    Bls12_381IsOnSubgroup = HINT_BLS12_381_IS_ON_SUBGROUP,
     /// Point addition hint type for BLS12-381 curve.
-    AddBls12_381 = HINT_ADD_BLS12_381,
+    Bls12_381Add = HINT_BLS12_381_ADD,
     /// Scalar multiplication hint type for BLS12-381 curve.
-    ScalarMulBls12_381 = HINT_SCALAR_MUL_BLS12_381,
+    Bls12_381ScalarMul = HINT_BLS12_381_SCALAR_MUL,
     /// Point decompression hint type for BLS12-381 twist.
-    DecompressTwistBls12_381 = HINT_DECOMPRESS_TWIST_BLS12_381,
+    Bls12_381DecompressTwist = HINT_BLS12_381_DECOMPRESS_TWIST,
     /// Check if point is on curve hint type for BLS12-381 twist.
-    IsOnCurveTwistBls12_381 = HINT_IS_ON_CURVE_TWIST_BLS12_381,
+    Bls12_381IsOnCurveTwist = HINT_BLS12_381_IS_ON_CURVE_TWIST,
     /// Check if point is in subgroup hint type for BLS12-381 twist.
-    IsOnSubgroupTwistBls12_381 = HINT_IS_ON_SUBGROUP_TWIST_BLS12_381,
+    Bls12_381IsOnSubgroupTwist = HINT_BLS12_381_IS_ON_SUBGROUP_TWIST,
     /// Point addition hint type for BLS12-381 twist.
-    AddTwistBls12_381 = HINT_ADD_TWIST_BLS12_381,
+    Bls12_381AddTwist = HINT_BLS12_381_ADD_TWIST,
     /// Scalar multiplication hint type for BLS12-381 twist.
-    ScalarMulTwistBls12_381 = HINT_SCALAR_MUL_TWIST_BLS12_381,
+    Bls12_381ScalarMulTwist = HINT_BLS12_381_SCALAR_MUL_TWIST,
     /// Miller loop computation hint type for BLS12-381 curve.
-    MillerLoopBls12_381 = HINT_MILLER_LOOP_BLS12_381,
+    Bls12_381MillerLoop = HINT_BLS12_381_MILLER_LOOP,
     /// Final exponentiation computation hint type for BLS12-381 curve.
-    FinalExpBls12_381 = HINT_FINAL_EXP_BLS12_381,
+    Bls12_381FinalExp = HINT_BLS12_381_FINAL_EXP,
 }
 
 impl Display for BuiltInHint {
@@ -300,29 +300,29 @@ impl Display for BuiltInHint {
             BuiltInHint::ModExp => "MODEXP",
 
             // BN254 Hints
-            BuiltInHint::IsOnCurveBn254 => "IS_ON_CURVE_BN254",
-            BuiltInHint::ToAffineBn254 => "TO_AFFINE_BN254",
-            BuiltInHint::AddBn254 => "ADD_BN254",
-            BuiltInHint::MulBn254 => "MUL_BN254",
-            BuiltInHint::ToAffineTwistBn254 => "TO_AFFINE_TWIST_BN254",
-            BuiltInHint::IsOnCurveTwistBn254 => "IS_ON_CURVE_TWIST_BN254",
-            BuiltInHint::IsOnSubgroupTwistBn254 => "IS_ON_SUBGROUP_TWIST_BN254",
-            BuiltInHint::PairingBatchBn254 => "PAIRING_BATCH_BN254",
+            BuiltInHint::Bn254IsOnCurve => "BN254_IS_ON_CURVE",
+            BuiltInHint::Bn254ToAffine => "BN254_TO_AFFINE",
+            BuiltInHint::Bn254Add => "BN254_ADD",
+            BuiltInHint::Bn254Mul => "BN254_MUL",
+            BuiltInHint::Bn254ToAffineTwist => "BN254_TO_AFFINE_TWIST",
+            BuiltInHint::Bn254IsOnCurveTwist => "BN254_IS_ON_CURVE_TWIST",
+            BuiltInHint::Bn254IsOnSubgroupTwist => "BN254_IS_ON_SUBGROUP_TWIST",
+            BuiltInHint::Bn254PairingBatch => "BN254_PAIRING_BATCH",
 
             // BLS12-381 Hints
-            BuiltInHint::MulFp12Bls12_381 => "MUL_FP12_BLS12_381",
-            BuiltInHint::DecompressBls12_381 => "DECOMPRESS_BLS12_381",
-            BuiltInHint::IsOnCurveBls12_381 => "IS_ON_CURVE_BLS12_381",
-            BuiltInHint::IsOnSubgroupBls12_381 => "IS_ON_SUBGROUP_BLS12_381",
-            BuiltInHint::AddBls12_381 => "ADD_BLS12_381",
-            BuiltInHint::ScalarMulBls12_381 => "SCALAR_MUL_BLS12_381",
-            BuiltInHint::DecompressTwistBls12_381 => "DECOMPRESS_TWIST_BLS12_381",
-            BuiltInHint::IsOnCurveTwistBls12_381 => "IS_ON_CURVE_TWIST_BLS12_381",
-            BuiltInHint::IsOnSubgroupTwistBls12_381 => "IS_ON_SUBGROUP_TWIST_BLS12_381",
-            BuiltInHint::AddTwistBls12_381 => "ADD_TWIST_BLS12_381",
-            BuiltInHint::ScalarMulTwistBls12_381 => "SCALAR_MUL_TWIST_BLS12_381",
-            BuiltInHint::MillerLoopBls12_381 => "MILLER_LOOP_BLS12_381",
-            BuiltInHint::FinalExpBls12_381 => "FINAL_EXP_BLS12_381",
+            BuiltInHint::Bls12_381MulFp12 => "BLS12_381_MUL_FP12",
+            BuiltInHint::Bls12_381Decompress => "BLS12_381_DECOMPRESS",
+            BuiltInHint::Bls12_381IsOnCurve => "BLS12_381_IS_ON_CURVE",
+            BuiltInHint::Bls12_381IsOnSubgroup => "BLS12_381_IS_ON_SUBGROUP",
+            BuiltInHint::Bls12_381Add => "BLS12_381_ADD",
+            BuiltInHint::Bls12_381ScalarMul => "BLS12_381_SCALAR_MUL",
+            BuiltInHint::Bls12_381DecompressTwist => "BLS12_381_DECOMPRESS_TWIST",
+            BuiltInHint::Bls12_381IsOnCurveTwist => "BLS12_381_IS_ON_CURVE_TWIST",
+            BuiltInHint::Bls12_381IsOnSubgroupTwist => "BLS12_381_IS_ON_SUBGROUP_TWIST",
+            BuiltInHint::Bls12_381AddTwist => "BLS12_381_ADD_TWIST",
+            BuiltInHint::Bls12_381ScalarMulTwist => "BLS12_381_SCALAR_MUL_TWIST",
+            BuiltInHint::Bls12_381MillerLoop => "BLS12_381_MILLER_LOOP",
+            BuiltInHint::Bls12_381FinalExp => "BLS12_381_FINAL_EXP",
         };
         write!(f, "{} ({:#x})", name, *self as u32)
     }
@@ -368,29 +368,29 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_MODEXP => Ok(Self::ModExp),
 
             // BN254 Hints
-            HINT_IS_ON_CURVE_BN254 => Ok(Self::IsOnCurveBn254),
-            HINT_TO_AFFINE_BN254 => Ok(Self::ToAffineBn254),
-            HINT_ADD_BN254 => Ok(Self::AddBn254),
-            HINT_MUL_BN254 => Ok(Self::MulBn254),
-            HINT_TO_AFFINE_TWIST_BN254 => Ok(Self::ToAffineTwistBn254),
-            HINT_IS_ON_CURVE_TWIST_BN254 => Ok(Self::IsOnCurveTwistBn254),
-            HINT_IS_ON_SUBGROUP_TWIST_BN254 => Ok(Self::IsOnSubgroupTwistBn254),
-            HINT_PAIRING_BATCH_BN254 => Ok(Self::PairingBatchBn254),
+            HINT_BN254_IS_ON_CURVE => Ok(Self::Bn254IsOnCurve),
+            HINT_BN254_TO_AFFINE => Ok(Self::Bn254ToAffine),
+            HINT_BN254_ADD => Ok(Self::Bn254Add),
+            HINT_BN254_MUL => Ok(Self::Bn254Mul),
+            HINT_BN254_TO_AFFINE_TWIST => Ok(Self::Bn254ToAffineTwist),
+            HINT_BN254_IS_ON_CURVE_TWIST => Ok(Self::Bn254IsOnCurveTwist),
+            HINT_BN254_IS_ON_SUBGROUP_TWIST => Ok(Self::Bn254IsOnSubgroupTwist),
+            HINT_BN254_PAIRING_BATCH => Ok(Self::Bn254PairingBatch),
 
             // BLS12-381 Hints
-            HINT_MUL_FP12_BLS12_381 => Ok(Self::MulFp12Bls12_381),
-            HINT_DECOMPRESS_BLS12_381 => Ok(Self::DecompressBls12_381),
-            HINT_IS_ON_CURVE_BLS12_381 => Ok(Self::IsOnCurveBls12_381),
-            HINT_IS_ON_SUBGROUP_BLS12_381 => Ok(Self::IsOnSubgroupBls12_381),
-            HINT_ADD_BLS12_381 => Ok(Self::AddBls12_381),
-            HINT_SCALAR_MUL_BLS12_381 => Ok(Self::ScalarMulBls12_381),
-            HINT_DECOMPRESS_TWIST_BLS12_381 => Ok(Self::DecompressTwistBls12_381),
-            HINT_IS_ON_CURVE_TWIST_BLS12_381 => Ok(Self::IsOnCurveTwistBls12_381),
-            HINT_IS_ON_SUBGROUP_TWIST_BLS12_381 => Ok(Self::IsOnSubgroupTwistBls12_381),
-            HINT_ADD_TWIST_BLS12_381 => Ok(Self::AddTwistBls12_381),
-            HINT_SCALAR_MUL_TWIST_BLS12_381 => Ok(Self::ScalarMulTwistBls12_381),
-            HINT_MILLER_LOOP_BLS12_381 => Ok(Self::MillerLoopBls12_381),
-            HINT_FINAL_EXP_BLS12_381 => Ok(Self::FinalExpBls12_381),
+            HINT_BLS12_381_MUL_FP12 => Ok(Self::Bls12_381MulFp12),
+            HINT_BLS12_381_DECOMPRESS => Ok(Self::Bls12_381Decompress),
+            HINT_BLS12_381_IS_ON_CURVE => Ok(Self::Bls12_381IsOnCurve),
+            HINT_BLS12_381_IS_ON_SUBGROUP => Ok(Self::Bls12_381IsOnSubgroup),
+            HINT_BLS12_381_ADD => Ok(Self::Bls12_381Add),
+            HINT_BLS12_381_SCALAR_MUL => Ok(Self::Bls12_381ScalarMul),
+            HINT_BLS12_381_DECOMPRESS_TWIST => Ok(Self::Bls12_381DecompressTwist),
+            HINT_BLS12_381_IS_ON_CURVE_TWIST => Ok(Self::Bls12_381IsOnCurveTwist),
+            HINT_BLS12_381_IS_ON_SUBGROUP_TWIST => Ok(Self::Bls12_381IsOnSubgroupTwist),
+            HINT_BLS12_381_ADD_TWIST => Ok(Self::Bls12_381AddTwist),
+            HINT_BLS12_381_SCALAR_MUL_TWIST => Ok(Self::Bls12_381ScalarMulTwist),
+            HINT_BLS12_381_MILLER_LOOP => Ok(Self::Bls12_381MillerLoop),
+            HINT_BLS12_381_FINAL_EXP => Ok(Self::Bls12_381FinalExp),
 
             _ => Err(anyhow::anyhow!("Invalid built-in hint code: {:#x}", value)),
         }
@@ -485,39 +485,39 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::ModExp) => HINT_MODEXP,
 
             // BN254 Hints
-            HintCode::BuiltIn(BuiltInHint::IsOnCurveBn254) => HINT_IS_ON_CURVE_BN254,
-            HintCode::BuiltIn(BuiltInHint::ToAffineBn254) => HINT_TO_AFFINE_BN254,
-            HintCode::BuiltIn(BuiltInHint::AddBn254) => HINT_ADD_BN254,
-            HintCode::BuiltIn(BuiltInHint::MulBn254) => HINT_MUL_BN254,
-            HintCode::BuiltIn(BuiltInHint::ToAffineTwistBn254) => HINT_TO_AFFINE_TWIST_BN254,
-            HintCode::BuiltIn(BuiltInHint::IsOnCurveTwistBn254) => HINT_IS_ON_CURVE_TWIST_BN254,
-            HintCode::BuiltIn(BuiltInHint::IsOnSubgroupTwistBn254) => {
-                HINT_IS_ON_SUBGROUP_TWIST_BN254
+            HintCode::BuiltIn(BuiltInHint::Bn254IsOnCurve) => HINT_BN254_IS_ON_CURVE,
+            HintCode::BuiltIn(BuiltInHint::Bn254ToAffine) => HINT_BN254_TO_AFFINE,
+            HintCode::BuiltIn(BuiltInHint::Bn254Add) => HINT_BN254_ADD,
+            HintCode::BuiltIn(BuiltInHint::Bn254Mul) => HINT_BN254_MUL,
+            HintCode::BuiltIn(BuiltInHint::Bn254ToAffineTwist) => HINT_BN254_TO_AFFINE_TWIST,
+            HintCode::BuiltIn(BuiltInHint::Bn254IsOnCurveTwist) => HINT_BN254_IS_ON_CURVE_TWIST,
+            HintCode::BuiltIn(BuiltInHint::Bn254IsOnSubgroupTwist) => {
+                HINT_BN254_IS_ON_SUBGROUP_TWIST
             }
-            HintCode::BuiltIn(BuiltInHint::PairingBatchBn254) => HINT_PAIRING_BATCH_BN254,
+            HintCode::BuiltIn(BuiltInHint::Bn254PairingBatch) => HINT_BN254_PAIRING_BATCH,
 
             // BLS12-381 Hints
-            HintCode::BuiltIn(BuiltInHint::MulFp12Bls12_381) => HINT_MUL_FP12_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::DecompressBls12_381) => HINT_DECOMPRESS_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::IsOnCurveBls12_381) => HINT_IS_ON_CURVE_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::IsOnSubgroupBls12_381) => HINT_IS_ON_SUBGROUP_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::AddBls12_381) => HINT_ADD_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::ScalarMulBls12_381) => HINT_SCALAR_MUL_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::DecompressTwistBls12_381) => {
-                HINT_DECOMPRESS_TWIST_BLS12_381
+            HintCode::BuiltIn(BuiltInHint::Bls12_381MulFp12) => HINT_BLS12_381_MUL_FP12,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381Decompress) => HINT_BLS12_381_DECOMPRESS,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381IsOnCurve) => HINT_BLS12_381_IS_ON_CURVE,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381IsOnSubgroup) => HINT_BLS12_381_IS_ON_SUBGROUP,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381Add) => HINT_BLS12_381_ADD,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381ScalarMul) => HINT_BLS12_381_SCALAR_MUL,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381DecompressTwist) => {
+                HINT_BLS12_381_DECOMPRESS_TWIST
             }
-            HintCode::BuiltIn(BuiltInHint::IsOnCurveTwistBls12_381) => {
-                HINT_IS_ON_CURVE_TWIST_BLS12_381
+            HintCode::BuiltIn(BuiltInHint::Bls12_381IsOnCurveTwist) => {
+                HINT_BLS12_381_IS_ON_CURVE_TWIST
             }
-            HintCode::BuiltIn(BuiltInHint::IsOnSubgroupTwistBls12_381) => {
-                HINT_IS_ON_SUBGROUP_TWIST_BLS12_381
+            HintCode::BuiltIn(BuiltInHint::Bls12_381IsOnSubgroupTwist) => {
+                HINT_BLS12_381_IS_ON_SUBGROUP_TWIST
             }
-            HintCode::BuiltIn(BuiltInHint::AddTwistBls12_381) => HINT_ADD_TWIST_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::ScalarMulTwistBls12_381) => {
-                HINT_SCALAR_MUL_TWIST_BLS12_381
+            HintCode::BuiltIn(BuiltInHint::Bls12_381AddTwist) => HINT_BLS12_381_ADD_TWIST,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381ScalarMulTwist) => {
+                HINT_BLS12_381_SCALAR_MUL_TWIST
             }
-            HintCode::BuiltIn(BuiltInHint::MillerLoopBls12_381) => HINT_MILLER_LOOP_BLS12_381,
-            HintCode::BuiltIn(BuiltInHint::FinalExpBls12_381) => HINT_FINAL_EXP_BLS12_381,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381MillerLoop) => HINT_BLS12_381_MILLER_LOOP,
+            HintCode::BuiltIn(BuiltInHint::Bls12_381FinalExp) => HINT_BLS12_381_FINAL_EXP,
 
             // Custom Hints
             HintCode::Custom(code) => code,

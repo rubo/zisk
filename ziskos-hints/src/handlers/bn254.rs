@@ -4,7 +4,7 @@ use anyhow::Result;
 
 /// Processes an `IS_ON_CURVE_BN254`` hint.
 #[inline]
-pub fn is_on_curve_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_is_on_curve_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P: 8];
 
     validate_hint_length(data, EXPECTED_LEN, "IS_ON_CURVE_BN254")?;
@@ -19,7 +19,7 @@ pub fn is_on_curve_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 
 /// Processes a `TO_AFFINE_BN254` hint.
 #[inline]
-pub fn to_affine_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_to_affine_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P: 12];
 
     validate_hint_length(data, EXPECTED_LEN, "TO_AFFINE_BN254")?;
@@ -34,7 +34,7 @@ pub fn to_affine_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 
 /// Processes an `ADD_BN254` hint.
 #[inline]
-pub fn add_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_add_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P1: 8, P2: 8];
 
     validate_hint_length(data, EXPECTED_LEN, "ADD_BN254")?;
@@ -50,7 +50,7 @@ pub fn add_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 
 /// Processes a `MUL_BN254` hint.
 #[inline]
-pub fn mul_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_mul_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P: 8, K: 4];
 
     validate_hint_length(data, EXPECTED_LEN, "MUL_BN254")?;
@@ -66,7 +66,7 @@ pub fn mul_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 
 /// Processes a `TO_AFFINE_TWIST_BN254` hint.
 #[inline]
-pub fn to_affine_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_to_affine_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P: 24];
 
     validate_hint_length(data, EXPECTED_LEN, "TO_AFFINE_TWIST_BN254")?;
@@ -81,7 +81,7 @@ pub fn to_affine_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 
 /// Processes an `IS_ON_CURVE_TWIST_BN254` hint.
 #[inline]
-pub fn is_on_curve_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_is_on_curve_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P: 16];
 
     validate_hint_length(data, EXPECTED_LEN, "IS_ON_CURVE_TWIST_BN254")?;
@@ -96,7 +96,7 @@ pub fn is_on_curve_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 
 /// Processes an `IS_ON_SUBGROUP_TWIST_BN254` hint.
 #[inline]
-pub fn is_on_subgroup_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_is_on_subgroup_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![P: 16];
 
     validate_hint_length(data, EXPECTED_LEN, "IS_ON_SUBGROUP_TWIST_BN254")?;
@@ -113,7 +113,7 @@ pub fn is_on_subgroup_twist_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
 /// Format: [num_points:u64][g1_points:&[u64]][g2_points:&[u64]]
 /// where g1_points has length num_points * 8 and g2_points has length num_points * 16
 #[inline]
-pub fn pairing_batch_bn254_hint(data: &[u64]) -> Result<Vec<u64>> {
+pub fn bn254_pairing_batch_hint(data: &[u64]) -> Result<Vec<u64>> {
     if data.is_empty() {
         anyhow::bail!("PAIRING_BATCH_BN254: data is empty");
     }

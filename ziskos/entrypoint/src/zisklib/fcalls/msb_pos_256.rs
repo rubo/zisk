@@ -52,7 +52,7 @@ pub fn fcall_msb_pos_256_3(
         let (i, pos) = msb_pos_256(&tmp, 3);
         #[cfg(feature = "hints")]
         {
-            hints.push(3);
+            hints.push(2);
             hints.push(i as u64);
             hints.push(pos as u64);
         }

@@ -29,14 +29,14 @@ pub fn bls12_381_decompress_hint(data: &[u64]) -> Result<Vec<u64>> {
     // Safe to unwrap due to prior length validation.
     let input: &[u64; INPUT_SIZE] =
         data[INPUT_OFFSET..INPUT_OFFSET + INPUT_SIZE].try_into().unwrap();
-    let input: [u64; INPUT_SIZE] = [
-        input[3].to_be(),
-        input[2].to_be(),
-        input[1].to_be(),
-        input[0].to_be(),
-        input[5].to_be(),
-        input[4].to_be(),
-    ];
+    // let input: [u64; INPUT_SIZE] = [
+    //     input[3].to_be(),
+    //     input[2].to_be(),
+    //     input[1].to_be(),
+    //     input[0].to_be(),
+    //     input[5].to_be(),
+    //     input[4].to_be(),
+    // ];
 
     // Map a [u64; 6] to a [u8; 48]
     let input: &[u8; INPUT_SIZE * 8] = unsafe { &*(input.as_ptr() as *const [u8; INPUT_SIZE * 8]) };
@@ -123,20 +123,20 @@ pub fn bls12_381_decompress_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
     // Safe to unwrap due to prior length validation.
     let input: &[u64; INPUT_SIZE] =
         data[INPUT_OFFSET..INPUT_OFFSET + INPUT_SIZE].try_into().unwrap();
-    let input: [u64; INPUT_SIZE] = [
-        input[3].to_be(),
-        input[2].to_be(),
-        input[1].to_be(),
-        input[0].to_be(),
-        input[7].to_be(),
-        input[6].to_be(),
-        input[5].to_be(),
-        input[4].to_be(),
-        input[11].to_be(),
-        input[10].to_be(),
-        input[9].to_be(),
-        input[8].to_be(),
-    ];
+    // let input: [u64; INPUT_SIZE] = [
+    //     input[3].to_be(),
+    //     input[2].to_be(),
+    //     input[1].to_be(),
+    //     input[0].to_be(),
+    //     input[7].to_be(),
+    //     input[6].to_be(),
+    //     input[5].to_be(),
+    //     input[4].to_be(),
+    //     input[11].to_be(),
+    //     input[10].to_be(),
+    //     input[9].to_be(),
+    //     input[8].to_be(),
+    // ];
 
     // Map a [u64; 6] to a [u8; 48]
     let input: &[u8; INPUT_SIZE * 8] = unsafe { &*(input.as_ptr() as *const [u8; INPUT_SIZE * 8]) };

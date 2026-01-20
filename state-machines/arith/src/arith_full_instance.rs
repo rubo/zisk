@@ -6,6 +6,7 @@
 
 use crate::{ArithFrops, ArithFullSM};
 use fields::PrimeField64;
+use pil_std_lib::Std;
 use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
 use std::{
     collections::{HashMap, VecDeque},
@@ -29,10 +30,13 @@ pub struct ArithFullInstance<F: PrimeField64> {
     arith_full_sm: Arc<ArithFullSM<F>>,
 
     /// Collect info for each chunk ID, containing the number of rows and a skipper for collection.
-    collect_info: HashMap<ChunkId, (u64, u64, bool, CollectSkipper)>,
+    collect_info: HashMap<ChunkId, (u64, bool, CollectSkipper)>,
 
     /// The instance context.
     ictx: InstanceCtx,
+
+    /// Standard library instance, providing common functionalities.
+    std: Arc<Std<F>>,
 }
 
 impl<F: PrimeField64> ArithFullInstance<F> {
@@ -44,7 +48,11 @@ impl<F: PrimeField64> ArithFullInstance<F> {
     ///
     /// # Returns
     /// A new `ArithFullInstance` instance initialized with the provided state machine and context.
-    pub fn new(arith_full_sm: Arc<ArithFullSM<F>>, mut ictx: InstanceCtx) -> Self {
+    pub fn new(
+        arith_full_sm: Arc<ArithFullSM<F>>,
+        mut ictx: InstanceCtx,
+        std: Arc<Std<F>>,
+    ) -> Self {
         assert_eq!(
             ictx.plan.air_id,
             ArithTrace::<F>::AIR_ID,
@@ -55,16 +63,20 @@ impl<F: PrimeField64> ArithFullInstance<F> {
         let meta = ictx.plan.meta.take().expect("Expected metadata in ictx.plan.meta");
 
         let collect_info = *meta
-            .downcast::<HashMap<ChunkId, (u64, u64, bool, CollectSkipper)>>()
+            .downcast::<HashMap<ChunkId, (u64, bool, CollectSkipper)>>()
             .expect("Failed to downcast ictx.plan.meta to expected type");
 
-        Self { arith_full_sm, collect_info, ictx }
+        Self { arith_full_sm, collect_info, ictx, std }
     }
 
-    pub fn build_arith_collector(&self, chunk_id: ChunkId) -> ArithInstanceCollector {
-        let (num_ops, num_freq_ops, force_execute_to_end, collect_skipper) =
-            self.collect_info[&chunk_id];
-        ArithInstanceCollector::new(num_ops, num_freq_ops, collect_skipper, force_execute_to_end)
+    pub fn build_arith_collector(&self, chunk_id: ChunkId) -> ArithInstanceCollector<F> {
+        let (num_ops, force_execute_to_end, collect_skipper) = self.collect_info[&chunk_id];
+        ArithInstanceCollector::new(
+            num_ops,
+            collect_skipper,
+            force_execute_to_end,
+            self.std.clone(),
+        )
     }
 }
 
@@ -91,8 +103,8 @@ impl<F: PrimeField64> Instance<F> for ArithFullInstance<F> {
         let inputs: Vec<_> = collectors
             .into_iter()
             .map(|(_, collector)| {
-                let _collector = collector.as_any().downcast::<ArithInstanceCollector>().unwrap();
-                self.arith_full_sm.compute_frops(&_collector.frops_inputs);
+                let _collector =
+                    collector.as_any().downcast::<ArithInstanceCollector<F>>().unwrap();
                 _collector.inputs
             })
             .collect();
@@ -123,13 +135,12 @@ impl<F: PrimeField64> Instance<F> for ArithFullInstance<F> {
     /// # Returns
     /// An `Option` containing the input collector for the instance.
     fn build_inputs_collector(&self, chunk_id: ChunkId) -> Option<Box<dyn BusDevice<PayloadType>>> {
-        let (num_ops, num_freq_ops, force_execute_to_end, collect_skipper) =
-            self.collect_info[&chunk_id];
+        let (num_ops, force_execute_to_end, collect_skipper) = self.collect_info[&chunk_id];
         Some(Box::new(ArithInstanceCollector::new(
             num_ops,
-            num_freq_ops,
             collect_skipper,
             force_execute_to_end,
+            self.std.clone(),
         )))
     }
 
@@ -139,11 +150,9 @@ impl<F: PrimeField64> Instance<F> for ArithFullInstance<F> {
 }
 
 /// The `ArithInstanceCollector` struct represents an input collector for arithmetic state machines.
-pub struct ArithInstanceCollector {
+pub struct ArithInstanceCollector<F: PrimeField64> {
     /// Collected inputs for witness computation.
     inputs: Vec<OperationData<u64>>,
-    /// Collected rows for FROPS
-    frops_inputs: Vec<u32>,
 
     /// The number of operations to collect.
     num_operations: u64,
@@ -153,9 +162,15 @@ pub struct ArithInstanceCollector {
 
     /// Flag to indicate that force to execute to end of chunk
     force_execute_to_end: bool,
+
+    /// The table ID for the Arith FROPS
+    frops_table_id: usize,
+
+    /// Standard library instance, providing common functionalities.
+    std: Arc<Std<F>>,
 }
 
-impl ArithInstanceCollector {
+impl<F: PrimeField64> ArithInstanceCollector<F> {
     /// Creates a new `ArithInstanceCollector`.
     ///
     /// # Arguments
@@ -168,21 +183,24 @@ impl ArithInstanceCollector {
     /// A new `ArithInstanceCollector` instance initialized with the provided parameters.
     pub fn new(
         num_operations: u64,
-        num_freq_ops: u64,
         collect_skipper: CollectSkipper,
         force_execute_to_end: bool,
+        std: Arc<Std<F>>,
     ) -> Self {
+        let frops_table_id =
+            std.get_virtual_table_id(ArithFrops::TABLE_ID).expect("Failed to get FROPS table ID");
         Self {
             inputs: Vec::with_capacity(num_operations as usize),
             num_operations,
             collect_skipper,
-            frops_inputs: Vec::with_capacity(num_freq_ops as usize),
             force_execute_to_end,
+            std,
+            frops_table_id,
         }
     }
 }
 
-impl BusDevice<u64> for ArithInstanceCollector {
+impl<F: PrimeField64> BusDevice<u64> for ArithInstanceCollector<F> {
     /// Processes data received on the bus, collecting the inputs necessary for witness computation.
     ///
     /// # Arguments
@@ -219,7 +237,7 @@ impl BusDevice<u64> for ArithInstanceCollector {
         }
 
         if frops_row != ArithFrops::NO_FROPS {
-            self.frops_inputs.push(frops_row as u32);
+            self.std.inc_virtual_row(self.frops_table_id, frops_row as u64, 1);
             return true;
         }
 

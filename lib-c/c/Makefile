@@ -24,6 +24,8 @@ all:
 	gcc $(CFLAGS) -c src/arith384/arith384.cpp -o build/arith384.o
 	gcc $(CFLAGS) -c src/bigint/add256.cpp -o build/add256.o
 	gcc $(CFLAGS) -c src/common/globals.cpp -o build/globals.o
+	gcc $(CFLAGS) -c src/poseidon2/goldilocks_base_field.cpp -o build/goldilocks_base_field.o
+	gcc $(CFLAGS) -c src/poseidon2/poseidon2_goldilocks.cpp -o build/poseidon2_goldilocks.o
 	ar rcs\
 		build/libziskc.a\
 		build/fec.o\
@@ -41,7 +43,9 @@ all:
 		build/arith256.o\
 		build/arith384.o\
 		build/add256.o\
-		build/globals.o
+		build/globals.o\
+		build/goldilocks_base_field.o\
+		build/poseidon2_goldilocks.o
 	gcc $(CFLAGS) src/main.cpp -lc build/libziskc.a -o build/clib -lgmp -lstdc++ -lgmpxx
 	mkdir -p lib
 	cp build/libziskc.a lib/

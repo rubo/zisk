@@ -206,10 +206,19 @@ Please note that the process can be long, taking approximately 45-60 minutes dep
 
 6. Generate setup data: (this step may take 30-45 minutes):
     ```bash
-    node --max-old-space-size=16384 --stack-size=8192 ../pil2-proofman-js/src/main_setup.js --stack-size=8192 -a ./pil/zisk.pilout -b build -t ../pil2-proofman/pil2-components/lib/std/pil -u tmp/fixed -r -s ./state-machines/starkstructs.json -f -w ../powersOfTau28_hez_final_27.ptau -p ./state-machines/publics.json
+    node --max-old-space-size=16384 --stack-size=8192 ../pil2-proofman-js/src/main_setup.js -a ./pil/zisk.pilout -b build -t ../pil2-proofman/pil2-components/lib/std/pil -u tmp/fixed -r -s ./state-machines/starkstructs.json
     ```
 
     This command generates the `build/provingKey` directory.
+
+    Additionally, to generate the snark wrapper:
+
+    ```bash
+    node  ../pil2-proofman-js/src/main_setup_snark.js -b build -t ../pil2-proofman/pil2-components/lib/std/pil -f -w ../powersOfTau28_hez_final_27.ptau -p ./state-machines/publics.json -n plonk
+    ```
+
+    It is stored under the `build/provingKeySnark` directory.
+    
 
 7. Copy (or move) the `build/provingKey` directory to `$HOME/.zisk` directory:
 

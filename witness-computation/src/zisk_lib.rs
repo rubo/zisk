@@ -4,13 +4,16 @@
 //! This module leverages `WitnessLibrary` to orchestrate the setup of state machines,
 //! program conversion, and execution pipelines to generate required witnesses.
 
-use executor::{StateMachines, StaticSMBundle, ZiskExecutor};
+use executor::{
+    EmulatorAsm, EmulatorKind, EmulatorRust, StateMachines, StaticSMBundle, ZiskExecutor,
+};
 use fields::{Goldilocks, PrimeField64};
 use pil_std_lib::Std;
 use precomp_arith_eq::ArithEqManager;
 use precomp_arith_eq_384::ArithEq384Manager;
 use precomp_big_int::Add256Manager;
 use precomp_keccakf::KeccakfManager;
+use precomp_poseidon2::Poseidon2Manager;
 use precomp_sha256f::Sha256fManager;
 use proofman::register_std;
 use proofman_common::{PackedInfo, ProofmanResult};
@@ -28,14 +31,14 @@ use zisk_pil::{
     ADD_256_AIR_IDS, ARITH_AIR_IDS, ARITH_EQ_384_AIR_IDS, ARITH_EQ_AIR_IDS, BINARY_ADD_AIR_IDS,
     BINARY_AIR_IDS, BINARY_EXTENSION_AIR_IDS, INPUT_DATA_AIR_IDS, KECCAKF_AIR_IDS, MEM_AIR_IDS,
     MEM_ALIGN_AIR_IDS, MEM_ALIGN_BYTE_AIR_IDS, MEM_ALIGN_READ_BYTE_AIR_IDS,
-    MEM_ALIGN_WRITE_BYTE_AIR_IDS, ROM_AIR_IDS, ROM_DATA_AIR_IDS, SHA_256_F_AIR_IDS,
-    ZISK_AIRGROUP_ID,
+    MEM_ALIGN_WRITE_BYTE_AIR_IDS, POSEIDON_2_AIR_IDS, ROM_AIR_IDS, ROM_DATA_AIR_IDS,
+    SHA_256_F_AIR_IDS, ZISK_AIRGROUP_ID,
 };
 
 pub struct WitnessLib<F: PrimeField64> {
     elf_path: PathBuf,
-    asm_path: Option<PathBuf>,
-    asm_rom_path: Option<PathBuf>,
+    asm_mt_path: Option<PathBuf>,
+    asm_rh_path: Option<PathBuf>,
     executor: Option<Arc<ZiskExecutor<F>>>,
     chunk_size: u64,
     base_port: Option<u16>,
@@ -49,8 +52,8 @@ pub struct WitnessLib<F: PrimeField64> {
 fn init_library(
     verbose_mode: proofman_common::VerboseMode,
     elf_path: PathBuf,
-    asm_path: Option<PathBuf>,
-    asm_rom_path: Option<PathBuf>,
+    asm_mt_path: Option<PathBuf>,
+    asm_rh_path: Option<PathBuf>,
     base_port: Option<u16>,
     unlock_mapped_memory: bool,
     shared_tables: bool,
@@ -59,8 +62,8 @@ fn init_library(
 
     let result = Box::new(WitnessLib {
         elf_path,
-        asm_path,
-        asm_rom_path,
+        asm_mt_path,
+        asm_rh_path,
         executor: None,
         chunk_size,
         base_port,
@@ -87,6 +90,8 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
     /// # Panics
     /// Panics if the `Riscv2zisk` conversion fails or if required paths cannot be resolved.
     fn register_witness(&mut self, wcm: &WitnessManager<F>) -> ProofmanResult<()> {
+        assert_eq!(self.asm_mt_path.is_some(), self.asm_rh_path.is_some());
+
         let world_rank = wcm.get_world_rank();
         let local_rank = wcm.get_local_rank();
 
@@ -103,13 +108,14 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         let std = Std::new(wcm.get_pctx(), wcm.get_sctx(), self.shared_tables)?;
         register_std(wcm, &std);
 
-        let rom_sm = RomSM::new(zisk_rom.clone(), self.asm_rom_path.clone());
+        let rom_sm = RomSM::new(zisk_rom.clone(), self.asm_rh_path.clone());
         let binary_sm = BinarySM::new(std.clone());
         let arith_sm = ArithSM::new(std.clone());
         let mem_sm = Mem::new(std.clone());
         // Step 4: Initialize the precompiles state machines
         let keccakf_sm = KeccakfManager::new(std.clone());
         let sha256f_sm = Sha256fManager::new(std.clone());
+        let poseidon2_sm = Poseidon2Manager::new();
         let arith_eq_sm = ArithEqManager::new(std.clone());
         let arith_eq_384_sm = ArithEq384Manager::new(std.clone());
         let add256_sm = Add256Manager::new(std.clone());
@@ -131,7 +137,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         ];
 
         let sm_bundle = StaticSMBundle::new(
-            self.asm_path.is_some(),
+            self.asm_mt_path.is_some(),
             vec![
                 (vec![(ZISK_AIRGROUP_ID, ROM_AIR_IDS[0])], StateMachines::RomSM(rom_sm.clone())),
                 (mem_instances, StateMachines::MemSM(mem_sm.clone())),
@@ -150,6 +156,10 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
                     StateMachines::Sha256fManager(sha256f_sm.clone()),
                 ),
                 (
+                    vec![(ZISK_AIRGROUP_ID, POSEIDON_2_AIR_IDS[0])],
+                    StateMachines::Poseidon2Manager(poseidon2_sm.clone()),
+                ),
+                (
                     vec![(ZISK_AIRGROUP_ID, ARITH_EQ_AIR_IDS[0])],
                     StateMachines::ArithEqManager(arith_eq_sm.clone()),
                 ),
@@ -164,23 +174,24 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
             ],
         );
 
-        // Step 5: Create the executor and register the secondary state machines
-        let executor: ZiskExecutor<F> = ZiskExecutor::new(
-            self.elf_path.clone(),
-            self.asm_path.clone(),
-            self.asm_rom_path.clone(),
-            zisk_rom,
-            std,
-            sm_bundle,
-            Some(rom_sm.clone()),
-            self.chunk_size,
-            world_rank,
-            local_rank,
-            self.base_port,
-            self.unlock_mapped_memory,
-        );
+        let is_asm_emulator = self.asm_mt_path.is_some();
+        let emulator = if is_asm_emulator {
+            EmulatorKind::Asm(EmulatorAsm::new(
+                zisk_rom.clone(),
+                self.asm_mt_path.clone(),
+                world_rank,
+                local_rank,
+                self.base_port,
+                self.unlock_mapped_memory,
+                self.chunk_size,
+                Some(rom_sm.clone()),
+            ))
+        } else {
+            EmulatorKind::Rust(EmulatorRust::new(zisk_rom.clone(), self.chunk_size))
+        };
 
-        let executor = Arc::new(executor);
+        let executor =
+            Arc::new(ZiskExecutor::new(zisk_rom, std, sm_bundle, self.chunk_size, emulator));
 
         // Step 7: Register the executor as a component in the Witness Manager
         wcm.register_component(executor.clone());

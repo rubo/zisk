@@ -8,21 +8,29 @@ use zisk_common::{
 };
 use zisk_core::zisk_ops::ZiskOp;
 
+use fields::PrimeField64;
+use pil_std_lib::Std;
+use std::sync::Arc;
+
 /// The `BinaryAddCollector` struct represents an input collector for binary add operations.
-pub struct BinaryAddCollector {
+pub struct BinaryAddCollector<F: PrimeField64> {
     /// Collected inputs for witness computation.
     pub inputs: Vec<[u64; 2]>,
-    /// Collected rows for FROPS
-    pub frops_inputs: Vec<u32>,
 
     pub num_operations: usize,
     pub collect_skipper: CollectSkipper,
 
     /// Flag to indicate that force to execute to end of chunk
     force_execute_to_end: bool,
+
+    /// The table ID for the Binary Add FROPS
+    frops_table_id: usize,
+
+    /// Standard library instance, providing common functionalities.
+    std: Arc<Std<F>>,
 }
 
-impl BinaryAddCollector {
+impl<F: PrimeField64> BinaryAddCollector<F> {
     /// Creates a new `BinaryAddCollector`.
     ///
     /// # Arguments
@@ -33,21 +41,25 @@ impl BinaryAddCollector {
     /// A new `BinaryAddCollector` instance initialized with the provided parameters.
     pub fn new(
         num_operations: usize,
-        num_freq_ops: usize,
         collect_skipper: CollectSkipper,
         force_execute_to_end: bool,
+        std: Arc<Std<F>>,
     ) -> Self {
+        let frops_table_id = std
+            .get_virtual_table_id(BinaryBasicFrops::TABLE_ID)
+            .expect("Failed to get FROPS table ID");
         Self {
             inputs: Vec::with_capacity(num_operations),
             num_operations,
             collect_skipper,
-            frops_inputs: Vec::with_capacity(num_freq_ops),
             force_execute_to_end,
+            frops_table_id,
+            std,
         }
     }
 }
 
-impl BusDevice<u64> for BinaryAddCollector {
+impl<F: PrimeField64> BusDevice<u64> for BinaryAddCollector<F> {
     /// Processes data received on the bus, collecting the inputs necessary for witness computation.
     ///
     /// # Arguments
@@ -89,7 +101,7 @@ impl BusDevice<u64> for BinaryAddCollector {
         }
 
         if frops_row != BinaryBasicFrops::NO_FROPS {
-            self.frops_inputs.push(frops_row as u32);
+            self.std.inc_virtual_row(self.frops_table_id, frops_row as u64, 1);
             return true;
         }
 

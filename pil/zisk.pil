@@ -18,6 +18,7 @@ require "arith_eq/pil/arith_eq.pil"
 require "arith_eq_384/pil/arith_eq_384.pil"
 require "keccakf/pil/keccakf.pil"
 require "sha256f/pil/sha256f.pil"
+require "poseidon2/pil/poseidon2.pil"
 
 proofval enable_input_data;
 enable_input_data * (1 - enable_input_data);
@@ -80,6 +81,8 @@ airgroup Zisk {
     virtual KeccakfTable(KECCAKF_TABLE_SIZE);
 
     Sha256f(N: 2**18);
+
+    Poseidon2(N: 2**17);
 
     // Public Inputs
     for (int i = 0; i < PUBLIC_INPUTS_64_BITS; i++) {

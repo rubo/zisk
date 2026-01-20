@@ -76,6 +76,7 @@ precompiles-common = { path = "precompiles/common" }
 precompiles-helpers = { path = "precompiles/helpers" }
 precomp-keccakf = { path = "precompiles/keccakf" }
 precomp-sha256f = { path = "precompiles/sha256f" }
+precomp-poseidon2 = { path = "precompiles/poseidon2" }
 precomp-big-int = { path = "precompiles/big_int" }
 riscv = { path = "riscv" }
 rom-setup = { path = "rom-setup" }
@@ -93,6 +94,7 @@ ziskos = { path = "ziskos/entrypoint" }
 circuit = { path = "tools/circuit" }
 zisk-sdk = { path = "sdk" }
 zisk-build = { path = "ziskbuild" }
+zisk-verifier = { path = "verifier" }
 
 # Distributed crates
 zisk-distributed-common = { path = "distributed/crates/common" }

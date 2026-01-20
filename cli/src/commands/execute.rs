@@ -5,7 +5,7 @@ use tracing::info;
 use zisk_build::ZISK_VERSION_MESSAGE;
 use zisk_sdk::{ProverClient, ZiskExecuteResult};
 
-use crate::{commands::cli_fail_if_gpu_mode, ux::print_banner};
+use crate::ux::print_banner;
 use zisk_common::io::ZiskStdin;
 
 #[derive(Parser)]
@@ -71,8 +71,6 @@ pub struct ZiskExecute {
 
 impl ZiskExecute {
     pub fn run(&mut self) -> Result<()> {
-        cli_fail_if_gpu_mode()?;
-
         print_banner();
 
         let stdin = self.create_stdin()?;

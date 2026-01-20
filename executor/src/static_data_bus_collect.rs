@@ -5,6 +5,7 @@
 use std::collections::VecDeque;
 
 use data_bus::DataBusTrait;
+use fields::PrimeField64;
 use precomp_arith_eq::ArithEqCollector;
 use precomp_arith_eq::ArithEqCounterInputGen;
 use precomp_arith_eq_384::ArithEq384Collector;
@@ -37,18 +38,18 @@ use zisk_core::ZiskOperationType;
 /// * `D` - The type of data payloads handled by the bus.
 /// * `BD` - The type of devices (subscribers) connected to the bus, implementing the `BusDevice`
 ///   trait.
-pub struct StaticDataBusCollect<D> {
+pub struct StaticDataBusCollect<D, F: PrimeField64> {
     /// Memory-related collectors (grouped for cache locality)
     pub mem_collector: Vec<(usize, MemModuleCollector)>,
     pub mem_align_collector: Vec<(usize, MemAlignCollector)>,
 
     /// Binary operation collectors (grouped for cache locality)
-    pub binary_basic_collector: Vec<(usize, BinaryBasicCollector)>,
-    pub binary_add_collector: Vec<(usize, BinaryAddCollector)>,
-    pub binary_extension_collector: Vec<(usize, BinaryExtensionCollector)>,
+    pub binary_basic_collector: Vec<(usize, BinaryBasicCollector<F>)>,
+    pub binary_add_collector: Vec<(usize, BinaryAddCollector<F>)>,
+    pub binary_extension_collector: Vec<(usize, BinaryExtensionCollector<F>)>,
 
     /// Arithmetic collectors (grouped for cache locality)
-    pub arith_collector: Vec<(usize, ArithInstanceCollector)>,
+    pub arith_collector: Vec<(usize, ArithInstanceCollector<F>)>,
     pub arith_inputs_generator: ArithCounterInputGen,
 
     /// Cryptographic hash collectors (grouped for cache locality)
@@ -90,16 +91,16 @@ const ARITH_EQ_TYPE: u64 = ZiskOperationType::ArithEq as u64;
 const ARITH_EQ_384_TYPE: u64 = ZiskOperationType::ArithEq384 as u64;
 const BIG_INT_OP_TYPE_ID: u64 = ZiskOperationType::BigInt as u64;
 
-impl StaticDataBusCollect<PayloadType> {
+impl<F: PrimeField64> StaticDataBusCollect<PayloadType, F> {
     /// Creates a new `DataBus` instance.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         mem_collector: Vec<(usize, MemModuleCollector)>,
         mem_align_collector: Vec<(usize, MemAlignCollector)>,
-        binary_basic_collector: Vec<(usize, BinaryBasicCollector)>,
-        binary_add_collector: Vec<(usize, BinaryAddCollector)>,
-        binary_extension_collector: Vec<(usize, BinaryExtensionCollector)>,
-        arith_collector: Vec<(usize, ArithInstanceCollector)>,
+        binary_basic_collector: Vec<(usize, BinaryBasicCollector<F>)>,
+        binary_add_collector: Vec<(usize, BinaryAddCollector<F>)>,
+        binary_extension_collector: Vec<(usize, BinaryExtensionCollector<F>)>,
+        arith_collector: Vec<(usize, ArithInstanceCollector<F>)>,
         keccakf_collector: Vec<(usize, KeccakfCollector)>,
         sha256f_collector: Vec<(usize, Sha256fCollector)>,
         poseidon2_collector: Vec<(usize, Poseidon2Collector)>,
@@ -333,8 +334,8 @@ impl StaticDataBusCollect<PayloadType> {
     }
 }
 
-impl DataBusTrait<PayloadType, Box<dyn BusDevice<PayloadType>>>
-    for StaticDataBusCollect<PayloadType>
+impl<F: PrimeField64> DataBusTrait<PayloadType, Box<dyn BusDevice<PayloadType>>>
+    for StaticDataBusCollect<PayloadType, F>
 {
     #[inline(always)]
     fn write_to_bus(&mut self, bus_id: BusId, payload: &[PayloadType]) -> bool {

@@ -24,6 +24,9 @@ use crate::{ArithCounterInputGen, ArithFullInstance, ArithFullSM, ArithPlanner};
 pub struct ArithSM<F: PrimeField64> {
     /// Arith Full state machine
     arith_full_sm: Arc<ArithFullSM<F>>,
+
+    /// Standard library instance, providing common functionalities.
+    std: Arc<Std<F>>,
 }
 
 impl<F: PrimeField64> ArithSM<F> {
@@ -32,9 +35,9 @@ impl<F: PrimeField64> ArithSM<F> {
     /// # Returns
     /// An `Arc`-wrapped instance of `ArithSM` containing initialized sub-state machines.
     pub fn new(std: Arc<Std<F>>) -> Arc<Self> {
-        let arith_full_sm = ArithFullSM::new(std);
+        let arith_full_sm = ArithFullSM::new(std.clone());
 
-        Arc::new(Self { arith_full_sm })
+        Arc::new(Self { arith_full_sm, std })
     }
 
     pub fn build_arith_counter(&self) -> ArithCounterInputGen {
@@ -78,7 +81,7 @@ impl<F: PrimeField64> ComponentBuilder<F> for ArithSM<F> {
     fn build_instance(&self, ictx: InstanceCtx) -> Box<dyn Instance<F>> {
         match ictx.plan.air_id {
             ArithTrace::<F>::AIR_ID => {
-                Box::new(ArithFullInstance::new(self.arith_full_sm.clone(), ictx))
+                Box::new(ArithFullInstance::new(self.arith_full_sm.clone(), ictx, self.std.clone()))
             }
             _ => panic!("BinarySM::get_instance() Unsupported air_id: {:?}", ictx.plan.air_id),
         }

@@ -254,7 +254,7 @@ impl<F: PrimeField64> StaticSMBundle<F> {
         pctx: &ProofCtx<F>,
         secn_instances: &HashMap<usize, &Box<dyn Instance<F>>>,
         chunks_to_execute: &[Vec<usize>],
-    ) -> Vec<Option<StaticDataBusCollect<u64>>> {
+    ) -> Vec<Option<StaticDataBusCollect<u64, F>>> {
         chunks_to_execute
             .par_iter()
             .enumerate()

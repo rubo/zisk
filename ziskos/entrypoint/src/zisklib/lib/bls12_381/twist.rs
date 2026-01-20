@@ -28,7 +28,7 @@ pub fn decompress_twist_bls12_381(
 
     // Check compression bit
     if (flags & 0x80) == 0 {
-        return Err("Expected compressed point (0x80 flag not set)");
+        return Err("decompress_twist_bls12_381: Expected compressed point (0x80 flag not set)");
     }
 
     // Check infinity bit

@@ -199,10 +199,11 @@ pub fn secp256k1_decompress_hint(data: &[u64]) -> Result<Vec<u64>> {
 
     let x: &[u64; X_BYTES_SIZE] =
         data[X_BYTES_OFFSET..X_BYTES_OFFSET + X_BYTES_SIZE].try_into().unwrap();
-    let y_is_odd = (data[Y_IS_ODD_OFFSET] >> 56) != 0;
+    let x: [u64; X_BYTES_SIZE] = [x[3].to_be(), x[2].to_be(), x[1].to_be(), x[0].to_be()];
+    let y_is_odd = data[Y_IS_ODD_OFFSET] != 0;
 
     let mut hints = Vec::new();
-    zisklib::secp256k1_decompress(x, y_is_odd, &mut hints).map_err(anyhow::Error::msg)?;
+    zisklib::secp256k1_decompress(&x, y_is_odd, &mut hints).map_err(anyhow::Error::msg)?;
 
     Ok(hints)
 }

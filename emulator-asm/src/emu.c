@@ -788,7 +788,8 @@ extern int _opcode_secp256k1_add(uint64_t * address)
 #ifdef DEBUG
     if (emu_verbose)
     {
-        printf("p3 = %lu:%lu:%lu:%lu = %lx:%lx:%lx:%lx\n", p1[3], p1[2], p1[1], p1[0], p1[3], p1[2], p1[1], p1[0]);
+        printf("p3.x = %lu:%lu:%lu:%lu = %lx:%lx:%lx:%lx\n", p1[3], p1[2], p1[1], p1[0], p1[3], p1[2], p1[1], p1[0]);
+        printf("p3.y = %lu:%lu:%lu:%lu = %lx:%lx:%lx:%lx\n", p1[7], p1[6], p1[5], p1[4], p1[7], p1[6], p1[5], p1[4]);
     }
 #endif
 #ifdef ASM_CALL_METRICS

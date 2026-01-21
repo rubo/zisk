@@ -699,7 +699,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         ProofOptions {
             verify_constraints: false,
             aggregation: false,
-            compressed: false,
+            compressed: self.prover_config.compressed,
             verify_proofs: true,
             save_proofs: true,
             test_mode: false,
@@ -713,7 +713,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         ProofOptions {
             verify_constraints: false,
             aggregation: true,
-            compressed: true,
+            compressed: self.prover_config.compressed,
             verify_proofs: false,
             save_proofs: false,
             test_mode: false,

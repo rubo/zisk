@@ -179,7 +179,7 @@ impl Default for ProverServiceConfigDto {
             debug: None,
             verify_constraints: false,
             aggregation: false,
-            compressed: true,
+            compressed: false,
             preallocate: false,
             max_streams: None,
             number_threads_witness: None,

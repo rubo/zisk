@@ -12,10 +12,20 @@ use crate::{dma::dma_rom::DmaRom, DmaInput};
 use precompiles_helpers::DmaInfo;
 
 #[cfg(feature = "packed")]
-pub use zisk_pil::{DmaRowPacked as DmaTraceRow, DmaTracePacked as DmaTrace};
+pub use zisk_pil::{DmaTracePacked, DmaTraceRowPacked};
 
 #[cfg(not(feature = "packed"))]
 pub use zisk_pil::{DmaTrace, DmaTraceRow};
+
+#[cfg(feature = "packed")]
+type DmaTraceRowType<F> = DmaTraceRowPacked<F>;
+#[cfg(feature = "packed")]
+type DmaTraceType<F> = DmaTracePacked<F>;
+
+#[cfg(not(feature = "packed"))]
+type DmaTraceRowType<F> = DmaTraceRow<F>;
+#[cfg(not(feature = "packed"))]
+type DmaTraceType<F> = DmaTrace<F>;
 
 /// The `DmaSM` struct encapsulates the logic of the Dma State Machine.
 pub struct DmaSM<F: PrimeField64> {
@@ -59,7 +69,7 @@ impl<F: PrimeField64> DmaSM<F> {
     pub fn process_slice(
         &self,
         input: &DmaInput,
-        trace: &mut DmaTraceRow<F>,
+        trace: &mut DmaTraceRowType<F>,
         local_dual_7_bits_multiplicities: &mut [u64],
         local_22_bits_values: &mut Vec<u32>,
         local_24_bits_values: &mut Vec<u32>,
@@ -131,7 +141,7 @@ impl<F: PrimeField64> DmaSM<F> {
     /// * `trace` - A mutable reference to the Dma trace.
     /// * `input` - The operation data to process.
     #[inline(always)]
-    pub fn process_empty_slice(&self, trace: &mut DmaTraceRow<F>) {
+    pub fn process_empty_slice(&self, trace: &mut DmaTraceRowType<F>) {
         trace.set_count_lt_256(true);
         trace.set_h_count(0);
         trace.set_l_count(0);
@@ -173,7 +183,7 @@ impl<F: PrimeField64> DmaSM<F> {
         inputs: &[Vec<DmaInput>],
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<AirInstance<F>> {
-        let mut trace = DmaTrace::<F>::new_from_vec(trace_buffer)?;
+        let mut trace = DmaTraceType::<F>::new_from_vec(trace_buffer)?;
         let num_rows = trace.num_rows();
 
         let total_inputs: usize = inputs.iter().map(|c| c.len()).sum();

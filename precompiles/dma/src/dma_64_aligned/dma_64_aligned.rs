@@ -7,7 +7,23 @@ use proofman_common::{AirInstance, FromTrace, ProofmanResult};
 use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use zisk_common::SegmentId;
-use zisk_pil::{Dma64AlignedAirValues, Dma64AlignedTrace, Dma64AlignedTraceRow};
+use zisk_pil::Dma64AlignedAirValues;
+
+#[cfg(feature = "packed")]
+pub use zisk_pil::{Dma64AlignedTracePacked, Dma64AlignedTraceRowPacked};
+
+#[cfg(not(feature = "packed"))]
+pub use zisk_pil::{Dma64AlignedTrace, Dma64AlignedTraceRow};
+
+#[cfg(feature = "packed")]
+type Dma64AlignedTraceRowType<F> = Dma64AlignedTraceRowPacked<F>;
+#[cfg(feature = "packed")]
+type Dma64AlignedTraceType<F> = Dma64AlignedTracePacked<F>;
+
+#[cfg(not(feature = "packed"))]
+type Dma64AlignedTraceRowType<F> = Dma64AlignedTraceRow<F>;
+#[cfg(not(feature = "packed"))]
+type Dma64AlignedTraceType<F> = Dma64AlignedTrace<F>;
 
 use crate::{Dma64AlignedInput, DMA_64_ALIGNED_OPS_BY_ROW};
 use precompiles_helpers::DmaInfo;
@@ -46,7 +62,7 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
     pub fn process_input(
         &self,
         input: &Dma64AlignedInput,
-        trace: &mut [Dma64AlignedTraceRow<F>],
+        trace: &mut [Dma64AlignedTraceRowType<F>],
         _local_16_bits_table: &mut [u32], // for input_cpy
         air_values: &mut Dma64AlignedAirValues<F>,
     ) -> usize {
@@ -130,7 +146,7 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
     /// * `trace` - A mutable reference to the Dma trace.
     /// * `input` - The operation data to process.
     #[inline(always)]
-    pub fn process_empty_slice(&self, trace: &mut Dma64AlignedTraceRow<F>) {
+    pub fn process_empty_slice(&self, trace: &mut Dma64AlignedTraceRowType<F>) {
         trace.set_main_step(0);
         trace.set_is_mem_eq(false);
         trace.set_dst64(0);
@@ -160,7 +176,7 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
         is_last_segment: bool,
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<AirInstance<F>> {
-        let mut trace = Dma64AlignedTrace::<F>::new_from_vec(trace_buffer)?;
+        let mut trace = Dma64AlignedTraceType::<F>::new_from_vec(trace_buffer)?;
         let num_rows = trace.num_rows();
 
         let total_inputs: usize = inputs
@@ -242,17 +258,14 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
         } else {
             assert!(segment_id > 0);
             air_values.segment_previous_seq_end = F::ZERO;
-            air_values.segment_previous_dst64 = F::from_u32(
-                (trace_rows[0].dst64.as_canonical_u64() - self.op_x_rows as u64) as u32,
-            );
-            air_values.segment_previous_src64 = F::from_u32(
-                (trace_rows[0].src64.as_canonical_u64() - self.op_x_rows as u64) as u32,
-            );
-            air_values.segment_previous_main_step = trace_rows[0].main_step;
-            air_values.segment_previous_count = F::from_u32(
-                (trace_rows[0].count.as_canonical_u64() + self.op_x_rows as u64) as u32,
-            );
-            air_values.segment_previous_is_mem_eq = trace_rows[0].is_mem_eq;
+            air_values.segment_previous_dst64 =
+                F::from_u32(trace_rows[0].get_dst64() - self.op_x_rows as u32);
+            air_values.segment_previous_src64 =
+                F::from_u32(trace_rows[0].get_src64() - self.op_x_rows as u32);
+            air_values.segment_previous_main_step = F::from_u64(trace_rows[0].get_main_step());
+            air_values.segment_previous_count =
+                F::from_u32(trace_rows[0].get_count() + self.op_x_rows as u32);
+            air_values.segment_previous_is_mem_eq = F::from_bool(trace_rows[0].get_is_mem_eq());
         }
         #[cfg(feature = "debug_dma")]
         {

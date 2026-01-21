@@ -9,10 +9,23 @@ use rayon::{
     iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
     slice::{ParallelSlice, ParallelSliceMut},
 };
-use zisk_pil::{
-    DmaPrePostTrace, DmaPrePostTraceRow, DMA_PRE_POST_TABLE_ID, DMA_PRE_POST_TABLE_SIZE,
-    DUAL_RANGE_BYTE_ID,
-};
+use zisk_pil::{DMA_PRE_POST_TABLE_ID, DMA_PRE_POST_TABLE_SIZE, DUAL_RANGE_BYTE_ID};
+
+#[cfg(feature = "packed")]
+pub use zisk_pil::{DmaPrePostTracePacked, DmaPrePostTraceRowPacked};
+
+#[cfg(not(feature = "packed"))]
+pub use zisk_pil::{DmaPrePostTrace, DmaPrePostTraceRow};
+
+#[cfg(feature = "packed")]
+type DmaPrePostTraceRowType<F> = DmaPrePostTraceRowPacked<F>;
+#[cfg(feature = "packed")]
+type DmaPrePostTraceType<F> = DmaPrePostTracePacked<F>;
+
+#[cfg(not(feature = "packed"))]
+type DmaPrePostTraceRowType<F> = DmaPrePostTraceRow<F>;
+#[cfg(not(feature = "packed"))]
+type DmaPrePostTraceType<F> = DmaPrePostTrace<F>;
 
 use crate::{DmaPrePostInput, DmaPrePostRom};
 use precompiles_helpers::DmaInfo;
@@ -55,7 +68,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
     pub fn process_slice(
         &self,
         input: &DmaPrePostInput,
-        trace: &mut DmaPrePostTraceRow<F>,
+        trace: &mut DmaPrePostTraceRowType<F>,
         pre_post_table_mul: &mut [u64],
         local_dual_range_byte_mul: &mut [u64],
     ) {
@@ -225,7 +238,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
     /// * `trace` - A mutable reference to the Dma trace.
     /// * `input` - The operation data to process.
     #[inline(always)]
-    pub fn process_empty_slice(&self, trace: &mut DmaPrePostTraceRow<F>) {
+    pub fn process_empty_slice(&self, trace: &mut DmaPrePostTraceRowType<F>) {
         trace.set_main_step(0);
         trace.set_dst64(0);
         trace.set_src64(0);
@@ -265,7 +278,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
         inputs: &[Vec<DmaPrePostInput>],
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<AirInstance<F>> {
-        let mut trace = DmaPrePostTrace::<F>::new_from_vec(trace_buffer)?;
+        let mut trace = DmaPrePostTraceType::<F>::new_from_vec(trace_buffer)?;
         let num_rows = trace.num_rows();
 
         let total_inputs: usize = inputs.iter().map(|inputs| inputs.len()).sum();

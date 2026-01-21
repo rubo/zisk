@@ -256,9 +256,30 @@ impl AsmServices {
         // Send request payload
         stream.write_all(&out_buffer).context("Failed to write request payload")?;
 
+        let total_timeout = Duration::from_secs(120);
+        let start = Instant::now();
+
         // Read exactly 40 bytes
         let mut in_buffer = [0u8; 40];
-        stream.read_exact(&mut in_buffer).context("Failed to read full response payload")?;
+        loop {
+            if start.elapsed() >= total_timeout {
+                return Err(anyhow::anyhow!("Total timeout exceeded"));
+            }
+
+            match stream.read_exact(&mut in_buffer) {
+                Ok(_) => break,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
+                    tracing::debug!("Read timeout after {:?}, retrying...", start.elapsed());
+                    continue;
+                }
+                Err(e) => {
+                    return Err(e.into());
+                }
+            }
+        }
 
         // Decode bytes into ResponseData
         let mut response = ResponseData::default();
@@ -292,7 +313,7 @@ impl AsmServices {
 
         // Wait for the shutdown signal (up to 30s)
         loop {
-            match sem.timed_wait(Duration::from_secs(30)) {
+            match sem.timed_wait(Duration::from_secs(60)) {
                 Ok(_) => break,
                 Err(named_sem::Error::WaitFailed(e))
                     if e.kind() == std::io::ErrorKind::Interrupted =>

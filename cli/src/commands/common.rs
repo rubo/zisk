@@ -70,15 +70,6 @@ pub fn cli_fail_if_macos() -> anyhow::Result<()> {
     }
 }
 
-/// If the feature "gpu" is enabled, returns an error indicating that the command is not supported.
-pub fn cli_fail_if_gpu_mode() -> anyhow::Result<()> {
-    if cfg!(feature = "gpu") {
-        Err(anyhow::anyhow!("Command is not supported on GPU mode"))
-    } else {
-        Ok(())
-    }
-}
-
 /// Gets the witness computation library file location.
 /// Uses the default one if not specified by user.
 pub fn get_witness_computation_lib(witness_lib: Option<&PathBuf>) -> PathBuf {

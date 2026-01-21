@@ -83,6 +83,8 @@ pub fn secp256k1_fn_inv(x: &[u64; 4]) -> [u64; 4] {
     x_inv
 }
 
+// ==================== C FFI Functions ====================
+
 /// # Safety
 /// - `x_ptr` must point to 4 u64s
 /// - `out_ptr` must point to at least 4 u64s

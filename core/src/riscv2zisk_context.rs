@@ -14,7 +14,7 @@ use std::collections::HashMap;
 // The CSR precompiled addresses are defined in the `ZiskOS` `ziskos/entrypoint/src` files
 // because legacy versions of Rust do not support constant parameters in `asm!` macros.
 
-const CSR_PRECOMPILED: [&str; 20] = [
+const CSR_PRECOMPILED: [&str; 21] = [
     "keccak",
     "arith256",
     "arith256_mod",
@@ -35,6 +35,7 @@ const CSR_PRECOMPILED: [&str; 20] = [
     "add256",
     "dma_memcpy",
     "dma_memcmp",
+    "poseidon2",
 ];
 const CSR_PRECOMPILED_ADDR_START: u32 = 0x800;
 const CSR_PRECOMPILED_ADDR_END: u32 = CSR_PRECOMPILED_ADDR_START + CSR_PRECOMPILED.len() as u32;
@@ -81,9 +82,9 @@ impl Riscv2ZiskContext<'_> {
 
             // I.1. Integer Computational (Register-Register)
             "add" => {
-                if riscv_instruction.rd == 0 && self.input_precompile == Some(0x812) {
+                if riscv_instruction.rd == 0 && self.input_precompile == Some(0x813) {
                     self.create_register_op(riscv_instruction, "dma_memcpy", 4);
-                } else if riscv_instruction.rd == 10 && self.input_precompile == Some(0x813) {
+                } else if riscv_instruction.rd == 10 && self.input_precompile == Some(0x814) {
                     self.create_register_op(riscv_instruction, "dma_memcmp", 4);
                 } else if riscv_instruction.rs1 == 0 {
                     if !next_instructions.is_empty() {
@@ -1174,7 +1175,7 @@ impl Riscv2ZiskContext<'_> {
             zib.j(4, 4);
             if (CSR_PRECOMPILED_ADDR_START..=CSR_PRECOMPILED_ADDR_END).contains(&i.csr) {
                 match i.csr {
-                    0x812 | 0x813 => {
+                    0x813 | 0x814 => {
                         self.output_precompile = Some(i.csr);
                         zib.src_a("imm", 0, false);
                         zib.op("copyb").unwrap();

@@ -1,8 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use cargo_zisk::commands::{
-    ZiskBuild, ZiskCheckSetup, ZiskClean, ZiskExecute, ZiskProve, ZiskProveClient, ZiskProveSnark,
-    ZiskRomSetup, ZiskRomVkey, ZiskRun, ZiskSdk, ZiskServer, ZiskStats, ZiskVerify,
-    ZiskVerifyConstraints,
+    ZiskBuild, ZiskCheckSetup, ZiskClean, ZiskExecute, ZiskProve, ZiskProveSnark, ZiskRomSetup,
+    ZiskRomVkey, ZiskRun, ZiskSdk, ZiskStats, ZiskVerify, ZiskVerifyConstraints,
 };
 use clap::Parser;
 use zisk_build::ZISK_VERSION_MESSAGE;
@@ -21,14 +20,12 @@ pub enum Cargo {
     CheckSetup(ZiskCheckSetup),
     Clean(ZiskClean),
     Execute(ZiskExecute),
-    ProveClient(ZiskProveClient),
     Prove(ZiskProve),
     ProveSnark(ZiskProveSnark),
     RomSetup(ZiskRomSetup),
     RomVkey(ZiskRomVkey),
     Run(ZiskRun),
     Sdk(ZiskSdk),
-    Server(ZiskServer),
     Stats(ZiskStats),
     Verify(ZiskVerify),
     VerifyConstraints(ZiskVerifyConstraints),
@@ -47,9 +44,6 @@ fn main() -> Result<()> {
         }
         Cargo::Clean(cmd) => {
             cmd.run().context("Error executing Clean command")?;
-        }
-        Cargo::ProveClient(cmd) => {
-            cmd.run().context("Error executing ProveClient command")?;
         }
         Cargo::Prove(mut cmd) => {
             cmd.run().context("Error executing Prove command")?;
@@ -74,9 +68,6 @@ fn main() -> Result<()> {
         }
         Cargo::Sdk(cmd) => {
             cmd.command.run().context("Error executing SDK command")?;
-        }
-        Cargo::Server(mut cmd) => {
-            cmd.run().context("Error executing Server command")?;
         }
         Cargo::Verify(cmd) => {
             cmd.run().map_err(|e| anyhow!("Error executing Verify command: {}", e))?;

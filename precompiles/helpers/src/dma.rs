@@ -534,7 +534,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[allow(dead_code)]
     fn benchmark_fast_encode_vs_encode_memcpy() {
         use std::time::Instant;
 

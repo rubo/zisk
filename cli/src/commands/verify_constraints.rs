@@ -1,4 +1,4 @@
-use crate::{commands::cli_fail_if_gpu_mode, ux::print_banner};
+use crate::ux::print_banner;
 use anyhow::Result;
 
 use clap::Parser;
@@ -76,8 +76,6 @@ pub struct ZiskVerifyConstraints {
 
 impl ZiskVerifyConstraints {
     pub fn run(&mut self) -> Result<()> {
-        cli_fail_if_gpu_mode()?;
-
         print_banner();
 
         let stdin = self.create_stdin()?;

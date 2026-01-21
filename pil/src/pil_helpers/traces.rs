@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "6a645a8a622600209da99c919fd1833af715f2ee2b748890e0a246da5a283bad";
+pub const PILOUT_HASH: &str = "354f59043e8d6c486c5c9980e808997a07cf4121ebf521487b02c685c151c478";
 
 pub const MERKLE_TREE_ARITY: u64 = 4;
 
@@ -70,11 +70,13 @@ pub const KECCAKF_AIR_IDS: &[usize] = &[20];
 
 pub const SHA_256_F_AIR_IDS: &[usize] = &[21];
 
-pub const SPECIFIED_RANGES_AIR_IDS: &[usize] = &[22];
+pub const POSEIDON_2_AIR_IDS: &[usize] = &[22];
 
-pub const VIRTUAL_TABLE_0_AIR_IDS: &[usize] = &[23];
+pub const SPECIFIED_RANGES_AIR_IDS: &[usize] = &[23];
 
-pub const VIRTUAL_TABLE_1_AIR_IDS: &[usize] = &[24];
+pub const VIRTUAL_TABLE_0_AIR_IDS: &[usize] = &[24];
+
+pub const VIRTUAL_TABLE_1_AIR_IDS: &[usize] = &[25];
 
 
 //PUBLICS
@@ -423,37 +425,51 @@ pub type Sha256fTrace<F> = GenericTrace<Sha256fTraceRow<F>, 262144, 0, 21>;
 pub type Sha256fTracePacked<F> = GenericTrace<Sha256fTraceRowPacked<F>, 262144, 0, 21>;
 
 
-trace_row!(SpecifiedRangesFixedRow<F> {
- RANGE: [F; 32], __L1__: F,
+trace_row!(Poseidon2FixedRow<F> {
+ CLK_0: F, __L1__: F,
 });
-pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 1048576, 0, 22>;
+pub type Poseidon2Fixed<F> = GenericTrace<Poseidon2FixedRow<F>, 131072, 0, 22>;
+
+trace_row!(Poseidon2TraceRow<F> {
+ in_use_clk_0:bit, in_use:bit, chunks:[[u32; 2]; 16], step_addr:ubit(40),
+});
+pub type Poseidon2Trace<F> = GenericTrace<Poseidon2TraceRow<F>, 131072, 0, 22>;
+
+
+pub type Poseidon2TracePacked<F> = GenericTrace<Poseidon2TraceRowPacked<F>, 131072, 0, 22>;
+
+
+trace_row!(SpecifiedRangesFixedRow<F> {
+ OPID: [F; 29], VALS: [F; 29], __L1__: F,
+});
+pub type SpecifiedRangesFixed<F> = GenericTrace<SpecifiedRangesFixedRow<F>, 1048576, 0, 23>;
 
 trace_row!(SpecifiedRangesTraceRow<F> {
- mul:[F; 32],
+ mul:[F; 29],
 });
-pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048576, 0, 22>;
+pub type SpecifiedRangesTrace<F> = GenericTrace<SpecifiedRangesTraceRow<F>, 1048576, 0, 23>;
 
 
 trace_row!(VirtualTable0FixedRow<F> {
  UID: [F; 8], column: [F; 43], __L1__: F,
 });
-pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 2097152, 0, 23>;
+pub type VirtualTable0Fixed<F> = GenericTrace<VirtualTable0FixedRow<F>, 2097152, 0, 24>;
 
 trace_row!(VirtualTable0TraceRow<F> {
  multiplicity:[F; 8],
 });
-pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 2097152, 0, 23>;
+pub type VirtualTable0Trace<F> = GenericTrace<VirtualTable0TraceRow<F>, 2097152, 0, 24>;
 
 
 trace_row!(VirtualTable1FixedRow<F> {
  UID: [F; 8], column: [F; 72], __L1__: F,
 });
-pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 2097152, 0, 24>;
+pub type VirtualTable1Fixed<F> = GenericTrace<VirtualTable1FixedRow<F>, 2097152, 0, 25>;
 
 trace_row!(VirtualTable1TraceRow<F> {
  multiplicity:[F; 8],
 });
-pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 2097152, 0, 24>;
+pub type VirtualTable1Trace<F> = GenericTrace<VirtualTable1TraceRow<F>, 2097152, 0, 25>;
 
 
 trace_row!(RomRomTraceRow<F> {
@@ -598,6 +614,10 @@ values!(Sha256fAirGroupValues<F> {
  gsum_result: FieldExtension<F>,
 });
 
+values!(Poseidon2AirGroupValues<F> {
+ gsum_result: FieldExtension<F>,
+});
+
 values!(SpecifiedRangesAirGroupValues<F> {
  gsum_result: FieldExtension<F>,
 });
@@ -715,5 +735,10 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
         is_packed: true,
         num_packed_words: 3,
         unpack_info: &[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 8, 4, 40, 1, 1],
+    }),
+    (0, 22, PackedInfoConst {
+        is_packed: true,
+        num_packed_words: 17,
+        unpack_info: &[1, 1, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 32, 40],
     }),
 ];

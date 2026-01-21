@@ -123,6 +123,8 @@ pub fn secp256k1_fp_sqrt(x: &[u64; 4], parity: u64) -> ([u64; 4], bool) {
     }
 }
 
+// ==================== C FFI Functions ====================
+
 /// # Safety
 /// - `x_ptr` must point to 4 u64s
 /// - `out_ptr` must point to at least 4 u64s

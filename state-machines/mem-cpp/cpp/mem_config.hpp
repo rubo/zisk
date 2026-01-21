@@ -55,7 +55,41 @@
 #define NO_CHUNK_ID 0xFFFFFFFF
 #define EMPTY_PAGE 0xFFFFFFFF
 
-#define MEM_WRITE_FLAG 0x10
-#define MEM_WRITE_BYTE_CLEAR_FLAG 0x20
+
+// SINGLE WRITE FLAGS
+//                bits
+// bytes(4)        0-3   (values 1,2,4,8)
+// write_flag (1)    4
+// clear_flag (1)    8
+
+// ALIGNED WRITE BLOCKS FLAGS
+//                bits
+// bytes(4)        0-3   (14 read block/15 write block)
+// word_count(28) 4-31   2^28 * 2^3 = 2^31 bytes = 2GB MAX_MEMCPY_SIZE
+
+
+#define MOPS_WRITE_FLAG 0x10
+#define MOPS_WRITE_BYTE_CLEAR_FLAG 0x20
+
+#define MOPS_READ_8   0x08
+#define MOPS_READ_4   0x04
+#define MOPS_READ_2   0x02
+#define MOPS_READ_1   0x01
+
+#define MOPS_WRITE_8  0x18
+#define MOPS_WRITE_4  0x14
+#define MOPS_WRITE_2  0x12
+#define MOPS_WRITE_1  0x11
+
+#define MOPS_CWRITE_1 0x31
+
+#define MOPS_BLOCK_READ 0x0A
+#define MOPS_BLOCK_WRITE 0x0B
+#define MOPS_ALIGNED_READ 0x0C
+#define MOPS_ALIGNED_WRITE 0x0D
+#define MOPS_ALIGNED_BLOCK_READ 0x0E
+#define MOPS_ALIGNED_BLOCK_WRITE 0x0F
+
+#define MOPS_BLOCK_COUNT_SBITS      4
 
 #endif

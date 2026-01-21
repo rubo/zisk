@@ -208,8 +208,7 @@ impl ZiskInstBuilder {
         self.i.op_type = op.op_type().into();
         self.i.input_size = op.input_size();
         // assume that input_size > 0 implies a precompiled, and precompiled uses step on operations
-        self.i.op_with_step =
-            op.input_size() > 0 || [ZiskOp::PARAM, ZiskOp::PARAMS].contains(&op.code());
+        self.i.op_with_step = op.input_size() > 0;
         Ok(())
     }
 

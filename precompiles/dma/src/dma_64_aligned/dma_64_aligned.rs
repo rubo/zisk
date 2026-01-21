@@ -4,7 +4,7 @@ use fields::PrimeField64;
 
 use pil_std_lib::Std;
 use proofman_common::{AirInstance, FromTrace, ProofmanResult};
-use proofman_util::{timer_start_trace, timer_stop_and_log_info};
+use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use zisk_common::SegmentId;
 use zisk_pil::{Dma64AlignedAirValues, Dma64AlignedTrace, Dma64AlignedTraceRow};
@@ -176,7 +176,7 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
             "Too many inputs, total_inputs:{total_inputs} num_rows:{num_rows}"
         );
 
-        tracing::info!(
+        tracing::debug!(
             "··· Creating Dma64Aligned instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
             total_inputs as f64 / num_rows as f64 * 100.0
         );
@@ -264,7 +264,7 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
             );
             println!("TRACE Dma64AlignedSM AIR_VALUES {:?}", air_values);
         }
-        timer_stop_and_log_info!(DMA_64_ALIGNED_TRACE);
+        timer_stop_and_log_trace!(DMA_64_ALIGNED_TRACE);
         let from_trace = FromTrace::new(&mut trace).with_air_values(&mut air_values);
         Ok(AirInstance::new_from_trace(from_trace))
     }

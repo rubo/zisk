@@ -22,8 +22,8 @@ use std::{
 use tiny_keccak::keccakf;
 
 use crate::{
-    sha256f, EmulationMode, InstContext, Mem, ZiskOperationType, ZiskRequiredOperation, M64,
-    REG_A0, SYS_ADDR,
+    sha256f, EmulationMode, InstContext, Mem, ZiskOperationType, ZiskRequiredOperation,
+    EXTRA_PARAMS, M64, REG_A0, SYS_ADDR,
 };
 
 use lib_c::{inverse_fn_ec_c, inverse_fp_ec_c, sqrt_fp_ec_parity_c, Fcall, FcallContext};
@@ -54,7 +54,6 @@ pub enum OpType {
     ArithEq384,
     BigInt,
     Dma,
-    Param,
 }
 
 impl From<OpType> for ZiskOperationType {
@@ -72,7 +71,6 @@ impl From<OpType> for ZiskOperationType {
             OpType::ArithEq384 => ZiskOperationType::ArithEq384,
             OpType::BigInt => ZiskOperationType::BigInt,
             OpType::Dma => ZiskOperationType::Dma,
-            OpType::Param => ZiskOperationType::Param,
         }
     }
 }
@@ -94,7 +92,6 @@ impl Display for OpType {
             Self::ArithEq384 => write!(f, "Arith384"),
             Self::BigInt => write!(f, "BigInt"),
             Self::Dma => write!(f, "Dma"),
-            Self::Param => write!(f, "Param"),
         }
     }
 }
@@ -117,7 +114,6 @@ impl FromStr for OpType {
             "aeq384" => Ok(Self::ArithEq384),
             "bint" => Ok(Self::BigInt),
             "dma" => Ok(Self::Dma),
-            "param" => Ok(Self::Param),
             _ => Err(InvalidOpTypeError),
         }
     }
@@ -428,10 +424,7 @@ define_ops! {
     (RemuW, "remu_w", ArithA32, ARITHA32_COST, 0xbd, 0, 0, opc_remu_w, op_remu_w, ops_none),
     (DivW, "div_w", ArithA32, ARITHA32_COST, 0xbe, 0, 0, opc_div_w, op_div_w, ops_none),
     (RemW, "rem_w", ArithA32, ARITHA32_COST, 0xbf, 0, 0, opc_rem_w, op_rem_w, ops_none),
-    (Param, "param", Param, 0, 0xc0, 0, 0, opc_param, op_param, ops_param),
-    (Params, "params", Param, 0, 0xc1, 0, 0, opc_params, op_params, ops_params),
-    // opcpdes 0xc2,0xc3 futured reserved for params
-    // opcodes 0xc4-0xcf are available
+    // opcpdes 0xc0-0xcf are available
     (DmaMemCpy, "dma_memcpy", Dma, DMA_COST, 0xd0, 8, 0, opc_dma_memcpy, op_dma_memcpy, ops_dma_memcpy),
     (DmaMemCmp, "dma_memcmp", Dma, DMA_COST, 0xd1, 16, 0, opc_dma_memcmp, op_dma_memcmp, ops_dma_memcmp),
     // opcodes 0xd2-0xd9 future reserved for dma operations (memset, memcpy256, memcmp256)
@@ -2331,13 +2324,13 @@ pub fn opc_dma_memcpy(ctx: &mut InstContext) {
 
     match ctx.emulation_mode {
         EmulationMode::Mem => {
-            let count = ctx.params.get_param(0).unwrap();
+            let count = ctx.mem.read(EXTRA_PARAMS, 8);
             ctx.mem.memcpy(dst, src, count);
         }
         EmulationMode::GenerateMemReads => {
             // In generate mode we need to populate precompiled.input_data with
             // information needed
-            let count = ctx.params.get_param(0).unwrap();
+            let count = ctx.mem.read(EXTRA_PARAMS, 8);
             ctx.precompiled.input_data.clear();
 
             #[cfg(feature = "debug_dma")]
@@ -2346,7 +2339,7 @@ pub fn opc_dma_memcpy(ctx: &mut InstContext) {
                 ctx.emulation_mode, ctx.step
             );
 
-            let encoded = DmaInfo::encode_memcpy(dst, src, count as usize);
+            let encoded = DmaInfo::fast_encode_memcpy(dst, src, count as usize);
             ctx.precompiled.input_data.push(encoded);
 
             if count > 0 {
@@ -2422,7 +2415,7 @@ pub fn op_dma_memcpy(_a: u64, _b: u64) -> (u64, bool) {
 pub fn ops_dma_memcpy(ctx: &InstContext, stats: &mut dyn OpStats) {
     let dst = ctx.a;
     let src = ctx.b;
-    let count = ctx.params.get_param(0).unwrap();
+    let count = ctx.mem.read(EXTRA_PARAMS, 8);
 
     // pre, post, dma_align, dma_unalign
     if count == 0 {
@@ -2481,7 +2474,7 @@ pub fn ops_dma_memcpy(ctx: &InstContext, stats: &mut dyn OpStats) {
 pub fn opc_dma_memcmp(ctx: &mut InstContext) {
     let addr_a = ctx.a;
     let addr_b = ctx.b;
-    let count = ctx.params.get_param(0).unwrap();
+    let count = ctx.mem.read(EXTRA_PARAMS, 8);
 
     println!("opc_dma_memcmp 0x{addr_a:08X} 0x{addr_b:08X} {count} {:?}", ctx.emulation_mode);
 
@@ -2524,7 +2517,7 @@ pub fn op_dma_memcmp(_a: u64, _b: u64) -> (u64, bool) {
 pub fn ops_dma_memcmp(ctx: &InstContext, stats: &mut dyn OpStats) {
     let addr_a = ctx.a;
     let addr_b = ctx.b;
-    let count = ctx.params.get_param(0).unwrap();
+    let count = ctx.mem.read(EXTRA_PARAMS, 8);
 
     // pre, post, dma_align, dma_unalign
     if count == 0 {
@@ -2592,53 +2585,3 @@ pub fn ops_dma_memcmp(ctx: &InstContext, stats: &mut dyn OpStats) {
         }
     }
 }
-
-pub fn opc_param(ctx: &mut InstContext) {
-    match ctx.emulation_mode {
-        EmulationMode::GenerateMemReads => {
-            let b = ctx.b;
-            // println!("opc_param 0x{b:08X}({b}) STEP:{} PC:0x{:08X}", ctx.step, ctx.pc);
-            ctx.params.add_param(b, ctx.step);
-        }
-        _ => {
-            // in other modes the length was read from minimal trace,
-            // to avoid move params info between chunks
-        }
-    }
-    ctx.c = 0;
-    ctx.flag = false;
-}
-
-/// Unimplemented.  Param can only be called from the system call context via InstContext.
-/// This is provided just for completeness.
-#[inline(always)]
-pub fn op_param(_a: u64, _b: u64) -> (u64, bool) {
-    unimplemented!("op_param() is not implemented");
-}
-
-#[inline(always)]
-pub fn ops_param(ctx: &InstContext, stats: &mut dyn OpStats) {
-    let param = ctx.b;
-
-    println!("ops_param 0x{param:08X} {:?}", ctx.emulation_mode);
-}
-
-pub fn opc_params(ctx: &mut InstContext) {
-    let a = ctx.a;
-    let b = ctx.b;
-
-    // println!("opc_params 0x{a:016X}({a}),0x{b:016X}({b}) {:?}", ctx.emulation_mode);
-    ctx.params.add_params(&[a, b], ctx.step);
-    ctx.c = 0;
-    ctx.flag = false;
-}
-
-/// Unimplemented.  Param can only be called from the system call context via InstContext.
-/// This is provided just for completeness.
-#[inline(always)]
-pub fn op_params(_a: u64, _b: u64) -> (u64, bool) {
-    unimplemented!("op_params() is not implemented");
-}
-
-#[inline(always)]
-pub fn ops_params(ctx: &InstContext, stats: &mut dyn OpStats) {}

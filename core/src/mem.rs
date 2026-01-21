@@ -141,6 +141,8 @@ pub const FLOAT_LIB_SP: u64 = 0xc0000000 - 16; // 0xbffffff0
 pub const ARCH_ID_ZISK: u64 = 0xFFFEEEE;
 /// UART memory address; single bytes written here will be copied to the standard output
 pub const UART_ADDR: u64 = SYS_ADDR + 0x200;
+/// Extra parameters of repcompiles are stored in fixed memory area (256 bytes => 32 parameters)
+pub const EXTRA_PARAMS: u64 = SYS_ADDR + 0x0F00;
 /// Float registers first address
 pub const FREG_FIRST: u64 = SYS_ADDR + 0x1000;
 /// CSR memory address; contains control and status registers

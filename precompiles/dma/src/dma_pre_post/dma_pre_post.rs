@@ -4,7 +4,7 @@ use fields::PrimeField64;
 
 use pil_std_lib::Std;
 use proofman_common::{AirInstance, FromTrace, ProofmanResult};
-use proofman_util::{timer_start_trace, timer_stop_and_log_info};
+use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
 use rayon::{
     iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator},
     slice::{ParallelSlice, ParallelSliceMut},
@@ -273,7 +273,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
         assert!(total_inputs <= num_rows);
         assert!(total_inputs > 0);
 
-        tracing::info!(
+        tracing::debug!(
             "··· Creating DmaPrePost instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
             total_inputs as f64 / num_rows as f64 * 100.0
         );
@@ -331,7 +331,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
             });
         }
         let from_trace = FromTrace::new(&mut trace);
-        timer_stop_and_log_info!(DMA_PRE_POST_TRACE);
+        timer_stop_and_log_trace!(DMA_PRE_POST_TRACE);
         Ok(AirInstance::new_from_trace(from_trace))
     }
 }

@@ -5,6 +5,7 @@ const int DMA_MEM_EQ = 3;
 const int MEM_CPY_BYTE_CONT_ID = 8200;
 const int MEM_CPY_CONT_ID = 8201;
 
+const int DMA_MEM_CPY_COUNT_ADDR = 0xA0000F00;
 
 
 airtemplate Dma(int N = 2**21, const int RC = 2, const int op_x_row = 4, const int selectors = 1,
@@ -195,8 +196,10 @@ airtemplate Dma(int N = 2**21, const int RC = 2, const int op_x_row = 4, const i
                                      main_step], sel: use_post);
 
     // TODO: memcmp
-    
+
     // used to link operation with main
     lookup_proves(operation_bus_id, [OP_DMA_MEMCPY, dst, 0, src, 0, 0, 0, 0, main_step], mul: sel);
-    lookup_proves(operation_bus_id, [OP_PARAM, 0, 0, count, 0, 0, 0, 0, main_step-1], mul: sel);
+    
+    // lookup_proves(operation_bus_id, [OP_PARAM, 0, 0, count, 0, 0, 0, 0, main_step-1], mul: sel);
+    precompiled_mem_load(sel: sel, main_step: main_step, addr: DMA_MEM_CPY_COUNT_ADDR, value: [count, 0]);
 }

@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use zisk_common::{
     BusId, MemCollectorInfo, A, B, DMA_ENCODED, OP, OPERATION_PRECOMPILED_BUS_DATA_SIZE, STEP,
 };
-use zisk_core::zisk_ops::ZiskOp;
+use zisk_core::{zisk_ops::ZiskOp, EXTRA_PARAMS};
 
 pub fn generate_dma_mem_inputs(
     data: &[u64],
@@ -26,6 +26,13 @@ pub fn generate_dma_mem_inputs(
 
     // NOTE: for dual memories it's very important to keep the order of loads and stores because
     // stores happend after loads.
+
+    MemBusHelpers::mem_aligned_load(
+        EXTRA_PARAMS as u32,
+        main_step,
+        DmaInfo::get_count(encoded) as u64,
+        pending,
+    );
 
     let mut wr_pending = VecDeque::new();
     if pre_count > 0 {
@@ -86,6 +93,9 @@ pub fn generate_dma_mem_inputs(
         let loop_data_count = DmaInfo::get_loop_count(encoded);
         let loop_src_data_end =
             loop_data_offset + loop_data_count + ((loop_src & 0x07) > 0) as usize;
+        if data_ext.len() <= loop_data_offset || data_ext.len() < loop_src_data_end {
+            println!("PRE-CRASH data_ext[{loop_data_offset}..{loop_src_data_end}] data_ext.len() = {} DATA={data:?} INFO{}", data_ext.len(), DmaInfo::to_string(encoded));
+        }
         let values = &data_ext[loop_data_offset..loop_src_data_end];
 
         #[cfg(feature = "debug_dma")]
@@ -193,6 +203,9 @@ pub fn skip_dma_mem_inputs(
     let src64_to = (src + use_count + 7) as u32 & !0x07;
 
     for mem_collector in mem_collectors_info {
+        if !mem_collector.skip_addr(EXTRA_PARAMS as u32) {
+            return false;
+        }
         if !mem_collector.skip_addr_range(dst64_from, dst64_to) {
             return false;
         }

@@ -2088,10 +2088,6 @@ impl<'a> Emu<'a> {
                 &mut self.static_array,
             );
             if self.ctx.inst_ctx.data_ext_len > 0 {
-                // println!(
-                //     "DETECTED DATA_EXT_LEN READ {} {} ",
-                //     self.ctx.inst_ctx.data_ext_len, mem_reads_index
-                // );
                 if mem_reads.len() < *mem_reads_index + self.ctx.inst_ctx.data_ext_len {
                     println!(
                         "OUT_OF_DATA_EXT({}) S:{}",
@@ -2167,14 +2163,14 @@ impl<'a> Emu<'a> {
                 &mut self.static_array,
             );
             if self.ctx.inst_ctx.data_ext_len > 0 {
-                data_bus.write_to_bus(OPERATION_BUS_ID, operation_payload, &[]);
-            } else {
                 data_bus.write_to_bus(
                     OPERATION_BUS_ID,
                     operation_payload,
                     &mem_reads[*mem_reads_index..*mem_reads_index + self.ctx.inst_ctx.data_ext_len],
                 );
                 *mem_reads_index += self.ctx.inst_ctx.data_ext_len;
+            } else {
+                data_bus.write_to_bus(OPERATION_BUS_ID, operation_payload, &[]);
             }
         }
 

@@ -8,8 +8,6 @@ use crate::{
     Mem, FCALL_PARAMS_MAX_SIZE, FCALL_RESULT_MAX_SIZE, REGS_IN_MAIN_TOTAL_NUMBER, ROM_ENTRY,
 };
 
-const PARAMS_MAX_SIZE: usize = 4;
-
 /// Zisk precompiled emulation mode
 #[derive(Debug, Default, PartialEq, Eq)]
 pub enum EmulationMode {
@@ -73,84 +71,6 @@ impl Default for FcallInstContext {
         }
     }
 }
-
-/// Zisk param instruction context, these instructions are used to pass extra parameters to
-/// precompiles. Currently precompiles can receive up to 2 parameters directly in instruction call,
-/// but if this precompile needs more parameters use these instructions to pass them. It's important
-/// to note that these parameters must be called in the instructions immediately before, because when
-/// precompiles prove them they use step - 1, step - 2 and so on.
-///
-/// Stores the precompile arguments.
-#[derive(Debug)]
-pub struct ParamInstContext {
-    /// Maximum size is PARAMS_MAX_SIZE u64s
-    pub parameters: [u64; PARAMS_MAX_SIZE],
-
-    /// Indicates how many parameter u64s contain valid data
-    pub parameters_size: usize,
-
-    /// Indicates the max step for these parameters
-    pub step_limit: u64,
-}
-
-impl Default for ParamInstContext {
-    /// Default param instruction context constructor
-    fn default() -> Self {
-        Self { parameters: [0; PARAMS_MAX_SIZE], parameters_size: 0, step_limit: 0 }
-    }
-}
-
-impl ParamInstContext {
-    /// Adds a single param.
-    pub fn add_param(&mut self, value: u64, step: u64) {
-        if step > self.step_limit {
-            self.step_limit = step + PARAMS_MAX_SIZE as u64 + 1;
-            self.parameters_size = 0;
-        }
-        if self.parameters_size >= PARAMS_MAX_SIZE {
-            panic!(
-                "ERROR: no space for one more parameter ({}/{} step_limit:{})",
-                self.parameters_size, PARAMS_MAX_SIZE, self.step_limit
-            );
-        }
-        self.parameters[self.parameters_size] = value;
-        self.parameters_size += 1;
-    }
-    /// Adds multiple params (double normally).
-    pub fn add_params(&mut self, values: &[u64], step: u64) {
-        if step > self.step_limit {
-            self.step_limit = PARAMS_MAX_SIZE as u64 + 1;
-            self.parameters_size = 0;
-        }
-        if self.parameters_size + values.len() > PARAMS_MAX_SIZE {
-            panic!(
-                "ERROR: no space for {} more parameters ({}/{} step_limit:{})",
-                values.len(),
-                self.parameters_size,
-                PARAMS_MAX_SIZE,
-                self.step_limit
-            );
-        }
-        for value in values {
-            self.parameters[self.parameters_size] = *value;
-            self.parameters_size += 1;
-        }
-    }
-    /// Clears params.
-    pub fn clear(&mut self) {
-        self.step_limit = 0;
-        self.parameters_size = 0;
-    }
-    /// Gets a param by index.
-    pub fn get_param(&self, index: usize) -> Option<u64> {
-        if index < self.parameters_size {
-            Some(self.parameters[index])
-        } else {
-            None
-        }
-    }
-}
-
 #[derive(Debug)]
 /// ZisK instruction context data container, storing the state of the execution
 pub struct InstContext {
@@ -197,9 +117,6 @@ pub struct InstContext {
     /// Fcall data
     pub fcall: FcallInstContext,
 
-    /// Params data
-    pub params: ParamInstContext,
-
     /// DataExt 64 bytes size. With this information it is possible to specify which variable part of the minimal trace
     /// is associated with the current instruction. Used by DMA precompile.
     pub data_ext_len: usize,
@@ -224,7 +141,6 @@ impl InstContext {
             emulation_mode: EmulationMode::default(),
             precompiled: PrecompiledInstContext::default(),
             fcall: FcallInstContext::default(),
-            params: ParamInstContext::default(),
             data_ext_len: 0,
         }
     }

@@ -7,7 +7,7 @@ use crate::DmaUnalignedInput;
 use pil_std_lib::Std;
 use precompiles_helpers::DmaInfo;
 use proofman_common::{AirInstance, FromTrace, ProofmanResult};
-use proofman_util::{timer_start_trace, timer_stop_and_log_info};
+use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
 use zisk_common::SegmentId;
 use zisk_pil::{
     DmaUnalignedAirValues, DmaUnalignedTrace, DmaUnalignedTraceRow, DUAL_RANGE_BYTE_ID,
@@ -158,7 +158,6 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         }
 
         if input.is_last_instance_input {
-            println!("DmaUnaligned LAST_INSTANCE_INPUT {seq_end}");
             if seq_end {
                 air_values.segment_last_seq_end = F::ONE;
                 air_values.segment_last_src64 = F::ZERO;
@@ -255,7 +254,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         assert!(total_inputs <= num_rows);
         assert!(total_inputs > 0);
 
-        tracing::info!(
+        tracing::debug!(
             "··· Creating DmaUnaligned instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
             total_inputs as f64 / num_rows as f64 * 100.0
         );
@@ -348,7 +347,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             );
             println!("TRACE DmaUnalignedSM AIR_VALUES {:?}", air_values);
         }
-        timer_stop_and_log_info!(DMA_UNALIGNED_TRACE);
+        timer_stop_and_log_trace!(DMA_UNALIGNED_TRACE);
         let from_trace = FromTrace::new(&mut trace).with_air_values(&mut air_values);
         Ok(AirInstance::new_from_trace(from_trace))
     }

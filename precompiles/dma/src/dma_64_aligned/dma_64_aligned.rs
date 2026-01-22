@@ -115,7 +115,6 @@ impl<F: PrimeField64> Dma64AlignedSM<F> {
         }
 
         if input.is_last_instance_input {
-            println!("Dma64Aligned LAST_INSTANCE_INPUT {seq_end}");
             if seq_end {
                 air_values.segment_last_seq_end = F::ONE;
                 air_values.segment_last_src64 = F::ZERO;

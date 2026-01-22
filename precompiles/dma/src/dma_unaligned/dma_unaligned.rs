@@ -320,10 +320,10 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             air_values.segment_first_bytes = [F::ZERO; 8];
         } else {
             air_values.segment_previous_seq_end = F::ZERO;
-            air_values.segment_previous_dst64 = F::from_u32((trace_rows[0].get_dst64() - 1) as u32);
-            air_values.segment_previous_src64 = F::from_u32((trace_rows[0].get_src64() - 1) as u32);
+            air_values.segment_previous_dst64 = F::from_u32(trace_rows[0].get_dst64() - 1);
+            air_values.segment_previous_src64 = F::from_u32(trace_rows[0].get_src64() - 1);
             air_values.segment_previous_main_step = F::from_u64(trace_rows[0].get_main_step());
-            air_values.segment_previous_count = F::from_u32((trace_rows[0].get_count() + 1) as u32);
+            air_values.segment_previous_count = F::from_u32(trace_rows[0].get_count() + 1);
             air_values.segment_previous_is_mem_eq = F::from_bool(trace_rows[0].get_is_mem_eq());
             air_values.segment_previous_offset =
                 F::from_u8(DmaInfo::get_loop_src_offset(first_input.encoded));

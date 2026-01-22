@@ -10,7 +10,7 @@ const KECCAK256_RATE: usize = 136;
 /// - Capacity: 512 bits (64 bytes)  
 /// - Output: 256 bits (32 bytes)
 /// - Padding: Keccak padding (0x01...0x80)
-pub fn keccak256(input: &[u8]) -> [u8; 32] {
+pub fn keccak256(input: &[u8], #[cfg(feature = "hints")] hints: &mut Vec<u64>) -> [u8; 32] {
     let mut state = [0u64; 25];
     let input_len = input.len();
 
@@ -20,7 +20,11 @@ pub fn keccak256(input: &[u8]) -> [u8; 32] {
         // XOR block into state
         xor_block_into_state(&mut state, &input[offset..offset + KECCAK256_RATE]);
         // Apply Keccak-f permutation
-        syscall_keccak_f(&mut state);
+        syscall_keccak_f(
+            &mut state,
+            #[cfg(feature = "hints")]
+            hints,
+        );
         offset += KECCAK256_RATE;
     }
 
@@ -40,7 +44,11 @@ pub fn keccak256(input: &[u8]) -> [u8; 32] {
     xor_block_into_state(&mut state, &final_block);
 
     // Final permutation
-    syscall_keccak_f(&mut state);
+    syscall_keccak_f(
+        &mut state,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Squeeze phase: extract first 32 bytes (256 bits) from state
     let mut result = [0u8; 32];
@@ -76,7 +84,11 @@ pub unsafe extern "C" fn keccak256_c(
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     let input_slice = core::slice::from_raw_parts(input, input_len);
-    let hash = keccak256(input_slice);
+    let hash = keccak256(
+        input_slice,
+        #[cfg(feature = "hints")]
+        hints,
+    );
     let output_slice = core::slice::from_raw_parts_mut(output, 32);
     output_slice.copy_from_slice(&hash);
 }
@@ -94,5 +106,11 @@ pub unsafe extern "C" fn native_keccak256(
     output: *mut u8,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
-    keccak256_c(bytes, len, output);
+    keccak256_c(
+        bytes,
+        len,
+        output,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 }

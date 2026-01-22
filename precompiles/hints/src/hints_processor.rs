@@ -13,7 +13,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use tracing::debug;
 use zisk_common::io::{StreamProcessor, StreamSink};
 use zisk_common::{BuiltInHint, CtrlHint, HintCode, PrecompileHint};
-use ziskos_hints::handlers::{bigint256::*, bls381::*, bn254::*, modexp::*, secp256k1::*};
+use ziskos_hints::handlers::bls381::bls12_381_g1_add_hint;
+use ziskos_hints::handlers::bn254::{bn254_g1_add_hint, bn254_g1_mul_hint};
+use ziskos_hints::handlers::secp256k1::secp256k1_ecrecover_hint;
+use ziskos_hints::handlers::sha256::sha256_hint;
 
 /// Ordered result buffer with drain state.
 ///
@@ -233,13 +236,15 @@ impl HintsProcessor {
             let hint = PrecompileHint::from_u64_slice(hints, idx, true)?;
             self.num_hint.fetch_add(1, Ordering::Relaxed);
 
-            // Check if custom handler is registered for custom hints
-            if let HintCode::Custom(code) = hint.hint_code {
-                if !self.custom_handlers.contains_key(&code) {
-                    return Err(anyhow::anyhow!(
-                        "Unknown custom hint code {:#x}: no handler registered",
-                        code
-                    ));
+            // Check if custom handler is registered for custom hints (skip pass-through)
+            if !hint.is_passthrough {
+                if let HintCode::Custom(code) = hint.hint_code {
+                    if !self.custom_handlers.contains_key(&code) {
+                        return Err(anyhow::anyhow!(
+                            "Unknown custom hint code {:#x}: no handler registered",
+                            code
+                        ));
+                    }
                 }
             }
 
@@ -310,8 +315,8 @@ impl HintsProcessor {
                 let mut queue = self.state.queue.lock().unwrap();
                 let seq = self.state.next_seq.fetch_add(1, Ordering::Relaxed);
 
-                // Handle HintCode::Noop synchronously - reserve and fill slot in one step
-                if hint.hint_code == HintCode::BuiltIn(BuiltInHint::Noop) {
+                // Handle pass-through hints immediately
+                if hint.is_passthrough {
                     queue.buffer.push_back(Some(Ok(hint.data.clone())));
                     // Notify immediately while holding the lock to ensure drainer sees the result
                     // Release lock after this block, avoiding duplicate notification
@@ -376,7 +381,7 @@ impl HintsProcessor {
             return;
         }
 
-        // println!("Hint processed {:?}:", hint);
+        println!("Processing Hint => {:?}:", hint);
 
         // Check if we should stop due to error - but still need to fill the slot
         let result = if state.error_flag.load(Ordering::Acquire) {
@@ -560,7 +565,9 @@ impl HintsProcessor {
         custom_handlers: Arc<HashMap<u32, CustomHintHandler>>,
     ) -> Result<Vec<u64>> {
         match hint.hint_code {
-            HintCode::BuiltIn(builtin) => Self::dispatch_builtin_hint(builtin, hint.data),
+            HintCode::BuiltIn(builtin) => {
+                Self::dispatch_builtin_hint(builtin, hint.data, hint.data_len_bytes)
+            }
             HintCode::Custom(code) => custom_handlers
                 .get(&code)
                 .map(|handler| handler(&hint.data))
@@ -570,68 +577,43 @@ impl HintsProcessor {
     }
 
     #[inline]
-    fn dispatch_builtin_hint(hint: BuiltInHint, data: Vec<u64>) -> Result<Vec<u64>> {
+    fn dispatch_builtin_hint(
+        hint: BuiltInHint,
+        data: Vec<u64>,
+        data_len_bytes: usize,
+    ) -> Result<Vec<u64>> {
         match hint {
-            // Secp256K1 Hint
-            BuiltInHint::Secp256K1FnReduce => secp256k1_fn_reduce_hint(&data),
-            BuiltInHint::Secp256K1FnAdd => secp256k1_fn_add_hint(&data),
-            BuiltInHint::Secp256K1FnNeg => secp256k1_fn_neg_hint(&data),
-            BuiltInHint::Secp256K1FnSub => secp256k1_fn_sub_hint(&data),
-            BuiltInHint::Secp256K1FnMul => secp256k1_fn_mul_hint(&data),
-            BuiltInHint::Secp256K1FnInv => secp256k1_fn_inv_hint(&data),
-            // Secp256k1 Field Hint Codes
-            BuiltInHint::Secp256K1FpReduce => secp256k1_fp_reduce_hint(&data),
-            BuiltInHint::Secp256K1FpAdd => secp256k1_fp_add_hint(&data),
-            BuiltInHint::Secp256K1FpNegate => secp256k1_fp_negate_hint(&data),
-            BuiltInHint::Secp256K1FpMul => secp256k1_fp_mul_hint(&data),
-            BuiltInHint::Secp256K1FpMulScalar => secp256k1_fp_mul_scalar_hint(&data),
-            // Secp256k1 Curve Hint Codes
-            BuiltInHint::Secp256K1ToAffine => secp256k1_to_affine_hint(&data),
-            BuiltInHint::Secp256K1Decompress => secp256k1_decompress_hint(&data),
-            BuiltInHint::Secp256K1DoubleScalarMulWithG => {
-                secp256k1_double_scalar_mul_with_g_hint(&data)
+            // SHA256 Hint Codes
+            BuiltInHint::Sha256 => sha256_hint(&data, data_len_bytes),
+            // BN254 Hint Codes
+            BuiltInHint::Bn254G1Add => bn254_g1_add_hint(&data),
+            BuiltInHint::Bn254G1Mul => bn254_g1_mul_hint(&data),
+            BuiltInHint::Bn254PairingCheck => {
+                unimplemented!("BN254 Pairing Check hint not implemented")
             }
-            BuiltInHint::Secp256K1EcdsaVerify => secp256k1_ecdsa_verify_hint(&data),
-
-            // Big Integer Arithmetic Hints
-            BuiltInHint::RedMod256 => redmod256_hint(&data),
-            BuiltInHint::AddMod256 => addmod256_hint(&data),
-            BuiltInHint::MulMod256 => mulmod256_hint(&data),
-            BuiltInHint::DivRem256 => divrem256_hint(&data),
-            BuiltInHint::WPow256 => wpow256_hint(&data),
-            BuiltInHint::OMul256 => omul256_hint(&data),
-            BuiltInHint::WMul256 => wmul256_hint(&data),
-
-            // Modular Exponentiation Hint
-            BuiltInHint::ModExp => modexp_hint(&data),
-
-            // BN254 hints
-            BuiltInHint::Bn254IsOnCurve => bn254_is_on_curve_hint(&data),
-            BuiltInHint::Bn254ToAffine => bn254_to_affine_hint(&data),
-            BuiltInHint::Bn254Add => bn254_add_hint(&data),
-            BuiltInHint::Bn254Mul => bn254_mul_hint(&data),
-            BuiltInHint::Bn254ToAffineTwist => bn254_to_affine_twist_hint(&data),
-            BuiltInHint::Bn254IsOnCurveTwist => bn254_is_on_curve_twist_hint(&data),
-            BuiltInHint::Bn254IsOnSubgroupTwist => bn254_is_on_subgroup_twist_hint(&data),
-            BuiltInHint::Bn254PairingBatch => bn254_pairing_batch_hint(&data),
-
-            // BLS12-381 hints
-            BuiltInHint::Bls12_381MulFp12 => bls12_381_mul_fp12_hint(&data),
-            BuiltInHint::Bls12_381Decompress => bls12_381_decompress_hint(&data),
-            BuiltInHint::Bls12_381IsOnCurve => bls12_381_is_on_curve_hint(&data),
-            BuiltInHint::Bls12_381IsOnSubgroup => bls12_381_is_on_subgroup_hint(&data),
-            BuiltInHint::Bls12_381Add => bls12_381_add_hint(&data),
-            BuiltInHint::Bls12_381ScalarMul => bls12_381_scalar_mul_hint(&data),
-            BuiltInHint::Bls12_381DecompressTwist => bls12_381_decompress_twist_hint(&data),
-            BuiltInHint::Bls12_381IsOnCurveTwist => bls12_381_is_on_curve_twist_hint(&data),
-            BuiltInHint::Bls12_381IsOnSubgroupTwist => bls12_381_is_on_subgroup_twist_hint(&data),
-            BuiltInHint::Bls12_381AddTwist => bls12_381_add_twist_hint(&data),
-            BuiltInHint::Bls12_381ScalarMulTwist => bls12_381_scalar_mul_twist_hint(&data),
-            BuiltInHint::Bls12_381MillerLoop => bls12_381_miller_loop_hint(&data),
-            BuiltInHint::Bls12_381FinalExp => bls12_381_final_exp_hint(&data),
-
-            // Control codes and Noop are handled before dispatch
-            _ => Err(anyhow::anyhow!("Unexpected builtin hint: {:?}", hint)),
+            // Secp256k1 Hints
+            BuiltInHint::Secp256k1EcRecover => secp256k1_ecrecover_hint(&data),
+            BuiltInHint::Secp256r1VerifySignature => {
+                unimplemented!("Secp256r1 Verify Signature hint not implemented")
+            }
+            // BLS12-381 Hint Codes
+            BuiltInHint::Bls12_381G1Add => bls12_381_g1_add_hint(&data),
+            BuiltInHint::Bls12_381G1Msm => unimplemented!("BLS12-381 G1 MSM hint not implemented"),
+            BuiltInHint::Bls12_381G2Add => unimplemented!("BLS12-381 G2 Add hint not implemented"),
+            BuiltInHint::Bls12_381G2Msm => unimplemented!("BLS12-381 G2 MSM hint not implemented"),
+            BuiltInHint::Bls12_381PairingCheck => {
+                unimplemented!("BLS12-381 Pairing Check hint not implemented")
+            }
+            BuiltInHint::Bls12_381FpToG1 => {
+                unimplemented!("BLS12-381 FP to G1 hint not implemented")
+            }
+            BuiltInHint::Bls12_381Fp2ToG2 => {
+                unimplemented!("BLS12-381 FP2 to G2 hint not implemented")
+            }
+            // Modular Exponentiation Hint Codes
+            BuiltInHint::ModExp => unimplemented!("Modular Exponentiation hint not implemented"),
+            // KZG Hint Codes
+            BuiltInHint::VerifyKzgProof => unimplemented!("KZG Verify Proof hint not implemented"),
         }
     }
 }
@@ -679,16 +661,27 @@ mod tests {
         make_header(ctrl, length)
     }
 
+    // Pass-through hint code for testing (bit 31 set = pass-through)
+    // Use high value (0x7FFF_xxxx range) to avoid conflicting with any built-in hint codes
+    const TEST_PASSTHROUGH_HINT: u32 = 0x8000_0000 | 0x7FFF_0000;
+
     fn processor() -> HintsProcessor {
-        HintsProcessor::builder(NullHints).num_threads(2).build().unwrap()
+        HintsProcessor::builder(NullHints)
+            .num_threads(2)
+            .custom_hint(0x7FFF_0000, |data| {
+                // This should never be called for pass-through hints
+                // but we register it to avoid "no handler" errors
+                Ok(data.to_vec())
+            })
+            .build()
+            .unwrap()
     }
 
     // Positive tests
     #[test]
     fn test_single_result_hint_non_blocking() {
         let p = processor();
-        let data =
-            vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 2), 0x111, 0x222];
+        let data = vec![make_header(TEST_PASSTHROUGH_HINT, 2), 0x111, 0x222];
 
         // Dispatch should succeed and be non-blocking
         assert!(p.process_hints(&data, false).is_ok());
@@ -705,11 +698,11 @@ mod tests {
     fn test_multiple_hints_ordered_output() {
         let p = processor();
         let data = vec![
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x111,
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x222,
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x333,
         ];
         assert!(p.process_hints(&data, false).is_ok());
@@ -724,8 +717,8 @@ mod tests {
     #[test]
     fn test_multiple_calls_global_sequence() {
         let p = processor();
-        let data1 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0xAAA];
-        let data2 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0xBBB];
+        let data1 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0xAAA];
+        let data2 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0xBBB];
 
         assert!(p.process_hints(&data1, false).is_ok());
         assert!(p.process_hints(&data2, false).is_ok());
@@ -765,11 +758,7 @@ mod tests {
     fn test_error_stops_wait() {
         let p = processor();
         // First valid, then invalid type
-        let data = vec![
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
-            0x111,
-            make_header(999, 0),
-        ];
+        let data = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x111, make_header(999, 0)];
 
         // Should error immediately when encountering invalid hint type
         let result = p.process_hints(&data, false);
@@ -792,7 +781,7 @@ mod tests {
         assert!(!p.state.error_flag.load(Ordering::Acquire));
 
         // Should be able to process new hints after reset
-        let good = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x42];
+        let good = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x42];
         assert!(p.process_hints(&good, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
@@ -806,7 +795,7 @@ mod tests {
         let p = processor();
 
         // First batch increments sequence
-        let batch1 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x01];
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x01];
         p.process_hints(&batch1, false).unwrap();
         p.wait_for_completion().unwrap();
 
@@ -828,7 +817,7 @@ mod tests {
         }
 
         // Process new batch
-        let batch2 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x02];
+        let batch2 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x02];
         p.process_hints(&batch2, false).unwrap();
 
         let end = vec![make_ctrl_header(HintCode::Ctrl(CtrlHint::End).to_u32(), 0)];
@@ -845,9 +834,9 @@ mod tests {
 
         // Dispatch hints
         let data = vec![
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x10,
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x20,
         ];
         p.process_hints(&data, false).unwrap();
@@ -899,7 +888,7 @@ mod tests {
 
         // CTRL_START not at position 0 should fail
         let data = vec![
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x42,
             make_ctrl_header(HintCode::Ctrl(CtrlHint::Start).to_u32(), 0),
         ];
@@ -914,7 +903,7 @@ mod tests {
         let p = processor();
 
         // First batch is ok
-        let batch1 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x01];
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x01];
         p.process_hints(&batch1, false).unwrap();
 
         // CTRL_START in non-first batch should fail
@@ -931,7 +920,7 @@ mod tests {
         // CTRL_END not at end should fail
         let data = vec![
             make_ctrl_header(HintCode::Ctrl(CtrlHint::End).to_u32(), 0),
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0x42,
         ];
 
@@ -961,10 +950,10 @@ mod tests {
 
         // Send some data
         let data = vec![
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 2),
+            make_header(TEST_PASSTHROUGH_HINT, 2),
             0xAAA,
             0xBBB,
-            make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1),
+            make_header(TEST_PASSTHROUGH_HINT, 1),
             0xCCC,
         ];
 
@@ -1002,7 +991,7 @@ mod tests {
         let p = HintsProcessor::builder(sink).num_threads(2).build().unwrap();
 
         // First batch succeeds
-        let data1 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x01];
+        let data1 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x01];
         assert!(p.process_hints(&data1, false).is_ok());
         assert!(p.wait_for_completion().is_ok());
 
@@ -1010,7 +999,7 @@ mod tests {
         should_fail.store(true, Ordering::Release);
 
         // Second batch should trigger sink error
-        let data2 = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x02];
+        let data2 = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x02];
         assert!(p.process_hints(&data2, false).is_ok());
 
         // Wait should detect the error from drainer thread
@@ -1035,7 +1024,7 @@ mod tests {
 
         // Custom threads
         let p4 = HintsProcessor::builder(NullHints).num_threads(4).build().unwrap();
-        let data = vec![make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1), 0x42];
+        let data = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x42];
         assert!(p4.process_hints(&data, false).is_ok());
         assert!(p4.wait_for_completion().is_ok());
 
@@ -1057,7 +1046,7 @@ mod tests {
         let mut data = Vec::with_capacity(NUM_HINTS * 2);
 
         for i in 0..NUM_HINTS {
-            data.push(make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1));
+            data.push(make_header(TEST_PASSTHROUGH_HINT, 1));
             data.push(i as u64);
         }
 
@@ -1094,7 +1083,7 @@ mod tests {
         for batch_id in 0..NUM_BATCHES {
             let mut data = Vec::with_capacity(HINTS_PER_BATCH * 2);
             for i in 0..HINTS_PER_BATCH {
-                data.push(make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1));
+                data.push(make_header(TEST_PASSTHROUGH_HINT, 1));
                 data.push((batch_id * HINTS_PER_BATCH + i) as u64);
             }
             p.process_hints(&data, false).unwrap();
@@ -1137,7 +1126,7 @@ mod tests {
             // Process batch
             let mut data = Vec::with_capacity(HINTS_PER_ITER * 2);
             for i in 0..HINTS_PER_ITER {
-                data.push(make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1));
+                data.push(make_header(TEST_PASSTHROUGH_HINT, 1));
                 data.push(i as u64);
             }
             p.process_hints(&data, false).unwrap();
@@ -1187,10 +1176,10 @@ mod tests {
         let received = Arc::new(Mutex::new(Vec::new()));
         let sink = RecordingSink { received: Arc::clone(&received) };
 
-        // Custom hint codes
-        const FAST_HINT: u32 = 0x100; // Processes instantly
-        const SLOW_HINT: u32 = 0x101; // Delays 10ms
-        const MED_HINT: u32 = 0x102; // Delays 5ms
+        // Custom hint codes (use high values to avoid conflicts with built-ins)
+        const FAST_HINT: u32 = 0x7FFF_0000; // Processes instantly
+        const SLOW_HINT: u32 = 0x7FFF_0001; // Delays 10ms
+        const MED_HINT: u32 = 0x7FFF_0002; // Delays 5ms
 
         let p = HintsProcessor::builder(sink)
             .num_threads(8)
@@ -1260,7 +1249,7 @@ mod tests {
         let received = Arc::new(Mutex::new(Vec::new()));
         let sink = RecordingSink { received: Arc::clone(&received) };
 
-        const VARIABLE_HINT: u32 = 0x200;
+        const VARIABLE_HINT: u32 = 0x7FFF_0100;
 
         let p = HintsProcessor::builder(sink)
             .num_threads(16)

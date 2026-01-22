@@ -3,6 +3,7 @@ pub mod bls381;
 pub mod bn254;
 pub mod modexp;
 pub mod secp256k1;
+pub mod sha256;
 
 /// Macro to generate size, offset, and expected length constants for hint data fields.
 ///
@@ -26,7 +27,10 @@ macro_rules! hint_fields {
 
         hint_fields!(@offsets 0, $($name: $size),+);
 
+        #[allow(dead_code)]
         const EXPECTED_LEN: usize = hint_fields!(@sum $($size),+);
+        #[allow(dead_code)]
+        const EXPECTED_LEN_U64: usize = (EXPECTED_LEN + 7) / 8;
     };
 
     (@offsets $offset:expr, $name:ident: $size:expr) => {
@@ -75,12 +79,37 @@ fn read_field<'a>(data: &'a [u64], pos: &mut usize) -> anyhow::Result<&'a [u64]>
 /// * `Ok(())` - If the length is correct
 /// * `Err(anyhow::Error)` - If the length is incorrect
 #[inline]
-fn validate_hint_length(data: &[u64], expected_len: usize, hint_name: &str) -> anyhow::Result<()> {
+fn validate_hint_length<T>(data: &[T], expected_len: usize, hint_name: &str) -> anyhow::Result<()> {
     if data.len() != expected_len {
         anyhow::bail!(
             "Invalid {} hint length: expected {}, got {}",
             hint_name,
             expected_len,
+            data.len(),
+        );
+    }
+    Ok(())
+}
+
+/// Validates that the hint data has at least the minimum required length.
+///
+/// # Arguments
+///
+/// * `data` - The hint data to validate
+/// * `min_len` - The minimum required length
+/// * `hint_name` - The name of the hint type for error messages
+///
+/// # Returns
+///
+/// * `Ok(())` - If the length is sufficient
+/// * `Err(anyhow::Error)` - If the length is too short
+#[inline]
+fn validate_hint_min_length<T>(data: &[T], min_len: usize, hint_name: &str) -> anyhow::Result<()> {
+    if data.len() < min_len {
+        anyhow::bail!(
+            "Invalid {} hint length: expected at least {}, got {}",
+            hint_name,
+            min_len,
             data.len(),
         );
     }

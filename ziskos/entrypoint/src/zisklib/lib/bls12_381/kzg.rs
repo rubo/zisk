@@ -42,13 +42,21 @@ pub unsafe extern "C" fn verify_kzg_proof_c(
     let proof_bytes: &[u8; 48] = &*(proof as *const [u8; 48]);
 
     // Parse the commitment (G1 point, compressed)
-    let commitment_point = match decompress_bls12_381(commitment_bytes) {
+    let commitment_point = match decompress_bls12_381(
+        commitment_bytes,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         Ok((point, _is_inf)) => point,
         Err(_) => return 2, // Invalid commitment
     };
 
     // Parse the proof (G1 point, compressed)
-    let proof_point = match decompress_bls12_381(proof_bytes) {
+    let proof_point = match decompress_bls12_381(
+        proof_bytes,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         Ok((point, _is_inf)) => point,
         Err(_) => return 2, // Invalid proof
     };
@@ -65,33 +73,65 @@ pub unsafe extern "C" fn verify_kzg_proof_c(
     };
 
     // Get the trusted setup G2 point [τ]₂
-    let tau_g2 = get_trusted_setup_g2();
+    let tau_g2 = get_trusted_setup_g2(
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Get generators
     let g1 = G1_GENERATOR;
     let g2 = G2_GENERATOR;
 
     // Compute c_minus_y = commitment - [y]G₁
-    let y_g1 = scalar_mul_bls12_381(&g1, &y_scalar);
-    let c_minus_y = sub_bls12_381(&commitment_point, &y_g1);
+    let y_g1 = scalar_mul_bls12_381(
+        &g1,
+        &y_scalar,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    let c_minus_y = sub_bls12_381(
+        &commitment_point,
+        &y_g1,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Compute t_minus_z = [τ]₂ - [z]G₂
-    let z_g2 = scalar_mul_twist_bls12_381(&g2, &z_scalar);
-    let t_minus_z = sub_twist_bls12_381(&tau_g2, &z_g2);
+    let z_g2 = scalar_mul_twist_bls12_381(
+        &g2,
+        &z_scalar,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    let t_minus_z = sub_twist_bls12_381(
+        &tau_g2,
+        &z_g2,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // The verification equation is:
     // e(commitment - [y]G₁, G₂) = e(proof, [τ]₂ - [z]G₂)
     //
     // Which is equivalent to checking:
     // e(commitment - [y]G₁, -G₂) · e(proof, [τ]₂ - [z]G₂) = 1
-    let neg_g2 = neg_twist_bls12_381(&g2);
+    let neg_g2 = neg_twist_bls12_381(
+        &g2,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Batch pairing check
     let g1_points = [c_minus_y, proof_point];
     let g2_points = [neg_g2, t_minus_z];
 
     // Check if the pairing result equals 1
-    if is_one(&pairing_batch_bls12_381(&g1_points, &g2_points)) {
+    if is_one(&pairing_batch_bls12_381(
+        &g1_points,
+        &g2_points,
+        #[cfg(feature = "hints")]
+        hints,
+    )) {
         1 // Valid proof
     } else {
         0 // Invalid proof
@@ -118,8 +158,12 @@ fn read_scalar_canonical(bytes: &[u8; 32]) -> Option<[u64; 4]> {
 }
 
 /// Get the trusted setup G2 point `[τ]₂`
-fn get_trusted_setup_g2() -> [u64; 24] {
-    decompress_twist_bls12_381(&TRUSTED_SETUP_TAU_G2_COMPRESSED)
-        .expect("Failed to decompress trusted setup G2")
-        .0
+fn get_trusted_setup_g2(#[cfg(feature = "hints")] hints: &mut Vec<u64>) -> [u64; 24] {
+    decompress_twist_bls12_381(
+        &TRUSTED_SETUP_TAU_G2_COMPRESSED,
+        #[cfg(feature = "hints")]
+        hints,
+    )
+    .expect("Failed to decompress trusted setup G2")
+    .0
 }

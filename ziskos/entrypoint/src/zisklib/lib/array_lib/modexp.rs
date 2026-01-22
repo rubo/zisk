@@ -279,7 +279,13 @@ pub unsafe extern "C" fn modexp_bytes_c(
     }
 
     // Call the u64 version
-    let result_u64 = modexp_u64(&base_u64, &exp_u64, &modulus_u64, #[cfg(feature = "hints")] hints);
+    let result_u64 = modexp_u64(
+        &base_u64,
+        &exp_u64,
+        &modulus_u64,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Convert result back to big-endian bytes with proper length
     let result = std::slice::from_raw_parts_mut(result_ptr, modulus_len);

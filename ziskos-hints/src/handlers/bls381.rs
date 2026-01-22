@@ -1,247 +1,268 @@
-use crate::{handlers::validate_hint_length, hint_fields, zisklib};
+use crate::{handlers::validate_hint_min_length, hint_fields, zisklib};
 
 use anyhow::Result;
 
-/// Processes an `MUL_FP12_BLS12_381` hint.
+/// Processes an `HINT_BLS12_381_G1_ADD` hint.
 #[inline]
-pub fn bls12_381_mul_fp12_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![A: 72, B: 72];
+pub fn bls12_381_g1_add_hint(data: &[u64]) -> Result<Vec<u64>> {
+    hint_fields![A: 96, B: 96];
 
-    validate_hint_length(data, EXPECTED_LEN, "MUL_FP12_BLS12_381")?;
+    validate_hint_min_length(data, EXPECTED_LEN_U64, "HINT_BLS12_381_G1_ADD")?;
 
-    // Safe to unwrap due to prior length validation.
-    let a: &[u64; A_SIZE] = data[A_OFFSET..A_OFFSET + A_SIZE].try_into().unwrap();
-    let b: &[u64; B_SIZE] = data[B_OFFSET..B_OFFSET + B_SIZE].try_into().unwrap();
+    let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, EXPECTED_LEN) };
+
+    let a: &[u8; A_SIZE] = bytes[A_OFFSET..A_OFFSET + A_SIZE].try_into().unwrap();
+    let b: &[u8; B_SIZE] = bytes[B_OFFSET..B_OFFSET + B_SIZE].try_into().unwrap();
 
     let mut hints = Vec::new();
-    zisklib::mul_fp12_bls12_381(a, b, &mut hints);
+    let result: &mut [u8; 96] = &mut [0u8; 96];
+    unsafe {
+        zisklib::bls12_381_g1_add_c(result.as_mut_ptr(), a.as_ptr(), b.as_ptr(), &mut hints);
+    }
 
     Ok(hints)
 }
 
-/// Processes a `DECOMPRESS_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_decompress_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![INPUT: 6];
+// /// Processes an `MUL_FP12_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_mul_fp12_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![A: 72, B: 72];
 
-    validate_hint_length(data, EXPECTED_LEN, "DECOMPRESS_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "MUL_FP12_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let input: &[u64; INPUT_SIZE] =
-        data[INPUT_OFFSET..INPUT_OFFSET + INPUT_SIZE].try_into().unwrap();
-    // let input: [u64; INPUT_SIZE] = [
-    //     input[3].to_be(),
-    //     input[2].to_be(),
-    //     input[1].to_be(),
-    //     input[0].to_be(),
-    //     input[5].to_be(),
-    //     input[4].to_be(),
-    // ];
+//     // Safe to unwrap due to prior length validation.
+//     let a: &[u64; A_SIZE] = data[A_OFFSET..A_OFFSET + A_SIZE].try_into().unwrap();
+//     let b: &[u64; B_SIZE] = data[B_OFFSET..B_OFFSET + B_SIZE].try_into().unwrap();
 
-    // Map a [u64; 6] to a [u8; 48]
-    let input: &[u8; INPUT_SIZE * 8] = unsafe { &*(input.as_ptr() as *const [u8; INPUT_SIZE * 8]) };
+//     let mut hints = Vec::new();
+//     zisklib::mul_fp12_bls12_381(a, b, &mut hints);
 
-    let mut hints = Vec::new();
-    zisklib::decompress_bls12_381(input, &mut hints).map_err(anyhow::Error::msg)?;
+//     Ok(hints)
+// }
 
-    Ok(hints)
-}
+// /// Processes a `DECOMPRESS_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_decompress_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![INPUT: 6];
 
-/// Processes an `IS_ON_CURVE_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_is_on_curve_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 12];
+//     validate_hint_length(data, EXPECTED_LEN, "DECOMPRESS_BLS12_381")?;
 
-    validate_hint_length(data, EXPECTED_LEN, "IS_ON_CURVE_BLS12_381")?;
+//     // Safe to unwrap due to prior length validation.
+//     let input: &[u64; INPUT_SIZE] =
+//         data[INPUT_OFFSET..INPUT_OFFSET + INPUT_SIZE].try_into().unwrap();
+//     // let input: [u64; INPUT_SIZE] = [
+//     //     input[3].to_be(),
+//     //     input[2].to_be(),
+//     //     input[1].to_be(),
+//     //     input[0].to_be(),
+//     //     input[5].to_be(),
+//     //     input[4].to_be(),
+//     // ];
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     // Map a [u64; 6] to a [u8; 48]
+//     let input: &[u8; INPUT_SIZE * 8] = unsafe { &*(input.as_ptr() as *const [u8; INPUT_SIZE * 8]) };
 
-    let mut hints = Vec::new();
-    zisklib::is_on_curve_bls12_381(p, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::decompress_bls12_381(input, &mut hints).map_err(anyhow::Error::msg)?;
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes an `IS_ON_SUBGROUP_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_is_on_subgroup_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 12];
+// /// Processes an `IS_ON_CURVE_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_is_on_curve_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 12];
 
-    validate_hint_length(data, EXPECTED_LEN, "IS_ON_SUBGROUP_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "IS_ON_CURVE_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::is_on_subgroup_bls12_381(p, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::is_on_curve_bls12_381(p, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes an `ADD_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_add_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P1: 12, P2: 12];
+// /// Processes an `IS_ON_SUBGROUP_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_is_on_subgroup_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 12];
 
-    validate_hint_length(data, EXPECTED_LEN, "ADD_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "IS_ON_SUBGROUP_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p1: &[u64; P1_SIZE] = data[P1_OFFSET..P1_OFFSET + P1_SIZE].try_into().unwrap();
-    let p2: &[u64; P2_SIZE] = data[P2_OFFSET..P2_OFFSET + P2_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::add_bls12_381(p1, p2, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::is_on_subgroup_bls12_381(p, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes a `SCALAR_MUL_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_scalar_mul_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 12, K: 6];
+// /// Processes an `ADD_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_add_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P1: 12, P2: 12];
 
-    validate_hint_length(data, EXPECTED_LEN, "SCALAR_MUL_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "ADD_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
-    let k: &[u64; K_SIZE] = data[K_OFFSET..K_OFFSET + K_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p1: &[u64; P1_SIZE] = data[P1_OFFSET..P1_OFFSET + P1_SIZE].try_into().unwrap();
+//     let p2: &[u64; P2_SIZE] = data[P2_OFFSET..P2_OFFSET + P2_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::scalar_mul_bls12_381(p, k, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::add_bls12_381(p1, p2, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes a `DECOMPRESS_TWIST_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_decompress_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![INPUT: 12];
+// /// Processes a `SCALAR_MUL_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_scalar_mul_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 12, K: 6];
 
-    validate_hint_length(data, EXPECTED_LEN, "DECOMPRESS_TWIST_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "SCALAR_MUL_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let input: &[u64; INPUT_SIZE] =
-        data[INPUT_OFFSET..INPUT_OFFSET + INPUT_SIZE].try_into().unwrap();
-    // let input: [u64; INPUT_SIZE] = [
-    //     input[3].to_be(),
-    //     input[2].to_be(),
-    //     input[1].to_be(),
-    //     input[0].to_be(),
-    //     input[7].to_be(),
-    //     input[6].to_be(),
-    //     input[5].to_be(),
-    //     input[4].to_be(),
-    //     input[11].to_be(),
-    //     input[10].to_be(),
-    //     input[9].to_be(),
-    //     input[8].to_be(),
-    // ];
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     let k: &[u64; K_SIZE] = data[K_OFFSET..K_OFFSET + K_SIZE].try_into().unwrap();
 
-    // Map a [u64; 6] to a [u8; 48]
-    let input: &[u8; INPUT_SIZE * 8] = unsafe { &*(input.as_ptr() as *const [u8; INPUT_SIZE * 8]) };
+//     let mut hints = Vec::new();
+//     zisklib::scalar_mul_bls12_381(p, k, &mut hints);
 
-    let mut hints = Vec::new();
-    zisklib::decompress_twist_bls12_381(input, &mut hints).map_err(anyhow::Error::msg)?;
+//     Ok(hints)
+// }
 
-    Ok(hints)
-}
+// /// Processes a `DECOMPRESS_TWIST_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_decompress_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![INPUT: 12];
 
-/// Processes an `IS_ON_CURVE_TWIST_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_is_on_curve_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 24];
+//     validate_hint_length(data, EXPECTED_LEN, "DECOMPRESS_TWIST_BLS12_381")?;
 
-    validate_hint_length(data, EXPECTED_LEN, "IS_ON_CURVE_TWIST_BLS12_381")?;
+//     // Safe to unwrap due to prior length validation.
+//     let input: &[u64; INPUT_SIZE] =
+//         data[INPUT_OFFSET..INPUT_OFFSET + INPUT_SIZE].try_into().unwrap();
+//     // let input: [u64; INPUT_SIZE] = [
+//     //     input[3].to_be(),
+//     //     input[2].to_be(),
+//     //     input[1].to_be(),
+//     //     input[0].to_be(),
+//     //     input[7].to_be(),
+//     //     input[6].to_be(),
+//     //     input[5].to_be(),
+//     //     input[4].to_be(),
+//     //     input[11].to_be(),
+//     //     input[10].to_be(),
+//     //     input[9].to_be(),
+//     //     input[8].to_be(),
+//     // ];
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     // Map a [u64; 6] to a [u8; 48]
+//     let input: &[u8; INPUT_SIZE * 8] = unsafe { &*(input.as_ptr() as *const [u8; INPUT_SIZE * 8]) };
 
-    let mut hints = Vec::new();
-    zisklib::is_on_curve_twist_bls12_381(p, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::decompress_twist_bls12_381(input, &mut hints).map_err(anyhow::Error::msg)?;
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes an `IS_ON_SUBGROUP_TWIST_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_is_on_subgroup_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 24];
+// /// Processes an `IS_ON_CURVE_TWIST_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_is_on_curve_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 24];
 
-    validate_hint_length(data, EXPECTED_LEN, "IS_ON_SUBGROUP_TWIST_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "IS_ON_CURVE_TWIST_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::is_on_subgroup_twist_bls12_381(p, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::is_on_curve_twist_bls12_381(p, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes an `ADD_TWIST_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_add_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P1: 24, P2: 24];
+// /// Processes an `IS_ON_SUBGROUP_TWIST_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_is_on_subgroup_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 24];
 
-    validate_hint_length(data, EXPECTED_LEN, "ADD_TWIST_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "IS_ON_SUBGROUP_TWIST_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p1: &[u64; P1_SIZE] = data[P1_OFFSET..P1_OFFSET + P1_SIZE].try_into().unwrap();
-    let p2: &[u64; P2_SIZE] = data[P2_OFFSET..P2_OFFSET + P2_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::add_twist_bls12_381(p1, p2, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::is_on_subgroup_twist_bls12_381(p, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes a `SCALAR_MUL_TWIST_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_scalar_mul_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 24, K: 6];
+// /// Processes an `ADD_TWIST_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_add_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P1: 24, P2: 24];
 
-    validate_hint_length(data, EXPECTED_LEN, "SCALAR_MUL_TWIST_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "ADD_TWIST_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
-    let k: &[u64; K_SIZE] = data[K_OFFSET..K_OFFSET + K_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p1: &[u64; P1_SIZE] = data[P1_OFFSET..P1_OFFSET + P1_SIZE].try_into().unwrap();
+//     let p2: &[u64; P2_SIZE] = data[P2_OFFSET..P2_OFFSET + P2_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::scalar_mul_twist_bls12_381(p, k, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::add_twist_bls12_381(p1, p2, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes a `MILLER_LOOP_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_miller_loop_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![P: 12, Q: 24];
+// /// Processes a `SCALAR_MUL_TWIST_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_scalar_mul_twist_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 24, K: 6];
 
-    validate_hint_length(data, EXPECTED_LEN, "MILLER_LOOP_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "SCALAR_MUL_TWIST_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
-    let q: &[u64; Q_SIZE] = data[Q_OFFSET..Q_OFFSET + Q_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     let k: &[u64; K_SIZE] = data[K_OFFSET..K_OFFSET + K_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::miller_loop_bls12_381(p, q, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::scalar_mul_twist_bls12_381(p, k, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
 
-/// Processes a `FINAL_EXP_BLS12_381` hint.
-#[inline]
-pub fn bls12_381_final_exp_hint(data: &[u64]) -> Result<Vec<u64>> {
-    hint_fields![F: 72];
+// /// Processes a `MILLER_LOOP_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_miller_loop_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![P: 12, Q: 24];
 
-    validate_hint_length(data, EXPECTED_LEN, "FINAL_EXP_BLS12_381")?;
+//     validate_hint_length(data, EXPECTED_LEN, "MILLER_LOOP_BLS12_381")?;
 
-    // Safe to unwrap due to prior length validation.
-    let f: &[u64; F_SIZE] = data[F_OFFSET..F_OFFSET + F_SIZE].try_into().unwrap();
+//     // Safe to unwrap due to prior length validation.
+//     let p: &[u64; P_SIZE] = data[P_OFFSET..P_OFFSET + P_SIZE].try_into().unwrap();
+//     let q: &[u64; Q_SIZE] = data[Q_OFFSET..Q_OFFSET + Q_SIZE].try_into().unwrap();
 
-    let mut hints = Vec::new();
-    zisklib::final_exp_bls12_381(f, &mut hints);
+//     let mut hints = Vec::new();
+//     zisklib::miller_loop_bls12_381(p, q, &mut hints);
 
-    Ok(hints)
-}
+//     Ok(hints)
+// }
+
+// /// Processes a `FINAL_EXP_BLS12_381` hint.
+// #[inline]
+// pub fn bls12_381_final_exp_hint(data: &[u64]) -> Result<Vec<u64>> {
+//     hint_fields![F: 72];
+
+//     validate_hint_length(data, EXPECTED_LEN, "FINAL_EXP_BLS12_381")?;
+
+//     // Safe to unwrap due to prior length validation.
+//     let f: &[u64; F_SIZE] = data[F_OFFSET..F_OFFSET + F_SIZE].try_into().unwrap();
+
+//     let mut hints = Vec::new();
+//     zisklib::final_exp_bls12_381(f, &mut hints);
+
+//     Ok(hints)
+// }

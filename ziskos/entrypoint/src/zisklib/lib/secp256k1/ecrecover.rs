@@ -108,6 +108,7 @@ pub fn secp256k1_ecrecover_point(
     s: &[u64; 4],
     z: &[u64; 4],
     recid: u8,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Option<[u64; 8]> {
     // Validate r and s
     if !is_valid_scalar(r) || !is_valid_scalar(s) {
@@ -126,22 +127,52 @@ pub fn secp256k1_ecrecover_point(
     // Recover the y-coordinate from x
     // y² = x³ + 7
     let y_is_odd = (recid & 1) == 1;
-    let (rx, ry) = secp256k1_decompress(&x, y_is_odd).ok()?;
+    let (rx, ry) = secp256k1_decompress(
+        &x,
+        y_is_odd,
+        #[cfg(feature = "hints")]
+        hints,
+    )
+    .ok()?;
 
     let r_point = [rx[0], rx[1], rx[2], rx[3], ry[0], ry[1], ry[2], ry[3]];
 
     // Compute r_inv = r⁻¹ (mod N)
-    let r_inv = secp256k1_fn_inv(r);
+    let r_inv = secp256k1_fn_inv(
+        r,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Compute u1 = -z * r_inv (mod N)
-    let neg_z = secp256k1_fn_neg(z);
-    let u1 = secp256k1_fn_mul(&neg_z, &r_inv);
+    let neg_z = secp256k1_fn_neg(
+        z,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    let u1 = secp256k1_fn_mul(
+        &neg_z,
+        &r_inv,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Compute u2 = s * r_inv (mod N)
-    let u2 = secp256k1_fn_mul(s, &r_inv);
+    let u2 = secp256k1_fn_mul(
+        s,
+        &r_inv,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Compute PK = u1*G + u2*R
-    let pk = secp256k1_double_scalar_mul_with_g(&u1, &u2, &r_point)?;
+    let pk = secp256k1_double_scalar_mul_with_g(
+        &u1,
+        &u2,
+        &r_point,
+        #[cfg(feature = "hints")]
+        hints,
+    )?;
 
     Some(pk)
 }
@@ -159,7 +190,12 @@ pub fn secp256k1_ecrecover_point(
 /// # Returns
 /// * 32 bytes where the first 12 bytes are 0 and the last 20 bytes are the Ethereum address
 /// * Returns all zeros if recovery fails
-pub fn secp256k1_ecrecover(sig: &[u8; 64], recid: u8, msg: &[u8; 32]) -> Option<[u8; 32]> {
+pub fn secp256k1_ecrecover(
+    sig: &[u8; 64],
+    recid: u8,
+    msg: &[u8; 32],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> Option<[u8; 32]> {
     // Parse r and s from signature
     let r_bytes: [u8; 32] = sig[0..32].try_into().unwrap();
     let s_bytes: [u8; 32] = sig[32..64].try_into().unwrap();
@@ -169,7 +205,14 @@ pub fn secp256k1_ecrecover(sig: &[u8; 64], recid: u8, msg: &[u8; 32]) -> Option<
     let z = bytes_be_to_u64_le(msg);
 
     // Recover the public key point
-    let pk = secp256k1_ecrecover_point(&r, &s, &z, recid)?;
+    let pk = secp256k1_ecrecover_point(
+        &r,
+        &s,
+        &z,
+        recid,
+        #[cfg(feature = "hints")]
+        hints,
+    )?;
 
     // Convert public key to uncompressed format (65 bytes: 0x04 || x || y)
     // But for keccak hashing, we only use x || y (64 bytes)
@@ -220,7 +263,13 @@ pub unsafe extern "C" fn secp256k1_ecrecover_c(
     let sig_bytes: &[u8; 64] = &*(sig as *const [u8; 64]);
     let msg_bytes: &[u8; 32] = &*(msg as *const [u8; 32]);
 
-    match secp256k1_ecrecover(sig_bytes, recid, msg_bytes) {
+    match secp256k1_ecrecover(
+        sig_bytes,
+        recid,
+        msg_bytes,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         Some(result) => {
             let output_slice = core::slice::from_raw_parts_mut(output, 32);
             output_slice.copy_from_slice(&result);

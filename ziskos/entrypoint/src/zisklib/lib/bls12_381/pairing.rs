@@ -197,5 +197,10 @@ pub unsafe extern "C" fn bls12_381_pairing_check_c(
     }
 
     // Compute batch pairing and check if result is 1
-    is_one(&pairing_batch_bls12_381(&g1_points, &g2_points, #[cfg(feature = "hints")] hints))
+    is_one(&pairing_batch_bls12_381(
+        &g1_points,
+        &g2_points,
+        #[cfg(feature = "hints")]
+        hints,
+    ))
 }

@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use zisk_common::io::StreamSink;
-use zisk_common::{BuiltInHint, HintCode};
 
 struct BenchSink {
     received: Arc<Mutex<Vec<Vec<u64>>>>,
@@ -24,10 +23,10 @@ fn make_header(hint_type: u32, length: u32) -> u64 {
 }
 
 fn parallel_speedup_benchmark(c: &mut Criterion) {
-    // Define custom hints with known processing times
-    const FAST_HINT: u32 = 0x100; // 1ms
-    const MEDIUM_HINT: u32 = 0x101; // 5ms
-    const SLOW_HINT: u32 = 0x102; // 10ms
+    // Define custom hints with known processing times (use high values to avoid built-in conflicts)
+    const FAST_HINT: u32 = 0x7FFF_0000; // 1ms
+    const MEDIUM_HINT: u32 = 0x7FFF_0001; // 5ms
+    const SLOW_HINT: u32 = 0x7FFF_0002; // 10ms
 
     // Test configuration
     const NUM_FAST: usize = 100;
@@ -101,9 +100,9 @@ fn parallel_speedup_benchmark(c: &mut Criterion) {
 }
 
 fn microsecond_hints_benchmark(c: &mut Criterion) {
-    const ULTRA_FAST: u32 = 0x110; // 10µs
-    const VERY_FAST: u32 = 0x111; // 50µs
-    const FAST: u32 = 0x112; // 100µs
+    const ULTRA_FAST: u32 = 0x7FFF_0010; // 10µs
+    const VERY_FAST: u32 = 0x7FFF_0011; // 50µs
+    const FAST: u32 = 0x7FFF_0012; // 100µs
     const NUM_HINTS: usize = 1000;
 
     let mut group = c.benchmark_group("microsecond_hints");
@@ -150,11 +149,11 @@ fn microsecond_hints_benchmark(c: &mut Criterion) {
 }
 
 fn workload_patterns_benchmark(c: &mut Criterion) {
-    const VERY_FAST: u32 = 0x100; // 0.5ms
-    const FAST: u32 = 0x101; // 2ms
-    const MEDIUM: u32 = 0x102; // 5ms
-    const SLOW: u32 = 0x103; // 10ms
-    const VERY_SLOW: u32 = 0x104; // 20ms
+    const VERY_FAST: u32 = 0x7FFF_0020; // 0.5ms
+    const FAST: u32 = 0x7FFF_0021; // 2ms
+    const MEDIUM: u32 = 0x7FFF_0022; // 5ms
+    const SLOW: u32 = 0x7FFF_0023; // 10ms
+    const VERY_SLOW: u32 = 0x7FFF_0024; // 20ms
 
     let mut group = c.benchmark_group("workload_patterns");
     group.sample_size(10);
@@ -236,6 +235,9 @@ fn noop_throughput_benchmark(c: &mut Criterion) {
 
     let hint_counts = [1000, 10000, 100000];
 
+    // Pass-through hint code (bit 31 set = pass-through, no computation needed)
+    const PASSTHROUGH_HINT: u32 = 0x8000_1000;
+
     for &count in &hint_counts {
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &num_hints| {
             b.iter(|| {
@@ -243,7 +245,7 @@ fn noop_throughput_benchmark(c: &mut Criterion) {
 
                 let mut data = Vec::with_capacity(num_hints * 2);
                 for i in 0..num_hints {
-                    data.push(make_header(HintCode::BuiltIn(BuiltInHint::Noop).to_u32(), 1));
+                    data.push(make_header(PASSTHROUGH_HINT, 1));
                     data.push(i as u64);
                 }
 

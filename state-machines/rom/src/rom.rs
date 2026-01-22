@@ -11,7 +11,7 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU32},
+        atomic::{AtomicBool, AtomicU64},
         Arc, Mutex,
     },
     thread::JoinHandle,
@@ -37,10 +37,10 @@ pub struct RomSM {
     zisk_rom: Arc<ZiskRom>,
 
     /// Shared biod instruction counter for monitoring ROM operations.
-    bios_inst_count: Arc<Vec<AtomicU32>>,
+    bios_inst_count: Arc<Vec<AtomicU64>>,
 
     /// Shared program instruction counter for monitoring ROM operations.
-    prog_inst_count: Arc<Vec<AtomicU32>>,
+    prog_inst_count: Arc<Vec<AtomicU64>>,
 
     asm_runner_handler: Mutex<Option<JoinHandle<AsmRunnerRH>>>,
 }

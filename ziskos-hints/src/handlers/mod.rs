@@ -1,9 +1,9 @@
 pub mod bls381;
 pub mod bn254;
+pub mod kzg;
 pub mod modexp;
 pub mod secp256k1;
 pub mod sha256;
-pub mod kzg;
 
 /// Macro to generate size, offset, and expected length constants for hint data fields.
 ///

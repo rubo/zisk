@@ -3,6 +3,7 @@ pub mod bn254;
 pub mod modexp;
 pub mod secp256k1;
 pub mod sha256;
+pub mod kzg;
 
 /// Macro to generate size, offset, and expected length constants for hint data fields.
 ///
@@ -29,7 +30,7 @@ macro_rules! hint_fields {
         #[allow(dead_code)]
         const EXPECTED_LEN: usize = hint_fields!(@sum $($size),+);
         #[allow(dead_code)]
-        const EXPECTED_LEN_U64: usize = (EXPECTED_LEN + 7) / 8;
+        const EXPECTED_LEN_U64: usize = EXPECTED_LEN.div_ceil(8);
     };
 
     (@offsets $offset:expr, $name:ident: $size:expr) => {

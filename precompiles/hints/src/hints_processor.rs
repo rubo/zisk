@@ -13,8 +13,15 @@ use std::sync::{Arc, Condvar, Mutex};
 use tracing::debug;
 use zisk_common::io::{StreamProcessor, StreamSink};
 use zisk_common::{BuiltInHint, CtrlHint, HintCode, PrecompileHint};
-use ziskos_hints::handlers::bls381::bls12_381_g1_add_hint;
-use ziskos_hints::handlers::bn254::{bn254_g1_add_hint, bn254_g1_mul_hint};
+use ziskos_hints::handlers::bls381::{
+    bls12_381_g1_add_hint, bls12_381_g1_msm_hint, bls12_381_g2_add_hint, bls12_381_g2_msm_hint,
+    bls12_381_pairing_check_hint,
+};
+use ziskos_hints::handlers::bn254::{
+    bn254_g1_add_hint, bn254_g1_mul_hint, bn254_pairing_check_hint,
+};
+use ziskos_hints::handlers::kzg::verify_kzg_proof_hint;
+use ziskos_hints::handlers::modexp::modexp_hint;
 use ziskos_hints::handlers::secp256k1::secp256k1_ecrecover_hint;
 use ziskos_hints::handlers::sha256::sha256_hint;
 
@@ -585,35 +592,30 @@ impl HintsProcessor {
         match hint {
             // SHA256 Hint Codes
             BuiltInHint::Sha256 => sha256_hint(&data, data_len_bytes),
+
             // BN254 Hint Codes
             BuiltInHint::Bn254G1Add => bn254_g1_add_hint(&data),
             BuiltInHint::Bn254G1Mul => bn254_g1_mul_hint(&data),
-            BuiltInHint::Bn254PairingCheck => {
-                unimplemented!("BN254 Pairing Check hint not implemented")
-            }
+            BuiltInHint::Bn254PairingCheck => bn254_pairing_check_hint(&data), // TODO: check
+
             // Secp256k1 Hints
             BuiltInHint::Secp256k1EcRecover => secp256k1_ecrecover_hint(&data),
-            BuiltInHint::Secp256r1VerifySignature => {
-                unimplemented!("Secp256r1 Verify Signature hint not implemented")
-            }
+            BuiltInHint::Secp256r1VerifySignature => unimplemented!(),
+
             // BLS12-381 Hint Codes
             BuiltInHint::Bls12_381G1Add => bls12_381_g1_add_hint(&data),
-            BuiltInHint::Bls12_381G1Msm => unimplemented!("BLS12-381 G1 MSM hint not implemented"),
-            BuiltInHint::Bls12_381G2Add => unimplemented!("BLS12-381 G2 Add hint not implemented"),
-            BuiltInHint::Bls12_381G2Msm => unimplemented!("BLS12-381 G2 MSM hint not implemented"),
-            BuiltInHint::Bls12_381PairingCheck => {
-                unimplemented!("BLS12-381 Pairing Check hint not implemented")
-            }
-            BuiltInHint::Bls12_381FpToG1 => {
-                unimplemented!("BLS12-381 FP to G1 hint not implemented")
-            }
-            BuiltInHint::Bls12_381Fp2ToG2 => {
-                unimplemented!("BLS12-381 FP2 to G2 hint not implemented")
-            }
+            BuiltInHint::Bls12_381G1Msm => bls12_381_g1_msm_hint(&data), // TODO: check
+            BuiltInHint::Bls12_381G2Add => bls12_381_g2_add_hint(&data), // TODO: check
+            BuiltInHint::Bls12_381G2Msm => bls12_381_g2_msm_hint(&data), // TODO: check
+            BuiltInHint::Bls12_381PairingCheck => bls12_381_pairing_check_hint(&data), // TODO: check
+            BuiltInHint::Bls12_381FpToG1 => unimplemented!(),
+            BuiltInHint::Bls12_381Fp2ToG2 => unimplemented!(),
+
             // Modular Exponentiation Hint Codes
-            BuiltInHint::ModExp => unimplemented!("Modular Exponentiation hint not implemented"),
+            BuiltInHint::ModExp => modexp_hint(&data), // TODO: check
+
             // KZG Hint Codes
-            BuiltInHint::VerifyKzgProof => unimplemented!("KZG Verify Proof hint not implemented"),
+            BuiltInHint::VerifyKzgProof => verify_kzg_proof_hint(&data), // TODO: check
         }
     }
 }

@@ -546,28 +546,3 @@ pub fn exp_fp12_bls12_381(
 
     result
 }
-
-/// # Safety
-/// - `ret` must point to a valid `[u64; 72]` for the output.
-/// - `a` and `b` must point to valid `[u64; 72]` Fp12 elements.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_mul_fp12_bls12_381_c")]
-pub unsafe extern "C" fn mul_fp12_bls12_381_c(
-    ret: *mut u64,
-    a: *const u64,
-    b: *const u64,
-    #[cfg(feature = "hints")] hints: *mut Vec<u64>,
-) {
-    let a_arr: &[u64; 72] = &*(a as *const [u64; 72]);
-    let b_arr: &[u64; 72] = &*(b as *const [u64; 72]);
-
-    let result = mul_fp12_bls12_381(
-        a_arr,
-        b_arr,
-        #[cfg(feature = "hints")]
-        &mut *hints,
-    );
-
-    let ret_arr: &mut [u64; 72] = &mut *(ret as *mut [u64; 72]);
-    *ret_arr = result;
-}

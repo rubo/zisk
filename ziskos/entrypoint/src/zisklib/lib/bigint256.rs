@@ -237,8 +237,6 @@ pub fn wpow256(
     result
 }
 
-// ========== Pointer-based API ==========
-
 /// Modular reduction of a 256-bit integer
 ///
 /// # Safety

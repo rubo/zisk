@@ -1,10 +1,10 @@
 //! Operations on the twist E': y² = x³ + 4·(1+u) of the BLS12-381 curve
 
-use crate::zisklib::{eq, fcall_msb_pos_384, lt};
+use crate::zisklib::{eq, fcall_msb_pos_256, lt};
 
 use super::{
     constants::{
-        ETWISTED_B, EXT_U, EXT_U_INV, FROBENIUS_GAMMA13, FROBENIUS_GAMMA14, IDENTITY_G2, P,
+        ETWISTED_B, EXT_U, EXT_U_INV, FROBENIUS_GAMMA13, FROBENIUS_GAMMA14, G2_IDENTITY, P,
         X_ABS_BIN_BE,
     },
     fp2::{
@@ -42,7 +42,7 @@ pub fn decompress_twist_bls12_381(
                 return Err("Invalid infinity encoding");
             }
         }
-        return Ok((IDENTITY_G2, true));
+        return Ok((G2_IDENTITY, true));
     }
 
     // Extract sign bit
@@ -248,7 +248,7 @@ pub fn add_twist_bls12_381(
             );
         } else {
             // Points are the inverse of each other, return the point at infinity
-            return IDENTITY_G2;
+            return G2_IDENTITY;
         }
     }
 
@@ -400,6 +400,34 @@ pub fn dbl_twist_bls12_381(
     result
 }
 
+/// Subtraction of two non-zero points `p1` and `p2` on the BLS12-381 curve
+pub fn sub_twist_bls12_381(
+    p1: &[u64; 24],
+    p2: &[u64; 24],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 24] {
+    let x2: [u64; 12] = p2[0..12].try_into().unwrap();
+    let y2: [u64; 12] = p2[12..24].try_into().unwrap();
+
+    // P1 - P2 = P1 + (-P2)
+    let y2_neg = neg_fp2_bls12_381(
+        &y2,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+
+    let mut p2_neg = [0u64; 24];
+    p2_neg[0..12].copy_from_slice(&x2);
+    p2_neg[12..24].copy_from_slice(&y2_neg);
+
+    add_twist_bls12_381(
+        p1,
+        &p2_neg,
+        #[cfg(feature = "hints")]
+        hints,
+    )
+}
+
 /// Negation of a point
 pub fn neg_twist_bls12_381(
     p: &[u64; 24],
@@ -424,20 +452,20 @@ pub fn neg_twist_bls12_381(
 /// Multiplies a non-zero point `p` on the BLS12-381 curve by a scalar `k` on the BLS12-381 scalar field
 pub fn scalar_mul_twist_bls12_381(
     p: &[u64; 24],
-    k: &[u64; 6],
+    k: &[u64; 4],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> [u64; 24] {
     // Direct cases: k = 0, k = 1, k = 2
     match k {
-        [0, 0, 0, 0, 0, 0] => {
+        [0, 0, 0, 0] => {
             // Return 𝒪
-            return IDENTITY_G2;
+            return G2_IDENTITY;
         }
-        [1, 0, 0, 0, 0, 0] => {
+        [1, 0, 0, 0] => {
             // Return p
             return *p;
         }
-        [2, 0, 0, 0, 0, 0] => {
+        [2, 0, 0, 0] => {
             // Return 2p
             return dbl_twist_bls12_381(
                 p,
@@ -452,9 +480,9 @@ pub fn scalar_mul_twist_bls12_381(
     // Hint the length the binary representations of k
     // We will verify the output by recomposing k
     // Moreover, we should check that the first received bit is 1
-    let (max_limb, max_bit) = fcall_msb_pos_384(
+    let (max_limb, max_bit) = fcall_msb_pos_256(
         k,
-        &[0, 0, 0, 0, 0, 0],
+        &[0, 0, 0, 0],
         #[cfg(feature = "hints")]
         hints,
     );
@@ -470,7 +498,7 @@ pub fn scalar_mul_twist_bls12_381(
 
     // Start at P
     let mut q = *p;
-    let mut k_rec = [0u64; 6];
+    let mut k_rec = [0u64; 4];
     k_rec[max_limb] |= 1 << max_bit;
 
     // Determine starting limb/bit for the loop
@@ -627,123 +655,283 @@ pub fn utf_endomorphism_twist_bls12_381(
     result
 }
 
-/// # Safety
-/// - `ret` must point to a valid `[u64; 24]` (192 bytes) for the output.
-/// - `input` must point to a valid `[u8; 96]` (96 bytes) for the compressed input.
-///   Returns:
-///   - 0 = success (regular point)
-///   - 1 = success (point at infinity)
-///   - 2 = error
+/// G2 point addition for uncompressed 192-byte points (big-endian format)
+///
+/// This function is designed to patch `fn bls12_381_g2_add(&self, a: G2Point, b: G2Point) -> Result<[u8; 192]>`
+///
+/// Input format: 192 bytes per point = 96 bytes x-coordinate (Fp2) + 96 bytes y-coordinate (Fp2)
+/// Each Fp2 element: 48 bytes imaginary + 48 bytes real (big-endian)
+/// Output format: Same as input
+///
+/// ### Safety
+/// - `a` must point to a valid `[u8; 192]` for the first input point
+/// - `b` must point to a valid `[u8; 192]` for the second input point
+/// - `ret` must point to a valid `[u8; 192]` for the output
+///
+/// Returns:
+/// - 0 = success (regular point)
+/// - 1 = success (point at infinity)
+/// - 2 = error (point not on curve or invalid)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_decompress_twist_bls12_381_c")]
-pub unsafe extern "C" fn decompress_twist_bls12_381_c(
-    ret: *mut u64,
-    input: *const u8,
+#[cfg_attr(feature = "hints", export_name = "hints_bls12_381_g2_add_c")]
+pub unsafe extern "C" fn bls12_381_g2_add_c(
+    ret: *mut u8,
+    a: *const u8,
+    b: *const u8,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
-    let input_arr: &[u8; 96] = &*(input as *const [u8; 96]);
+    let a_bytes: &[u8; 192] = &*(a as *const [u8; 192]);
+    let b_bytes: &[u8; 192] = &*(b as *const [u8; 192]);
+    let ret_bytes: &mut [u8; 192] = &mut *(ret as *mut [u8; 192]);
 
-    match decompress_twist_bls12_381(
-        input_arr,
+    // Check for infinity points (all zeros)
+    let a_is_inf = a_bytes.iter().all(|&x| x == 0);
+    let b_is_inf = b_bytes.iter().all(|&x| x == 0);
+
+    if a_is_inf && b_is_inf {
+        // 𝒪 + 𝒪 = 𝒪
+        ret_bytes.fill(0);
+        return 1;
+    }
+
+    if a_is_inf {
+        // 𝒪 + B = B
+        ret_bytes.copy_from_slice(b_bytes);
+        return 0;
+    }
+
+    if b_is_inf {
+        // A + 𝒪 = A
+        ret_bytes.copy_from_slice(a_bytes);
+        return 0;
+    }
+
+    // Convert big-endian bytes to little-endian u64 limbs
+    let a_u64 = g2_bytes_be_to_u64_le(a_bytes);
+    let b_u64 = g2_bytes_be_to_u64_le(b_bytes);
+
+    // Verify points are on curve
+    if !is_on_curve_twist_bls12_381(
+        &a_u64,
+        #[cfg(feature = "hints")]
+        hints,
+    ) || !is_on_curve_twist_bls12_381(
+        &b_u64,
         #[cfg(feature = "hints")]
         hints,
     ) {
-        Ok((result, is_infinity)) => {
-            let ret_arr: &mut [u64; 24] = &mut *(ret as *mut [u64; 24]);
-            *ret_arr = result;
-            if is_infinity {
-                1
-            } else {
-                0
-            }
-        }
-        Err(_) => 2,
+        return 2;
     }
-}
 
-/// # Safety
-/// - `p` must point to a valid `[u64; 24]` (192 bytes) for the input point.
-///   Returns true if the point is on the twist curve, false otherwise.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_is_on_curve_twist_bls12_381_c")]
-pub unsafe extern "C" fn is_on_curve_twist_bls12_381_c(
-    p: *const u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p_arr: &[u64; 24] = &*(p as *const [u64; 24]);
-    is_on_curve_twist_bls12_381(
-        p_arr,
-        #[cfg(feature = "hints")]
-        hints,
-    )
-}
-
-/// # Safety
-/// - `p` must point to a valid `[u64; 24]` (192 bytes) for the input point.
-///   Returns true if the point is in the G2 subgroup, false otherwise.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_is_on_subgroup_twist_bls12_381_c")]
-pub unsafe extern "C" fn is_on_subgroup_twist_bls12_381_c(
-    p: *const u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p_arr: &[u64; 24] = &*(p as *const [u64; 24]);
-    is_on_subgroup_twist_bls12_381(
-        p_arr,
-        #[cfg(feature = "hints")]
-        hints,
-    )
-}
-
-/// # Safety
-/// - `p1` must point to a valid `[u64; 24]` (192 bytes), used as both input and output.
-/// - `p2` must point to a valid `[u64; 24]` (192 bytes).
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_add_twist_bls12_381_c")]
-pub unsafe extern "C" fn add_twist_bls12_381_c(
-    p1: *mut u64,
-    p2: *const u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p1_arr: &[u64; 24] = &*(p1 as *const [u64; 24]);
-    let p2_arr: &[u64; 24] = &*(p2 as *const [u64; 24]);
-
+    // Perform addition
     let result = add_twist_bls12_381(
-        p1_arr,
-        p2_arr,
+        &a_u64,
+        &b_u64,
         #[cfg(feature = "hints")]
         hints,
     );
-    if result == IDENTITY_G2 {
-        return true;
+
+    // Check if result is identity
+    if result == G2_IDENTITY {
+        ret_bytes.fill(0);
+        return 1;
     }
 
-    let ret_arr: &mut [u64; 24] = &mut *(p1 as *mut [u64; 24]);
-    *ret_arr = result;
-    false
+    // Convert result back to big-endian bytes
+    g2_u64_le_to_bytes_be(&result, ret_bytes);
+    0
 }
 
-/// # Safety
-/// - `ret` must point to a valid `[u64; 24]` for the output affine point.
-/// - `p` must point to a valid `[u64; 24]` affine point.
-/// - `k` must point to a valid `[u64; 6]` scalar.
+/// G2 Multi-Scalar Multiplication (MSM) for uncompressed points (big-endian format)
+///
+/// This function is designed to patch:
+/// `fn bls12_381_g2_msm(&self, pairs: &mut dyn Iterator<Item = Result<G2PointScalar, PrecompileError>>) -> Result<[u8; 192]>`
+///
+/// Input format per pair: 224 bytes = 192 bytes G2 point + 32 bytes scalar (big-endian)
+/// Output format: 192 bytes G2 point
+///
+/// ### Safety
+/// - `pairs` must point to an array of `num_pairs * 224` bytes
+/// - `ret` must point to a valid `[u8; 192]` for the output
+///
+/// Returns:
+/// - 0 = success (regular point)
+/// - 1 = success (point at infinity)
+/// - 2 = error (point not on curve or invalid)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_scalar_mul_twist_bls12_381_c")]
-pub unsafe extern "C" fn scalar_mul_twist_bls12_381_c(
-    ret: *mut u64,
-    p: *const u64,
-    k: *const u64,
+#[cfg_attr(feature = "hints", export_name = "hints_bls12_381_g2_msm_c")]
+pub unsafe extern "C" fn bls12_381_g2_msm_c(
+    ret: *mut u8,
+    pairs: *const u8,
+    num_pairs: usize,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) {
-    let p_arr: &[u64; 24] = &*(p as *const [u64; 24]);
-    let k_arr: &[u64; 6] = &*(k as *const [u64; 6]);
+) -> u8 {
+    let ret_bytes: &mut [u8; 192] = &mut *(ret as *mut [u8; 192]);
 
-    let result = scalar_mul_twist_bls12_381(
-        p_arr,
-        k_arr,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    let ret_arr: &mut [u64; 24] = &mut *(ret as *mut [u64; 24]);
-    *ret_arr = result;
+    // Handle empty input
+    if num_pairs == 0 {
+        ret_bytes.fill(0);
+        return 1; // Point at infinity
+    }
+
+    // Accumulator starts at infinity
+    let mut acc = G2_IDENTITY;
+    let mut acc_is_inf = true;
+
+    for i in 0..num_pairs {
+        let pair_ptr = pairs.add(i * 224);
+
+        // Extract point (192 bytes) and scalar (32 bytes)
+        let point_bytes: &[u8; 192] = &*(pair_ptr as *const [u8; 192]);
+        let scalar_bytes: &[u8; 32] = &*(pair_ptr.add(192) as *const [u8; 32]);
+
+        // Check if point is infinity
+        let point_is_inf = point_bytes.iter().all(|&x| x == 0);
+        if point_is_inf {
+            continue; // 𝒪 * k = 𝒪, skip
+        }
+
+        // Check if scalar is zero
+        let scalar_is_zero = scalar_bytes.iter().all(|&x| x == 0);
+        if scalar_is_zero {
+            continue; // P * 0 = 𝒪, skip
+        }
+
+        // Convert point from big-endian bytes to u64 limbs
+        let point_u64 = g2_bytes_be_to_u64_le(point_bytes);
+
+        // Verify point is on curve
+        if !is_on_curve_twist_bls12_381(
+            &point_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return 2;
+        }
+
+        // Convert scalar from big-endian bytes to u64 limbs
+        let scalar_u64 = scalar_bytes_be_to_u64_le_g2(scalar_bytes);
+
+        // Compute P * k
+        let product = scalar_mul_twist_bls12_381(
+            &point_u64,
+            &scalar_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+
+        // Check if product is infinity
+        if product == G2_IDENTITY {
+            continue;
+        }
+
+        // Add to accumulator
+        if acc_is_inf {
+            acc = product;
+            acc_is_inf = false;
+        } else {
+            acc = add_twist_bls12_381(
+                &acc,
+                &product,
+                #[cfg(feature = "hints")]
+                hints,
+            );
+            acc_is_inf = acc == G2_IDENTITY;
+        }
+    }
+
+    // Write result
+    if acc_is_inf {
+        ret_bytes.fill(0);
+        return 1;
+    }
+
+    g2_u64_le_to_bytes_be(&acc, ret_bytes);
+    0
+}
+
+/// Convert 192-byte big-endian G2 point to [u64; 24] little-endian
+/// Format: x_i (48 bytes) || x_r (48 bytes) || y_i (48 bytes) || y_r (48 bytes)
+pub fn g2_bytes_be_to_u64_le(bytes: &[u8; 192]) -> [u64; 24] {
+    let mut result = [0u64; 24];
+
+    // x_r (bytes 48-95) -> result[0..6]
+    for i in 0..6 {
+        for j in 0..8 {
+            result[5 - i] |= (bytes[48 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // x_i (bytes 0-47) -> result[6..12]
+    for i in 0..6 {
+        for j in 0..8 {
+            result[11 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // y_r (bytes 144-191) -> result[12..18]
+    for i in 0..6 {
+        for j in 0..8 {
+            result[17 - i] |= (bytes[144 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // y_i (bytes 96-143) -> result[18..24]
+    for i in 0..6 {
+        for j in 0..8 {
+            result[23 - i] |= (bytes[96 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    result
+}
+
+/// Convert [u64; 24] little-endian G2 point to 192-byte big-endian
+/// Format: x_i (48 bytes) || x_r (48 bytes) || y_i (48 bytes) || y_r (48 bytes)
+fn g2_u64_le_to_bytes_be(limbs: &[u64; 24], bytes: &mut [u8; 192]) {
+    // x_i (result[6..12]) -> bytes 0-47
+    for i in 0..6 {
+        let limb = limbs[11 - i];
+        for j in 0..8 {
+            bytes[i * 8 + j] = ((limb >> (8 * (7 - j))) & 0xFF) as u8;
+        }
+    }
+
+    // x_r (result[0..6]) -> bytes 48-95
+    for i in 0..6 {
+        let limb = limbs[5 - i];
+        for j in 0..8 {
+            bytes[48 + i * 8 + j] = ((limb >> (8 * (7 - j))) & 0xFF) as u8;
+        }
+    }
+
+    // y_i (result[18..24]) -> bytes 96-143
+    for i in 0..6 {
+        let limb = limbs[23 - i];
+        for j in 0..8 {
+            bytes[96 + i * 8 + j] = ((limb >> (8 * (7 - j))) & 0xFF) as u8;
+        }
+    }
+
+    // y_r (result[12..18]) -> bytes 144-191
+    for i in 0..6 {
+        let limb = limbs[17 - i];
+        for j in 0..8 {
+            bytes[144 + i * 8 + j] = ((limb >> (8 * (7 - j))) & 0xFF) as u8;
+        }
+    }
+}
+
+/// Convert 32-byte big-endian scalar to [u64; 4] little-endian
+fn scalar_bytes_be_to_u64_le_g2(bytes: &[u8; 32]) -> [u64; 4] {
+    let mut result = [0u64; 4];
+
+    // 32 bytes = 4 u64 limbs, remaining 2 limbs are zero
+    for i in 0..4 {
+        for j in 0..8 {
+            result[3 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    result
 }

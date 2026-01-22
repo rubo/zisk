@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    constants::{E_B, IDENTITY_G1},
+    constants::{E_B, IDENTITY_G1, P},
     fp::{add_fp_bn254, inv_fp_bn254, mul_fp_bn254, square_fp_bn254},
 };
 
@@ -257,111 +257,252 @@ pub fn mul_bn254(
     [x3[0], x3[1], x3[2], x3[3], y3[0], y3[1], y3[2], y3[3]]
 }
 
-/// # Safety
-/// `p` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_is_on_curve_bn254_c")]
-pub unsafe extern "C" fn is_on_curve_bn254_c(
-    p_ptr: *const u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p = unsafe { &*(p_ptr as *const [u64; 8]) };
-    is_on_curve_bn254(
-        p,
-        #[cfg(feature = "hints")]
-        hints,
-    )
+/// Convert big-endian bytes to little-endian u64 limbs for a G1 point (64 bytes -> [u64; 8])
+/// Format: 32 bytes x (big-endian) + 32 bytes y (big-endian)
+fn g1_bytes_be_to_u64_le(bytes: &[u8; 64]) -> [u64; 8] {
+    let mut result = [0u64; 8];
+
+    // Parse x coordinate (first 32 bytes, big-endian)
+    for i in 0..4 {
+        for j in 0..8 {
+            result[3 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // Parse y coordinate (next 32 bytes, big-endian)
+    for i in 0..4 {
+        for j in 0..8 {
+            result[7 - i] |= (bytes[32 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    result
 }
 
-/// # Safety
-/// - `p` must point to a valid `[u64; 12]` (96 bytes, Jacobian G1 point).
-/// - `out` must point to a valid `[u64; 8]` (64 bytes) writable buffer.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_to_affine_bn254_c")]
-pub unsafe extern "C" fn to_affine_bn254_c(
-    p_ptr: *const u64,
-    out_ptr: *mut u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p = unsafe { &*(p_ptr as *const [u64; 12]) };
-    let result = to_affine_bn254(
-        p,
-        #[cfg(feature = "hints")]
-        hints,
-    );
+/// Convert little-endian u64 limbs to big-endian bytes for a G1 point ([u64; 8] -> 64 bytes)
+fn g1_u64_le_to_bytes_be(point: &[u64; 8]) -> [u8; 64] {
+    let mut result = [0u8; 64];
 
-    *out_ptr.add(0) = result[0];
-    *out_ptr.add(1) = result[1];
-    *out_ptr.add(2) = result[2];
-    *out_ptr.add(3) = result[3];
-    *out_ptr.add(4) = result[4];
-    *out_ptr.add(5) = result[5];
-    *out_ptr.add(6) = result[6];
-    *out_ptr.add(7) = result[7];
+    // Encode x coordinate (first 32 bytes, big-endian)
+    for i in 0..4 {
+        for j in 0..8 {
+            result[i * 8 + j] = ((point[3 - i] >> (8 * (7 - j))) & 0xff) as u8;
+        }
+    }
 
-    result == IDENTITY_G1
+    // Encode y coordinate (next 32 bytes, big-endian)
+    for i in 0..4 {
+        for j in 0..8 {
+            result[32 + i * 8 + j] = ((point[7 - i] >> (8 * (7 - j))) & 0xff) as u8;
+        }
+    }
+
+    result
 }
 
-/// # Safety
-/// - `p1_ptr` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
-/// - `p2_ptr` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
-/// - `out_ptr` must point to a valid `[u64; 8]` (64 bytes) writable buffer.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_add_bn254_c")]
-pub unsafe extern "C" fn add_bn254_c(
-    p1_ptr: *const u64,
-    p2_ptr: *const u64,
-    out_ptr: *mut u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p1 = unsafe { &*(p1_ptr as *const [u64; 8]) };
-    let p2 = unsafe { &*(p2_ptr as *const [u64; 8]) };
-    let result = add_bn254(
-        p1,
-        p2,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    *out_ptr.add(0) = result[0];
-    *out_ptr.add(1) = result[1];
-    *out_ptr.add(2) = result[2];
-    *out_ptr.add(3) = result[3];
-    *out_ptr.add(4) = result[4];
-    *out_ptr.add(5) = result[5];
-    *out_ptr.add(6) = result[6];
-    *out_ptr.add(7) = result[7];
+/// Convert big-endian bytes to little-endian u64 limbs for a scalar (32 bytes -> [u64; 4])
+fn scalar_bytes_be_to_u64_le(bytes: &[u8; 32]) -> [u64; 4] {
+    let mut result = [0u64; 4];
 
-    result == IDENTITY_G1
+    for i in 0..4 {
+        for j in 0..8 {
+            result[3 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    result
 }
 
-/// # Safety
-/// - `p_ptr` must point to a valid `[u64; 8]` (64 bytes, affine G1 point).
-/// - `k_ptr` must point to a valid `[u64; 4]` (32 bytes, scalar).
-/// - `out_ptr` must point to a valid `[u64; 8]` (64 bytes) writable buffer.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_mul_bn254_c")]
-pub unsafe extern "C" fn mul_bn254_c(
-    p_ptr: *const u64,
-    k_ptr: *const u64,
-    out_ptr: *mut u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    let p = unsafe { &*(p_ptr as *const [u64; 8]) };
-    let k = unsafe { &*(k_ptr as *const [u64; 4]) };
-    let result = mul_bn254(
-        p,
-        k,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    *out_ptr.add(0) = result[0];
-    *out_ptr.add(1) = result[1];
-    *out_ptr.add(2) = result[2];
-    *out_ptr.add(3) = result[3];
-    *out_ptr.add(4) = result[4];
-    *out_ptr.add(5) = result[5];
-    *out_ptr.add(6) = result[6];
-    *out_ptr.add(7) = result[7];
+/// Check if a field element is valid (< P)
+fn is_valid_field_element(x: &[u64; 4]) -> bool {
+    // Compare from most significant limb
+    for i in (0..4).rev() {
+        if x[i] > P[i] {
+            return false;
+        }
+        if x[i] < P[i] {
+            return true;
+        }
+    }
+    // x == P, which is not valid
+    false
+}
 
-    result == IDENTITY_G1
+/// BN254 G1 point addition with big-endian byte format
+///
+/// This function is designed to patch:
+/// `fn bn254_g1_add(&self, p1: &[u8], p2: &[u8]) -> Result<[u8; 64], PrecompileError>`
+///
+/// Input format: 64 bytes per point = 32 bytes x + 32 bytes y (big-endian)
+/// Output format: 64 bytes = 32 bytes x + 32 bytes y (big-endian)
+///
+/// # Safety
+/// - `p1` must point to at least 64 bytes
+/// - `p2` must point to at least 64 bytes
+/// - `result` must point to a writable buffer of at least 64 bytes
+///
+/// # Returns
+/// - 0 if the operation succeeded
+/// - 1 if p1 is invalid (not on curve or invalid field element)
+/// - 2 if p2 is invalid (not on curve or invalid field element)
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_bn254_g1_add_c")]
+pub unsafe extern "C" fn bn254_g1_add_c(
+    p1: *const u8,
+    p2: *const u8,
+    result: *mut u8,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> u8 {
+    let p1_bytes: &[u8; 64] = &*(p1 as *const [u8; 64]);
+    let p2_bytes: &[u8; 64] = &*(p2 as *const [u8; 64]);
+
+    // Check if p1 is infinity (all zeros)
+    let p1_is_inf = p1_bytes.iter().all(|&x| x == 0);
+
+    // Check if p2 is infinity (all zeros)
+    let p2_is_inf = p2_bytes.iter().all(|&x| x == 0);
+
+    // Convert to internal format
+    let p1_u64 = g1_bytes_be_to_u64_le(p1_bytes);
+    let p2_u64 = g1_bytes_be_to_u64_le(p2_bytes);
+
+    // Validate field elements and curve membership for non-infinity points
+    if !p1_is_inf {
+        let x1: [u64; 4] = p1_u64[0..4].try_into().unwrap();
+        let y1: [u64; 4] = p1_u64[4..8].try_into().unwrap();
+
+        if !is_valid_field_element(&x1) || !is_valid_field_element(&y1) {
+            return 1; // Invalid field element
+        }
+
+        if !is_on_curve_bn254(
+            &p1_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return 1; // Not on curve
+        }
+    }
+
+    if !p2_is_inf {
+        let x2: [u64; 4] = p2_u64[0..4].try_into().unwrap();
+        let y2: [u64; 4] = p2_u64[4..8].try_into().unwrap();
+
+        if !is_valid_field_element(&x2) || !is_valid_field_element(&y2) {
+            return 2; // Invalid field element
+        }
+
+        if !is_on_curve_bn254(
+            &p2_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return 2; // Not on curve
+        }
+    }
+
+    // Handle infinity cases
+    let sum = if p1_is_inf && p2_is_inf {
+        IDENTITY_G1
+    } else if p1_is_inf {
+        p2_u64
+    } else if p2_is_inf {
+        p1_u64
+    } else {
+        add_bn254(
+            &p1_u64,
+            &p2_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        )
+    };
+
+    // Convert result to big-endian bytes
+    let result_bytes = if sum == IDENTITY_G1 { [0u8; 64] } else { g1_u64_le_to_bytes_be(&sum) };
+
+    // Write result
+    let result_slice = core::slice::from_raw_parts_mut(result, 64);
+    result_slice.copy_from_slice(&result_bytes);
+
+    0 // Success
+}
+
+/// BN254 G1 scalar multiplication with big-endian byte format
+///
+/// This function is designed to patch:
+/// `fn bn254_g1_mul(&self, point: &[u8], scalar: &[u8]) -> Result<[u8; 64], PrecompileError>`
+///
+/// Input format:
+/// - point: 64 bytes = 32 bytes x + 32 bytes y (big-endian)
+/// - scalar: 32 bytes (big-endian), does NOT need to be canonical
+///
+/// Output format: 64 bytes = 32 bytes x + 32 bytes y (big-endian)
+///
+/// # Safety
+/// - `point` must point to at least 64 bytes
+/// - `scalar` must point to at least 32 bytes
+/// - `result` must point to a writable buffer of at least 64 bytes
+///
+/// # Returns
+/// - 0 if the operation succeeded
+/// - 1 if point is invalid (not on curve or invalid field element)
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_bn254_g1_mul_c")]
+pub unsafe extern "C" fn bn254_g1_mul_c(
+    point: *const u8,
+    scalar: *const u8,
+    result: *mut u8,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> u8 {
+    let point_bytes: &[u8; 64] = &*(point as *const [u8; 64]);
+    let scalar_bytes: &[u8; 32] = &*(scalar as *const [u8; 32]);
+
+    // Check if point is infinity (all zeros)
+    let point_is_inf = point_bytes.iter().all(|&x| x == 0);
+
+    // Convert point to internal format
+    let point_u64 = g1_bytes_be_to_u64_le(point_bytes);
+
+    // Validate field elements and curve membership for non-infinity point
+    if !point_is_inf {
+        let x: [u64; 4] = point_u64[0..4].try_into().unwrap();
+        let y: [u64; 4] = point_u64[4..8].try_into().unwrap();
+
+        if !is_valid_field_element(&x) || !is_valid_field_element(&y) {
+            return 1; // Invalid field element
+        }
+
+        if !is_on_curve_bn254(
+            &point_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return 1; // Not on curve
+        }
+    }
+
+    // Convert scalar to internal format
+    let scalar_u64 = scalar_bytes_be_to_u64_le(scalar_bytes);
+
+    // Perform scalar multiplication
+    let product = if point_is_inf || scalar_u64 == [0, 0, 0, 0] {
+        IDENTITY_G1
+    } else {
+        mul_bn254(
+            &point_u64,
+            &scalar_u64,
+            #[cfg(feature = "hints")]
+            hints,
+        )
+    };
+
+    // Convert result to big-endian bytes
+    let result_bytes =
+        if product == IDENTITY_G1 { [0u8; 64] } else { g1_u64_le_to_bytes_be(&product) };
+
+    // Write result
+    let result_slice = core::slice::from_raw_parts_mut(result, 64);
+    result_slice.copy_from_slice(&result_bytes);
+
+    0 // Success
 }

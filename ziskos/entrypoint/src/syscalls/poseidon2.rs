@@ -20,7 +20,10 @@ use crate::ziskos_syscall;
 #[allow(unused_variables)]
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_syscall_poseidon2")]
-pub extern "C" fn syscall_poseidon2(state: *mut [u64; 16]) {
+pub extern "C" fn syscall_poseidon2(
+    state: *mut [u64; 16],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
     ziskos_syscall!(0x812, state);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]

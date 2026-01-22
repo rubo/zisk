@@ -574,28 +574,3 @@ fn dbl_twist_with_hints_bls12_381(
     result[12..24].copy_from_slice(&y3);
     result
 }
-
-/// # Safety
-/// - `ret` must point to a valid `[u64; 72]` for the Fp12 output.
-/// - `q` must point to a valid `[u64; 24]` for the G2 affine point.
-/// - `p` must point to a valid `[u64; 12]` for the G1 affine point.
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_miller_loop_bls12_381_c")]
-pub unsafe extern "C" fn miller_loop_bls12_381_c(
-    ret: *mut u64,
-    q: *const u64,
-    p: *const u64,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) {
-    let p_arr: &[u64; 12] = &*(p as *const [u64; 12]);
-    let q_arr: &[u64; 24] = &*(q as *const [u64; 24]);
-
-    let result = miller_loop_bls12_381(
-        p_arr,
-        q_arr,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    let ret_arr: &mut [u64; 72] = &mut *(ret as *mut [u64; 72]);
-    *ret_arr = result;
-}

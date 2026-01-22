@@ -236,59 +236,102 @@ pub fn modexp_u64(
     U256::slice_to_flat(&result_u256).to_vec()
 }
 
-/// Compute modular exponentiation of three large numbers
+/// Compute modular exponentiation from big-endian byte arrays
+///
+/// This function is designed to patch `fn modexp(&self, base: &[u8], exp: &[u8], modulus: &[u8]) -> Vec<u8>`
 ///
 /// ### Safety
 ///
 /// The caller must ensure that:
-/// - `base_ptr` points to an array of `base_len` u64 elements
-/// - `exp_ptr` points to an array of `exp_len` u64 elements
-/// - `modulus_ptr` points to an array of `modulus_len` u64 elements
-/// - `result_ptr` points to an array of at least `modulus_len` u64 elements
+/// - `base_ptr` points to an array of `base_len` bytes (big-endian)
+/// - `exp_ptr` points to an array of `exp_len` bytes (big-endian)
+/// - `modulus_ptr` points to an array of `modulus_len` bytes (big-endian)
+/// - `result_ptr` points to an array of at least `modulus_len` bytes
+///
+/// Returns the number of bytes written to `result_ptr` (always equals `modulus_len`, zero-padded)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_modexp_u64_c")]
-pub unsafe extern "C" fn modexp_u64_c(
-    base_ptr: *const u64,
+#[cfg_attr(feature = "hints", export_name = "hints_modexp_bytes_c")]
+pub unsafe extern "C" fn modexp_bytes_c(
+    base_ptr: *const u8,
     base_len: usize,
-    exp_ptr: *const u64,
+    exp_ptr: *const u8,
     exp_len: usize,
-    modulus_ptr: *const u64,
+    modulus_ptr: *const u8,
     modulus_len: usize,
-    result_ptr: *mut u64,
+    result_ptr: *mut u8,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> usize {
-    let base = std::slice::from_raw_parts(base_ptr, base_len);
-    let exp = std::slice::from_raw_parts(exp_ptr, exp_len);
-    let modulus = std::slice::from_raw_parts(modulus_ptr, modulus_len);
+    let base_bytes = std::slice::from_raw_parts(base_ptr, base_len);
+    let exp_bytes = std::slice::from_raw_parts(exp_ptr, exp_len);
+    let modulus_bytes = std::slice::from_raw_parts(modulus_ptr, modulus_len);
 
-    // Round up to multiple of 4
-    let base_len = (base.len() + 3) & !3;
-    let modulus_len = (modulus.len() + 3) & !3;
+    // Convert big-endian bytes to little-endian u64 arrays
+    let base_u64 = bytes_be_to_u64_le(base_bytes);
+    let exp_u64 = bytes_be_to_u64_le(exp_bytes);
+    let modulus_u64 = bytes_be_to_u64_le(modulus_bytes);
 
-    let mut base_padded = vec![0u64; base_len];
-    let mut modulus_padded = vec![0u64; modulus_len];
+    // Handle empty/zero cases
+    if modulus_u64.is_empty() || (modulus_u64.len() == 1 && modulus_u64[0] == 0) {
+        // modulus == 0: return all zeros
+        let result = std::slice::from_raw_parts_mut(result_ptr, modulus_len);
+        result.fill(0);
+        return modulus_len;
+    }
 
-    base_padded[..base.len()].copy_from_slice(base);
-    modulus_padded[..modulus.len()].copy_from_slice(modulus);
+    // Call the u64 version
+    let result_u64 = modexp_u64(&base_u64, &exp_u64, &modulus_u64, #[cfg(feature = "hints")] hints);
 
-    // Convert u64 arrays to U256 chunks
-    let base_u256 = U256::flat_to_slice(&base_padded);
-    let modulus_u256 = U256::flat_to_slice(&modulus_padded);
-
-    // Call the main modexp function
-    let result_u256 = modexp(
-        base_u256,
-        exp,
-        modulus_u256,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    let result_slice = U256::slice_to_flat(&result_u256);
-    let result_len = result_slice.len();
-
-    // Convert result back to u64 array
+    // Convert result back to big-endian bytes with proper length
     let result = std::slice::from_raw_parts_mut(result_ptr, modulus_len);
-    result[..result_len].copy_from_slice(result_slice);
+    u64_le_to_bytes_be(&result_u64, result);
 
-    result_len
+    modulus_len
+}
+
+/// Convert big-endian bytes to little-endian u64 array
+fn bytes_be_to_u64_le(bytes: &[u8]) -> Vec<u64> {
+    if bytes.is_empty() {
+        return vec![0];
+    }
+
+    // Skip leading zeros but keep at least one limb
+    let first_nonzero = bytes.iter().position(|&b| b != 0).unwrap_or(bytes.len() - 1);
+    let bytes = &bytes[first_nonzero..];
+
+    if bytes.is_empty() {
+        return vec![0];
+    }
+
+    // Calculate number of u64 limbs needed
+    let num_limbs = (bytes.len() + 7) / 8;
+    let mut result = vec![0u64; num_limbs];
+
+    // Process bytes from the end (least significant) to the beginning
+    for (i, &byte) in bytes.iter().rev().enumerate() {
+        let limb_idx = i / 8;
+        let byte_idx = i % 8;
+        result[limb_idx] |= (byte as u64) << (byte_idx * 8);
+    }
+
+    result
+}
+
+/// Convert little-endian u64 array to big-endian bytes with specified length
+fn u64_le_to_bytes_be(limbs: &[u64], output: &mut [u8]) {
+    let out_len = output.len();
+    output.fill(0);
+
+    // Calculate how many bytes the result actually has
+    let result_bytes = limbs.len() * 8;
+
+    for (i, &limb) in limbs.iter().enumerate() {
+        for j in 0..8 {
+            let byte_val = ((limb >> (j * 8)) & 0xFF) as u8;
+            // Position from the end of the result
+            let pos_from_end = i * 8 + j;
+            if pos_from_end < out_len {
+                output[out_len - 1 - pos_from_end] = byte_val;
+            }
+        }
+    }
 }

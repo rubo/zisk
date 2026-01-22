@@ -11,7 +11,7 @@
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU32},
+        atomic::{AtomicBool, AtomicU64},
         Arc, Mutex,
     },
     thread::JoinHandle,
@@ -37,10 +37,10 @@ pub struct RomSM {
     zisk_rom: Arc<ZiskRom>,
 
     /// Shared biod instruction counter for monitoring ROM operations.
-    bios_inst_count: Arc<Vec<AtomicU32>>,
+    bios_inst_count: Arc<Vec<AtomicU64>>,
 
     /// Shared program instruction counter for monitoring ROM operations.
-    prog_inst_count: Arc<Vec<AtomicU32>>,
+    prog_inst_count: Arc<Vec<AtomicU64>>,
 
     asm_runner_handler: Mutex<Option<JoinHandle<AsmRunnerRH>>>,
 }
@@ -111,14 +111,12 @@ impl RomSM {
                         true => {
                             multiplicity = counter_stats.bios_inst_count
                                 [((inst.paddr - ROM_ENTRY) as usize) >> 2]
-                                .swap(0, std::sync::atomic::Ordering::Relaxed)
-                                as u64;
+                                .swap(0, std::sync::atomic::Ordering::Relaxed);
                         }
                         false => {
                             multiplicity = counter_stats.bios_inst_count
                                 [((inst.paddr - ROM_ENTRY) as usize) >> 2]
-                                .load(std::sync::atomic::Ordering::Relaxed)
-                                as u64;
+                                .load(std::sync::atomic::Ordering::Relaxed);
                         }
                     }
 
@@ -135,13 +133,11 @@ impl RomSM {
                         multiplicity = counter_stats.prog_inst_count
                             [(inst.paddr - ROM_ADDR) as usize]
                             .swap(0, std::sync::atomic::Ordering::Relaxed)
-                            as u64
                     }
                     false => {
                         multiplicity = counter_stats.prog_inst_count
                             [(inst.paddr - ROM_ADDR) as usize]
                             .load(std::sync::atomic::Ordering::Relaxed)
-                            as u64
                     }
                 }
                 if multiplicity == 0 {

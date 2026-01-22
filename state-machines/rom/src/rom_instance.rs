@@ -5,7 +5,7 @@
 use std::{
     collections::VecDeque,
     sync::{
-        atomic::{AtomicBool, AtomicU32},
+        atomic::{AtomicBool, AtomicU64},
         Arc,
     },
     thread::JoinHandle,
@@ -35,10 +35,10 @@ pub struct RomInstance {
     ictx: InstanceCtx,
 
     /// Shared biod instruction counter for monitoring ROM operations.
-    bios_inst_count: Mutex<Arc<Vec<AtomicU32>>>,
+    bios_inst_count: Mutex<Arc<Vec<AtomicU64>>>,
 
     /// Shared program instruction counter for monitoring ROM operations.
-    prog_inst_count: Mutex<Arc<Vec<AtomicU32>>>,
+    prog_inst_count: Mutex<Arc<Vec<AtomicU64>>>,
 
     /// Execution statistics counter for ROM instructions.
     counter_stats: Mutex<Option<CounterStats>>,
@@ -64,8 +64,8 @@ impl RomInstance {
     pub fn new(
         zisk_rom: Arc<ZiskRom>,
         ictx: InstanceCtx,
-        bios_inst_count: Arc<Vec<AtomicU32>>,
-        prog_inst_count: Arc<Vec<AtomicU32>>,
+        bios_inst_count: Arc<Vec<AtomicU64>>,
+        prog_inst_count: Arc<Vec<AtomicU64>>,
         handle_rh: Option<JoinHandle<AsmRunnerRH>>,
     ) -> Self {
         Self {
@@ -240,8 +240,8 @@ impl RomCollector {
     /// A new `RomCounter` instance.
     pub fn new(
         computed: bool,
-        bios_inst_count: Arc<Vec<AtomicU32>>,
-        prog_inst_count: Arc<Vec<AtomicU32>>,
+        bios_inst_count: Arc<Vec<AtomicU64>>,
+        prog_inst_count: Arc<Vec<AtomicU64>>,
     ) -> Self {
         let rom_counter = RomCounter::new(bios_inst_count, prog_inst_count);
         Self { already_computed: computed, rom_counter }

@@ -1,4 +1,3 @@
-pub mod bigint256;
 pub mod bls381;
 pub mod bn254;
 pub mod modexp;

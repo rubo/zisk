@@ -6316,7 +6316,6 @@ version = "0.16.0"
 dependencies = [
  "bincode",
  "cfg-if",
- "fields",
  "getrandom 0.2.17",
  "lazy_static",
  "lib-c",

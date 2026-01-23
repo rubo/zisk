@@ -14,21 +14,21 @@ use super::{
         add_fp_bls12_381, mul_fp_bls12_381, neg_fp_bls12_381, sqrt_fp_bls12_381,
         square_fp_bls12_381,
     },
-    fr::scalar_bytes_be_to_u64_le,
+    fr::scalar_bytes_be_to_u64_le_bls12_381,
 };
 
 // TODO: Check what happens if scalar or ecc coordinates are bigger than the field size
 
 /// G1 add result codes
-pub const G1_ADD_SUCCESS: u8 = 0;
-pub const G1_ADD_SUCCESS_INFINITY: u8 = 1;
-pub const G1_ADD_ERR_NOT_ON_CURVE: u8 = 2;
+const G1_ADD_SUCCESS: u8 = 0;
+const G1_ADD_SUCCESS_INFINITY: u8 = 1;
+const G1_ADD_ERR_NOT_ON_CURVE: u8 = 2;
 
 /// G1 MSM result codes
-pub const G1_MSM_SUCCESS: u8 = 0;
-pub const G1_MSM_SUCCESS_INFINITY: u8 = 1;
-pub const G1_MSM_ERR_NOT_ON_CURVE: u8 = 2;
-pub const G1_MSM_ERR_NOT_IN_SUBGROUP: u8 = 3;
+const G1_MSM_SUCCESS: u8 = 0;
+const G1_MSM_SUCCESS_INFINITY: u8 = 1;
+const G1_MSM_ERR_NOT_ON_CURVE: u8 = 2;
+const G1_MSM_ERR_NOT_IN_SUBGROUP: u8 = 3;
 
 /// Decompresses a point on the BLS12-381 curve from 48 bytes
 ///
@@ -686,8 +686,8 @@ pub unsafe extern "C" fn bls12_381_g1_add_c(
     let ret_bytes: &mut [u8; 96] = &mut *(ret as *mut [u8; 96]);
 
     // Parse points
-    let a_u64 = g1_bytes_be_to_u64_le(a_bytes);
-    let b_u64 = g1_bytes_be_to_u64_le(b_bytes);
+    let a_u64 = g1_bytes_be_to_u64_le_bls12_381(a_bytes);
+    let b_u64 = g1_bytes_be_to_u64_le_bls12_381(b_bytes);
 
     // Perform addition
     let result = match add_complete_bls12_381(
@@ -704,7 +704,7 @@ pub unsafe extern "C" fn bls12_381_g1_add_c(
     if result == G1_IDENTITY {
         G1_ADD_SUCCESS_INFINITY
     } else {
-        g1_u64_le_to_bytes_be(&result, ret_bytes);
+        g1_u64_le_to_bytes_be_bls12_381(&result, ret_bytes);
         G1_ADD_SUCCESS
     }
 }
@@ -742,8 +742,8 @@ pub unsafe extern "C" fn bls12_381_g1_msm_c(
         let scalar_bytes: &[u8; 32] = &*(pair_ptr.add(96) as *const [u8; 32]);
 
         // Parse point and scalar
-        let point_u64 = g1_bytes_be_to_u64_le(point_bytes);
-        let scalar_u64 = scalar_bytes_be_to_u64_le(scalar_bytes);
+        let point_u64 = g1_bytes_be_to_u64_le_bls12_381(point_bytes);
+        let scalar_u64 = scalar_bytes_be_to_u64_le_bls12_381(scalar_bytes);
 
         points.push(point_u64);
         scalars.push(scalar_u64);
@@ -764,13 +764,13 @@ pub unsafe extern "C" fn bls12_381_g1_msm_c(
     if result == G1_IDENTITY {
         G1_MSM_SUCCESS_INFINITY
     } else {
-        g1_u64_le_to_bytes_be(&result, ret_bytes);
+        g1_u64_le_to_bytes_be_bls12_381(&result, ret_bytes);
         G1_MSM_SUCCESS
     }
 }
 
 /// Convert 96-byte big-endian G1 point to [u64; 12] little-endian
-pub fn g1_bytes_be_to_u64_le(bytes: &[u8; 96]) -> [u64; 12] {
+pub fn g1_bytes_be_to_u64_le_bls12_381(bytes: &[u8; 96]) -> [u64; 12] {
     let mut result = [0u64; 12];
 
     // x-coordinate (first 48 bytes)
@@ -791,7 +791,7 @@ pub fn g1_bytes_be_to_u64_le(bytes: &[u8; 96]) -> [u64; 12] {
 }
 
 /// Convert [u64; 12] little-endian G1 point to 96-byte big-endian
-fn g1_u64_le_to_bytes_be(limbs: &[u64; 12], bytes: &mut [u8; 96]) {
+fn g1_u64_le_to_bytes_be_bls12_381(limbs: &[u64; 12], bytes: &mut [u8; 96]) {
     // x-coordinate (first 48 bytes)
     for i in 0..6 {
         let limb = limbs[5 - i];

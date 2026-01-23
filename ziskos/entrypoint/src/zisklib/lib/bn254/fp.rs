@@ -2,10 +2,16 @@
 
 use crate::{
     syscalls::{syscall_arith256_mod, SyscallArith256ModParams},
-    zisklib::{eq, fcall_bn254_fp_inv},
+    zisklib::{eq, fcall_bn254_fp_inv, lt},
 };
 
 use super::constants::{P, P_MINUS_ONE};
+
+// Checks if a 256-bit integer `x` is in canonical form
+#[inline]
+pub fn is_canonical_fp_bn254(x: &[u64; 4]) -> bool {
+    lt(x, &P)
+}
 
 /// Addition in the base field of the BN254 curve
 #[inline]

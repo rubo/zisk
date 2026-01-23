@@ -5,20 +5,24 @@ use crate::zisklib::lib::utils::{eq, gt, is_one};
 use super::{
     constants::{G1_IDENTITY, G2_IDENTITY, P_MINUS_ONE},
     curve::{
-        g1_bytes_be_to_u64_le, is_on_curve_bls12_381, is_on_subgroup_bls12_381, neg_bls12_381,
+        g1_bytes_be_to_u64_le_bls12_381, is_on_curve_bls12_381, is_on_subgroup_bls12_381,
+        neg_bls12_381,
     },
     final_exp::final_exp_bls12_381,
     miller_loop::{miller_loop_batch_bls12_381, miller_loop_bls12_381},
-    twist::{g2_bytes_be_to_u64_le, is_on_curve_twist_bls12_381, is_on_subgroup_twist_bls12_381},
+    twist::{
+        g2_bytes_be_to_u64_le_bls12_381, is_on_curve_twist_bls12_381,
+        is_on_subgroup_twist_bls12_381,
+    },
 };
 
 /// Pairing check result codes
-pub const PAIRING_CHECK_SUCCESS: u8 = 0;
-pub const PAIRING_CHECK_FAILED: u8 = 1;
-pub const PAIRING_CHECK_ERR_G1_NOT_ON_CURVE: u8 = 2;
-pub const PAIRING_CHECK_ERR_G1_NOT_IN_SUBGROUP: u8 = 3;
-pub const PAIRING_CHECK_ERR_G2_NOT_ON_CURVE: u8 = 4;
-pub const PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP: u8 = 5;
+const PAIRING_CHECK_SUCCESS: u8 = 0;
+const PAIRING_CHECK_FAILED: u8 = 1;
+const PAIRING_CHECK_ERR_G1_NOT_ON_CURVE: u8 = 2;
+const PAIRING_CHECK_ERR_G1_NOT_IN_SUBGROUP: u8 = 3;
+const PAIRING_CHECK_ERR_G2_NOT_ON_CURVE: u8 = 4;
+const PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP: u8 = 5;
 
 /// Optimal Ate Pairing e: G1 x G2 -> GT over the BLS12-381 curve
 /// where G1 = E(Fp)[r] = E(Fp), G2 = E'(Fp2)[r] and GT = μ_r (the r-th roots of unity over Fp12*)
@@ -239,11 +243,12 @@ pub unsafe extern "C" fn bls12_381_pairing_check_c(
     let mut g2_points: Vec<[u64; 24]> = Vec::with_capacity(num_pairs);
     for i in 0..num_pairs {
         let pair_ptr = pairs.add(i * 288);
+
         let g1_bytes: &[u8; 96] = &*(pair_ptr as *const [u8; 96]);
         let g2_bytes: &[u8; 192] = &*(pair_ptr.add(96) as *const [u8; 192]);
 
-        g1_points.push(g1_bytes_be_to_u64_le(g1_bytes));
-        g2_points.push(g2_bytes_be_to_u64_le(g2_bytes));
+        g1_points.push(g1_bytes_be_to_u64_le_bls12_381(g1_bytes));
+        g2_points.push(g2_bytes_be_to_u64_le_bls12_381(g2_bytes));
     }
 
     match pairing_check_bls12_381(

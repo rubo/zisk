@@ -12,7 +12,7 @@ use super::{
         mul_fp2_bls12_381, neg_fp2_bls12_381, scalar_mul_fp2_bls12_381, sqrt_fp2_bls12_381,
         square_fp2_bls12_381, sub_fp2_bls12_381,
     },
-    fr::scalar_bytes_be_to_u64_le,
+    fr::scalar_bytes_be_to_u64_le_bls12_381,
 };
 
 // TODO: Check what happens if scalar or ecc coordinates are bigger than the field size
@@ -869,8 +869,8 @@ pub unsafe extern "C" fn bls12_381_g2_add_c(
     let ret_bytes: &mut [u8; 192] = &mut *(ret as *mut [u8; 192]);
 
     // Parse points
-    let a_u64 = g2_bytes_be_to_u64_le(a_bytes);
-    let b_u64 = g2_bytes_be_to_u64_le(b_bytes);
+    let a_u64 = g2_bytes_be_to_u64_le_bls12_381(a_bytes);
+    let b_u64 = g2_bytes_be_to_u64_le_bls12_381(b_bytes);
 
     // Perform addition
     let result = match add_complete_twist_bls12_381(
@@ -887,7 +887,7 @@ pub unsafe extern "C" fn bls12_381_g2_add_c(
     if result == G2_IDENTITY {
         G2_ADD_SUCCESS_INFINITY
     } else {
-        g2_u64_le_to_bytes_be(&result, ret_bytes);
+        g2_u64_le_to_bytes_be_bls12_381(&result, ret_bytes);
         G2_ADD_SUCCESS
     }
 }
@@ -925,8 +925,8 @@ pub unsafe extern "C" fn bls12_381_g2_msm_c(
         let scalar_bytes: &[u8; 32] = &*(pair_ptr.add(192) as *const [u8; 32]);
 
         // Parse point and scalar
-        let point_u64 = g2_bytes_be_to_u64_le(point_bytes);
-        let scalar_u64 = scalar_bytes_be_to_u64_le(scalar_bytes);
+        let point_u64 = g2_bytes_be_to_u64_le_bls12_381(point_bytes);
+        let scalar_u64 = scalar_bytes_be_to_u64_le_bls12_381(scalar_bytes);
 
         points.push(point_u64);
         scalars.push(scalar_u64);
@@ -947,13 +947,13 @@ pub unsafe extern "C" fn bls12_381_g2_msm_c(
     if result == G2_IDENTITY {
         G2_MSM_SUCCESS_INFINITY
     } else {
-        g2_u64_le_to_bytes_be(&result, ret_bytes);
+        g2_u64_le_to_bytes_be_bls12_381(&result, ret_bytes);
         G2_MSM_SUCCESS
     }
 }
 
 /// Convert 192-byte big-endian G2 point to [u64; 24] little-endian
-pub fn g2_bytes_be_to_u64_le(bytes: &[u8; 192]) -> [u64; 24] {
+pub fn g2_bytes_be_to_u64_le_bls12_381(bytes: &[u8; 192]) -> [u64; 24] {
     let mut result = [0u64; 24];
 
     // x_r (bytes 0-47) -> result[0..6]
@@ -988,7 +988,7 @@ pub fn g2_bytes_be_to_u64_le(bytes: &[u8; 192]) -> [u64; 24] {
 }
 
 /// Convert [u64; 24] little-endian G2 point to 192-byte big-endian
-fn g2_u64_le_to_bytes_be(limbs: &[u64; 24], bytes: &mut [u8; 192]) {
+fn g2_u64_le_to_bytes_be_bls12_381(limbs: &[u64; 24], bytes: &mut [u8; 192]) {
     // x_r (limbs[0..6]) -> bytes 0-47
     for i in 0..6 {
         let limb = limbs[5 - i];

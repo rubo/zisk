@@ -3,7 +3,7 @@
 use crate::zisklib::lib::utils::eq;
 
 use super::{
-    constants::{ETWISTED_B, E_B, FROBENIUS_GAMMA12, FROBENIUS_GAMMA13, IDENTITY_G2},
+    constants::{ETWISTED_B, E_B, FROBENIUS_GAMMA12, FROBENIUS_GAMMA13, G2_IDENTITY},
     fp2::{
         add_fp2_bn254, conjugate_fp2_bn254, dbl_fp2_bn254, inv_fp2_bn254, mul_fp2_bn254,
         neg_fp2_bn254, scalar_mul_fp2_bn254, square_fp2_bn254, sub_fp2_bn254,
@@ -117,7 +117,7 @@ pub fn to_affine_twist_bn254(
     let z: [u64; 8] = p[16..24].try_into().unwrap();
 
     if z == [0u64; 8] {
-        return IDENTITY_G2;
+        return G2_IDENTITY;
     } else if z == [1u64, 0, 0, 0, 0, 0, 0, 0] {
         return [
             p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[10], p[11], p[12], p[13],
@@ -186,7 +186,7 @@ pub fn add_twist_bn254(
             );
         } else {
             // Points are the inverse of each other, return the point at infinity
-            return IDENTITY_G2;
+            return G2_IDENTITY;
         }
     }
 
@@ -421,4 +421,39 @@ pub fn utf_endomorphism_twist_bn254(
         qx[0], qx[1], qx[2], qx[3], qx[4], qx[5], qx[6], qx[7], qy[0], qy[1], qy[2], qy[3], qy[4],
         qy[5], qy[6], qy[7],
     ]
+}
+
+/// Convert 128-byte big-endian G2 point to [u64; 16] little-endian
+pub fn g2_bytes_be_to_u64_le_bn254(bytes: &[u8; 128]) -> [u64; 16] {
+    let mut result = [0u64; 16];
+
+    // x_i (bytes 0-31) -> result[4..8]
+    for i in 0..4 {
+        for j in 0..8 {
+            result[7 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // x_r (bytes 32-63) -> result[0..4]
+    for i in 0..4 {
+        for j in 0..8 {
+            result[3 - i] |= (bytes[32 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // y_i (bytes 64-95) -> result[12..16]
+    for i in 0..4 {
+        for j in 0..8 {
+            result[15 - i] |= (bytes[64 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    // y_r (bytes 96-127) -> result[8..12]
+    for i in 0..4 {
+        for j in 0..8 {
+            result[11 - i] |= (bytes[96 + i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+
+    result
 }

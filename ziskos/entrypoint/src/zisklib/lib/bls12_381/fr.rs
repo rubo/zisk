@@ -114,7 +114,7 @@ pub fn square_fr_bls12_381(
 }
 
 /// Convert 32-byte big-endian scalar to [u64; 4] little-endian
-pub fn scalar_bytes_be_to_u64_le(bytes: &[u8; 32]) -> [u64; 4] {
+pub fn scalar_bytes_be_to_u64_le_bls12_381(bytes: &[u8; 32]) -> [u64; 4] {
     let mut result = [0u64; 4];
     for i in 0..4 {
         for j in 0..8 {

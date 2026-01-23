@@ -115,10 +115,6 @@ pub fn bn254_pairing_check_hint(data: &[u64]) -> Result<Vec<u64>> {
         g2_points.push(g2_bytes);
     }
 
-    for i in 0..num_pairs {
-        println!("[{}] G1 Point: {:x?}\n    G2 Point: {:x?}", i, g1_points[i], g2_points[i]);
-    }
-
     // Build arrays of raw pointers for the FFI call
     let g1_ptrs: Vec<*const u8> = g1_points.iter().map(|p| p.as_ptr()).collect();
     let g2_ptrs: Vec<*const u8> = g2_points.iter().map(|p| p.as_ptr()).collect();
@@ -131,18 +127,7 @@ pub fn bn254_pairing_check_hint(data: &[u64]) -> Result<Vec<u64>> {
             num_pairs,
             &mut hints,
         );
-
-        println!("BN254_PAIRING_CHECK: result = {}", result);
     }
 
     Ok(hints)
-}
-
-#[inline]
-unsafe fn reinterpret_u64_as_bytes<const BYTES: usize>(
-    slice: &[u64],
-    count: usize,
-) -> &[[u8; BYTES]] {
-    debug_assert_eq!(slice.len(), count * (BYTES / 8));
-    std::slice::from_raw_parts(slice.as_ptr().cast(), count)
 }

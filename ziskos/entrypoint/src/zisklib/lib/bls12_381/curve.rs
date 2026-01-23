@@ -14,9 +14,23 @@ use super::{
         add_fp_bls12_381, mul_fp_bls12_381, neg_fp_bls12_381, sqrt_fp_bls12_381,
         square_fp_bls12_381,
     },
+    fr::scalar_bytes_be_to_u64_le,
 };
 
-/// Decompresses a G1 point on the BLS12-381 curve from 48 bytes (compressed format).
+// TODO: Check what happens if scalar or ecc coordinates are bigger than the field size
+
+/// G1 add result codes
+pub const G1_ADD_SUCCESS: u8 = 0;
+pub const G1_ADD_SUCCESS_INFINITY: u8 = 1;
+pub const G1_ADD_ERR_NOT_ON_CURVE: u8 = 2;
+
+/// G1 MSM result codes
+pub const G1_MSM_SUCCESS: u8 = 0;
+pub const G1_MSM_SUCCESS_INFINITY: u8 = 1;
+pub const G1_MSM_ERR_NOT_ON_CURVE: u8 = 2;
+pub const G1_MSM_ERR_NOT_IN_SUBGROUP: u8 = 3;
+
+/// Decompresses a point on the BLS12-381 curve from 48 bytes
 ///
 /// Format: Big-endian x-coordinate with flag bits in the top 3 bits of the first byte:
 /// - Bit 7 (0x80): Compression flag (must be 1 for compressed)
@@ -25,12 +39,12 @@ use super::{
 pub fn decompress_bls12_381(
     input: &[u8; 48],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> Result<([u64; 12], bool), &'static str> {
+) -> Result<[u64; 12], &'static str> {
     let flags = input[0];
 
     // Check compression bit
     if (flags & 0x80) == 0 {
-        return Err("decompress_bls12_381: Expected compressed point (0x80 flag not set)");
+        return Err("Expected compressed point");
     }
 
     // Check infinity bit
@@ -44,7 +58,7 @@ pub fn decompress_bls12_381(
                 return Err("Invalid infinity encoding");
             }
         }
-        return Ok((G1_IDENTITY, true));
+        return Ok(G1_IDENTITY);
     }
 
     // Extract sign bit
@@ -111,7 +125,7 @@ pub fn decompress_bls12_381(
     let mut result = [0u64; 12];
     result[0..6].copy_from_slice(&x);
     result[6..12].copy_from_slice(&final_y);
-    Ok((result, false))
+    Ok(result)
 }
 
 /// Check if a non-zero point `p` is on the BLS12-381 curve
@@ -239,6 +253,66 @@ pub fn add_bls12_381(
     result
 }
 
+/// Adds two points `p1` and `p2` on the BLS12-381 curve
+pub fn add_complete_bls12_381(
+    p1: &[u64; 12],
+    p2: &[u64; 12],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> Result<[u64; 12], u8> {
+    let p1_is_inf = *p1 == G1_IDENTITY;
+    let p2_is_inf = *p2 == G1_IDENTITY;
+
+    // Handle identity cases
+    if p1_is_inf && p2_is_inf {
+        return Ok(G1_IDENTITY);
+    }
+    if p1_is_inf {
+        if !is_on_curve_bls12_381(
+            p2,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return Err(G1_ADD_ERR_NOT_ON_CURVE);
+        }
+        return Ok(*p2);
+    }
+
+    if p2_is_inf {
+        if !is_on_curve_bls12_381(
+            p1,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return Err(G1_ADD_ERR_NOT_ON_CURVE);
+        }
+        return Ok(*p1);
+    }
+
+    // Both points are non-identity, validate both are on curve
+    if !is_on_curve_bls12_381(
+        p1,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
+        return Err(G1_ADD_ERR_NOT_ON_CURVE);
+    }
+    if !is_on_curve_bls12_381(
+        p2,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
+        return Err(G1_ADD_ERR_NOT_ON_CURVE);
+    }
+
+    // Otherwise, perform regular addition
+    Ok(add_bls12_381(
+        p1,
+        p2,
+        #[cfg(feature = "hints")]
+        hints,
+    ))
+}
+
 /// Negation of a non-zero point `p` on the BLS12-381 curve
 pub fn neg_bls12_381(p: &[u64; 12], #[cfg(feature = "hints")] hints: &mut Vec<u64>) -> [u64; 12] {
     let x: [u64; 6] = p[0..6].try_into().unwrap();
@@ -298,23 +372,41 @@ pub fn sub_bls12_381(
     )
 }
 
-// pub fn sub_complete_bls12_381(p1: &[u64; 12], p2: &[u64; 12]) -> [u64; 12] {
-//     if p1 == G1_IDENTITY {
-//         return neg_bls12_381(p2);
-//     }
+/// Subtraction of two points `p1` and `p2` on the BLS12-381 curve
+pub fn sub_complete_bls12_381(
+    p1: &[u64; 12],
+    p2: &[u64; 12],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 12] {
+    let p1_is_inf = *p1 == G1_IDENTITY;
+    let p2_is_inf = *p2 == G1_IDENTITY;
 
-//     let x2: [u64; 6] = p2[0..6].try_into().unwrap();
-//     let y2: [u64; 6] = p2[6..12].try_into().unwrap();
+    // Handle identity cases
+    if p1_is_inf && p2_is_inf {
+        // O - O = O
+        return G1_IDENTITY;
+    }
+    if p1_is_inf {
+        // O - P2 = -P2
+        return neg_bls12_381(
+            p2,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+    }
+    if p2_is_inf {
+        // P1 - O = P1
+        return *p1;
+    }
 
-//     // P1 - P2 = P1 + (-P2)
-//     let y2_neg = neg_fp_bls12_381(&y2);
-
-//     let mut p2_neg = [0u64; 12];
-//     p2_neg[0..6].copy_from_slice(&x2);
-//     p2_neg[6..12].copy_from_slice(&y2_neg);
-
-//     add_bls12_381(p1, &p2_neg)
-// }
+    // Perform regular subtraction: P1 - P2 = P1 + (-P2)
+    sub_bls12_381(
+        p1,
+        p2,
+        #[cfg(feature = "hints")]
+        hints,
+    )
+}
 
 /// Multiplies a non-zero point `p` on the BLS12-381 curve by a scalar `k` on the BLS12-381 scalar field
 pub fn scalar_mul_bls12_381(
@@ -473,6 +565,78 @@ pub fn scalar_mul_by_x2div3_bls12_381(
     )
 }
 
+/// Multi-Scalar Multiplication (MSM) for BLS12-381 G1 points
+/// It computes k1·P1 + k2·P2 + ... + kn·Pn
+// TODO: This is a naive implementation, one can improve it by using, e.g., a windowed strategies!
+pub fn msm_complete_bls12_381(
+    points: &[[u64; 12]],
+    scalars: &[[u64; 4]],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> Result<[u64; 12], u8> {
+    assert_eq!(points.len(), scalars.len());
+
+    let mut acc = G1_IDENTITY;
+    let mut acc_is_inf = true;
+    for (point, scalar) in points.iter().zip(scalars.iter()) {
+        // Skip infinity points
+        if *point == G1_IDENTITY {
+            continue;
+        }
+
+        // Skip zero scalars
+        if *scalar == [0, 0, 0, 0] {
+            continue;
+        }
+
+        // Verify point is on curve
+        if !is_on_curve_bls12_381(
+            point,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return Err(G1_MSM_ERR_NOT_ON_CURVE);
+        }
+
+        // Verify point is in subgroup
+        if !is_on_subgroup_bls12_381(
+            point,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return Err(G1_MSM_ERR_NOT_IN_SUBGROUP);
+        }
+
+        // Compute P * k
+        let product = scalar_mul_bls12_381(
+            point,
+            scalar,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+
+        // Skip if product is infinity
+        if product == G1_IDENTITY {
+            continue;
+        }
+
+        // Add to accumulator
+        if acc_is_inf {
+            acc = product;
+            acc_is_inf = false;
+        } else {
+            acc = add_bls12_381(
+                &acc,
+                &product,
+                #[cfg(feature = "hints")]
+                hints,
+            );
+            acc_is_inf = acc == G1_IDENTITY;
+        }
+    }
+
+    Ok(acc)
+}
+
 /// Compute the sigma endomorphism σ of a non-zero point `p`, defined as:
 ///              σ : E(Fp)  ->  E(Fp)
 ///                  (x,y) |-> (ɣ·x,y)
@@ -495,7 +659,7 @@ pub fn sigma_endomorphism_bls12_381(
     result
 }
 
-/// G1 point addition for uncompressed 96-byte points (big-endian format)
+/// G1 point addition for uncompressed 96-byte points
 ///
 /// Input format: 96 bytes per point = 48 bytes x-coordinate + 48 bytes y-coordinate (big-endian)
 /// Output format: Same as input
@@ -508,7 +672,7 @@ pub fn sigma_endomorphism_bls12_381(
 /// Returns:
 /// - 0 = success (regular point)
 /// - 1 = success (point at infinity)
-/// - 2 = error (point not on curve or invalid)
+/// - 2 = error (point not on curve)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_bls12_381_g1_add_c")]
 pub unsafe extern "C" fn bls12_381_g1_add_c(
@@ -517,68 +681,92 @@ pub unsafe extern "C" fn bls12_381_g1_add_c(
     b: *const u8,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
-    // TODO: Check we can remove code using assumptions!
-
     let a_bytes: &[u8; 96] = &*(a as *const [u8; 96]);
     let b_bytes: &[u8; 96] = &*(b as *const [u8; 96]);
     let ret_bytes: &mut [u8; 96] = &mut *(ret as *mut [u8; 96]);
 
-    // Check for infinity points (all zeros)
-    let a_is_inf = a_bytes.iter().all(|&x| x == 0);
-    let b_is_inf = b_bytes.iter().all(|&x| x == 0);
-
-    if a_is_inf && b_is_inf {
-        // 𝒪 + 𝒪 = 𝒪
-        ret_bytes.fill(0);
-        return 1;
-    }
-
-    if a_is_inf {
-        // 𝒪 + B = B
-        ret_bytes.copy_from_slice(b_bytes);
-        return 0;
-    }
-
-    if b_is_inf {
-        // A + 𝒪 = A
-        ret_bytes.copy_from_slice(a_bytes);
-        return 0;
-    }
-
-    // Convert big-endian bytes to little-endian u64 limbs
+    // Parse points
     let a_u64 = g1_bytes_be_to_u64_le(a_bytes);
     let b_u64 = g1_bytes_be_to_u64_le(b_bytes);
 
-    // Verify points are on curve
-    if !is_on_curve_bls12_381(
+    // Perform addition
+    let result = match add_complete_bls12_381(
         &a_u64,
-        #[cfg(feature = "hints")]
-        hints,
-    ) || !is_on_curve_bls12_381(
         &b_u64,
         #[cfg(feature = "hints")]
         hints,
     ) {
-        return 2;
+        Ok(r) => r,
+        Err(code) => return code,
+    };
+
+    // Encode result
+    if result == G1_IDENTITY {
+        G1_ADD_SUCCESS_INFINITY
+    } else {
+        g1_u64_le_to_bytes_be(&result, ret_bytes);
+        G1_ADD_SUCCESS
+    }
+}
+
+/// G1 Multi-Scalar Multiplication (MSM) for uncompressed points
+///
+/// Input format per pair: 128 bytes = 96 bytes G1 point (x || y big-endian) + 32 bytes scalar (big-endian)
+/// Output format: 96 bytes G1 point (x || y big-endian)
+///
+/// ### Safety
+/// - `pairs` must point to an array of `num_pairs * 128` bytes
+/// - `ret` must point to a valid `[u8; 96]` for the output
+///
+/// Returns:
+/// - 0 = success (regular point)
+/// - 1 = success (point at infinity)
+/// - 2 = error (point not on curve)
+/// - 3 = error (point not in subgroup)
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_bls12_381_g1_msm_c")]
+pub unsafe extern "C" fn bls12_381_g1_msm_c(
+    ret: *mut u8,
+    pairs: *const u8,
+    num_pairs: usize,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> u8 {
+    let ret_bytes: &mut [u8; 96] = &mut *(ret as *mut [u8; 96]);
+
+    // Parse all pairs
+    let mut points = Vec::with_capacity(num_pairs);
+    let mut scalars = Vec::with_capacity(num_pairs);
+    for i in 0..num_pairs {
+        let pair_ptr = pairs.add(i * 128);
+        let point_bytes: &[u8; 96] = &*(pair_ptr as *const [u8; 96]);
+        let scalar_bytes: &[u8; 32] = &*(pair_ptr.add(96) as *const [u8; 32]);
+
+        // Parse point and scalar
+        let point_u64 = g1_bytes_be_to_u64_le(point_bytes);
+        let scalar_u64 = scalar_bytes_be_to_u64_le(scalar_bytes);
+
+        points.push(point_u64);
+        scalars.push(scalar_u64);
     }
 
-    // Perform addition
-    let result = add_bls12_381(
-        &a_u64,
-        &b_u64,
+    // Perform MSM with validation
+    let result = match msm_complete_bls12_381(
+        &points,
+        &scalars,
         #[cfg(feature = "hints")]
         hints,
-    );
+    ) {
+        Ok(r) => r,
+        Err(code) => return code,
+    };
 
-    // Check if result is identity
+    // Encode result
     if result == G1_IDENTITY {
-        ret_bytes.fill(0);
-        return 1;
+        G1_MSM_SUCCESS_INFINITY
+    } else {
+        g1_u64_le_to_bytes_be(&result, ret_bytes);
+        G1_MSM_SUCCESS
     }
-
-    // Convert result back to big-endian bytes
-    g1_u64_le_to_bytes_be(&result, ret_bytes);
-    0
 }
 
 /// Convert 96-byte big-endian G1 point to [u64; 12] little-endian
@@ -619,124 +807,4 @@ fn g1_u64_le_to_bytes_be(limbs: &[u64; 12], bytes: &mut [u8; 96]) {
             bytes[48 + i * 8 + j] = ((limb >> (8 * (7 - j))) & 0xFF) as u8;
         }
     }
-}
-
-/// G1 Multi-Scalar Multiplication (MSM) for uncompressed points (big-endian format)
-///
-/// This function is designed to patch:
-/// `fn bls12_381_g1_msm(&self, pairs: &mut dyn Iterator<Item = Result<G1PointScalar, PrecompileError>>) -> Result<[u8; 96]>`
-///
-/// Input format per pair: 128 bytes = 96 bytes G1 point (x || y big-endian) + 32 bytes scalar (big-endian)
-/// Output format: 96 bytes G1 point (x || y big-endian)
-///
-/// ### Safety
-/// - `pairs` must point to an array of `num_pairs * 128` bytes
-/// - `ret` must point to a valid `[u8; 96]` for the output
-///
-/// Returns:
-/// - 0 = success (regular point)
-/// - 1 = success (point at infinity)
-/// - 2 = error (point not on curve or invalid)
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-#[cfg_attr(feature = "hints", export_name = "hints_bls12_381_g1_msm_c")]
-pub unsafe extern "C" fn bls12_381_g1_msm_c(
-    ret: *mut u8,
-    pairs: *const u8,
-    num_pairs: usize,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> u8 {
-    let ret_bytes: &mut [u8; 96] = &mut *(ret as *mut [u8; 96]);
-
-    // Handle empty input
-    if num_pairs == 0 {
-        ret_bytes.fill(0);
-        return 1; // Point at infinity
-    }
-
-    // Accumulator starts at infinity
-    let mut acc = G1_IDENTITY;
-    let mut acc_is_inf = true;
-
-    for i in 0..num_pairs {
-        let pair_ptr = pairs.add(i * 128);
-
-        // Extract point (96 bytes) and scalar (32 bytes)
-        let point_bytes: &[u8; 96] = &*(pair_ptr as *const [u8; 96]);
-        let scalar_bytes: &[u8; 32] = &*(pair_ptr.add(96) as *const [u8; 32]);
-
-        // Check if point is infinity
-        let point_is_inf = point_bytes.iter().all(|&x| x == 0);
-        if point_is_inf {
-            continue; // 𝒪 * k = 𝒪, skip
-        }
-
-        // Check if scalar is zero
-        let scalar_is_zero = scalar_bytes.iter().all(|&x| x == 0);
-        if scalar_is_zero {
-            continue; // P * 0 = 𝒪, skip
-        }
-
-        // Convert point from big-endian bytes to u64 limbs
-        let point_u64 = g1_bytes_be_to_u64_le(point_bytes);
-
-        // Verify point is on curve
-        if !is_on_curve_bls12_381(
-            &point_u64,
-            #[cfg(feature = "hints")]
-            hints,
-        ) {
-            return 2;
-        }
-
-        // Convert scalar from big-endian bytes to u64 limbs (only need 4 limbs for 256-bit field)
-        let scalar_u64 = scalar_bytes_be_to_u64_le(scalar_bytes);
-
-        // Compute P * k
-        let product = scalar_mul_bls12_381(
-            &point_u64,
-            &scalar_u64,
-            #[cfg(feature = "hints")]
-            hints,
-        );
-
-        // Check if product is infinity
-        if product == G1_IDENTITY {
-            continue;
-        }
-
-        // Add to accumulator
-        if acc_is_inf {
-            acc = product;
-            acc_is_inf = false;
-        } else {
-            acc = add_bls12_381(
-                &acc,
-                &product,
-                #[cfg(feature = "hints")]
-                hints,
-            );
-            acc_is_inf = acc == G1_IDENTITY;
-        }
-    }
-
-    // Write result
-    if acc_is_inf {
-        ret_bytes.fill(0);
-        return 1;
-    }
-
-    g1_u64_le_to_bytes_be(&acc, ret_bytes);
-    0
-}
-
-/// Convert 32-byte big-endian scalar to [u64; 4] little-endian (zero-padded for 256-bit)
-fn scalar_bytes_be_to_u64_le(bytes: &[u8; 32]) -> [u64; 4] {
-    let mut result = [0u64; 4];
-    for i in 0..4 {
-        for j in 0..8 {
-            result[3 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
-        }
-    }
-
-    result
 }

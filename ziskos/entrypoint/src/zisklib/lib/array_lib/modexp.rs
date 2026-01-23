@@ -41,6 +41,11 @@ pub fn modexp(
         }
     }
 
+    // If modulus == 0, return zeros
+    if len_m == 1 && modulus[0].is_zero() {
+        return vec![U256::ZERO];
+    }
+
     // If modulus == 1, then base^exp (mod 1) is always 0
     if len_m == 1 && modulus[0].is_one() {
         return vec![U256::ZERO];
@@ -64,181 +69,177 @@ pub fn modexp(
     }
 
     // We can assume from now on that base,modulus > 1 and exp > 0
-
-    // There are two versions:
-    //   - If len(modulus) == 1, we can use short reductions
-    //   - If len(modulus) > 1, we must use long reductions
     if len_m == 1 {
-        let modulus = &modulus[0];
-
-        // Compute base = base (mod modulus)
-        let base = rem_short_init(
+        modexp_short(
             base,
-            modulus,
-            #[cfg(feature = "hints")]
-            hints,
-        );
-
-        // Hint exponent bits
-        let (len, bits) = fcall_bin_decomp(
             exp,
+            &modulus[0],
             #[cfg(feature = "hints")]
             hints,
-        );
-
-        // We should recompose the exponent from bits to verify correctness
-        let mut rec_exp = vec![0u64; len_e];
-
-        // Recompose the MSB
-        let bits_pos = len - 1;
-        let limb_idx = bits_pos / 64;
-        let bit_in_limb = bits_pos % 64;
-        rec_exp[limb_idx] = 1u64 << bit_in_limb;
-
-        // Scratch space
-        let mut scratch = ShortScratch::new();
-
-        // Initialize out = base
-        let mut out = base;
-        for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
-            if out.is_zero() {
-                return vec![U256::ZERO];
-            }
-
-            // Compute out = out² (mod modulus)
-            out = square_and_reduce_short(
-                &out,
-                modulus,
-                &mut scratch,
-                #[cfg(feature = "hints")]
-                hints,
-            );
-
-            if bit == 1 {
-                // Compute out = (out * base) (mod modulus);
-                out = mul_and_reduce_short(
-                    &out,
-                    &base,
-                    modulus,
-                    &mut scratch,
-                    #[cfg(feature = "hints")]
-                    hints,
-                );
-                // Recompose the exponent
-                let bits_pos = len - 1 - bit_idx;
-                let limb_idx = bits_pos / 64;
-                let bit_in_limb = bits_pos % 64;
-                rec_exp[limb_idx] |= 1u64 << bit_in_limb;
-            }
-        }
-
-        assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
-
-        vec![out]
+        )
     } else {
-        // Compute base = base (mod modulus)
-        let base = rem_long_init(
+        modexp_long(
             base,
+            exp,
             modulus,
             #[cfg(feature = "hints")]
             hints,
-        );
-
-        // Hint exponent bits
-        let (len, bits) = fcall_bin_decomp(
-            exp,
-            #[cfg(feature = "hints")]
-            hints,
-        );
-
-        // We should recompose the exponent from bits to verify correctness
-        let mut rec_exp = vec![0u64; len_e];
-
-        // Recompose the MSB
-        let bits_pos = len - 1;
-        let limb_idx = bits_pos / 64;
-        let bit_in_limb = bits_pos % 64;
-        rec_exp[limb_idx] = 1u64 << bit_in_limb;
-
-        // Scratch space
-        let mut scratch = LongScratch::new(len_m);
-
-        // Initialize out = base
-        let mut out = base.clone();
-        for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
-            if out.len() == 1 && out[0].is_zero() {
-                return vec![U256::ZERO];
-            }
-
-            // Compute out = out² (mod modulus)
-            out = square_and_reduce_long(
-                &out,
-                modulus,
-                &mut scratch,
-                #[cfg(feature = "hints")]
-                hints,
-            );
-
-            if bit == 1 {
-                // Compute out = (out * base) (mod modulus);
-                out = mul_and_reduce_long(
-                    &out,
-                    &base,
-                    modulus,
-                    &mut scratch,
-                    #[cfg(feature = "hints")]
-                    hints,
-                );
-                // Recompose the exponent
-                let bits_pos = len - 1 - bit_idx;
-                let limb_idx = bits_pos / 64;
-                let bit_in_limb = bits_pos % 64;
-                rec_exp[limb_idx] |= 1u64 << bit_in_limb;
-            }
-        }
-
-        assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
-
-        out
+        )
     }
 }
 
-pub fn modexp_u64(
-    base: &[u64],
+/// Short modexp when modulus fits in a single U256
+fn modexp_short(
+    base: &[U256],
     exp: &[u64],
-    modulus: &[u64],
+    modulus: &U256,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> Vec<u64> {
-    // Round up to multiple of 4
-    let base_len = (base.len() + 3) & !3;
-    let modulus_len = (modulus.len() + 3) & !3;
+) -> Vec<U256> {
+    let len_e = exp.len();
 
-    let mut base_padded = vec![0u64; base_len];
-    let mut modulus_padded = vec![0u64; modulus_len];
-
-    base_padded[..base.len()].copy_from_slice(base);
-    modulus_padded[..modulus.len()].copy_from_slice(modulus);
-
-    // Convert u64 arrays to U256 chunks
-    let base_u256 = U256::flat_to_slice(&base_padded);
-    let modulus_u256 = U256::flat_to_slice(&modulus_padded);
-
-    // Call the main modexp function
-    let result_u256 = modexp(
-        base_u256,
-        exp,
-        modulus_u256,
+    // Compute base = base (mod modulus)
+    let base = rem_short_init(
+        base,
+        modulus,
         #[cfg(feature = "hints")]
         hints,
     );
 
-    // Convert result back to u64 array
-    U256::slice_to_flat(&result_u256).to_vec()
+    // Hint exponent bits
+    let (len, bits) = fcall_bin_decomp(
+        exp,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+
+    // We should recompose the exponent from bits to verify correctness
+    let mut rec_exp = vec![0u64; len_e];
+
+    // Recompose the MSB
+    let bits_pos = len - 1;
+    let limb_idx = bits_pos / 64;
+    let bit_in_limb = bits_pos % 64;
+    rec_exp[limb_idx] = 1u64 << bit_in_limb;
+
+    // Scratch space
+    let mut scratch = ShortScratch::new();
+
+    // Initialize out = base
+    let mut out = base;
+    for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
+        if out.is_zero() {
+            return vec![U256::ZERO];
+        }
+
+        // Compute out = out² (mod modulus)
+        out = square_and_reduce_short(
+            &out,
+            modulus,
+            &mut scratch,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+
+        if bit == 1 {
+            // Compute out = (out * base) (mod modulus)
+            out = mul_and_reduce_short(
+                &out,
+                &base,
+                modulus,
+                &mut scratch,
+                #[cfg(feature = "hints")]
+                hints,
+            );
+            // Recompose the exponent
+            let bits_pos = len - 1 - bit_idx;
+            let limb_idx = bits_pos / 64;
+            let bit_in_limb = bits_pos % 64;
+            rec_exp[limb_idx] |= 1u64 << bit_in_limb;
+        }
+    }
+
+    assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
+
+    vec![out]
+}
+
+/// Long modexp when modulus requires multiple U256 limbs
+fn modexp_long(
+    base: &[U256],
+    exp: &[u64],
+    modulus: &[U256],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> Vec<U256> {
+    let len_e = exp.len();
+    let len_m = modulus.len();
+
+    // Compute base = base (mod modulus)
+    let base = rem_long_init(
+        base,
+        modulus,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+
+    // Hint exponent bits
+    let (len, bits) = fcall_bin_decomp(
+        exp,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+
+    // We should recompose the exponent from bits to verify correctness
+    let mut rec_exp = vec![0u64; len_e];
+
+    // Recompose the MSB
+    let bits_pos = len - 1;
+    let limb_idx = bits_pos / 64;
+    let bit_in_limb = bits_pos % 64;
+    rec_exp[limb_idx] = 1u64 << bit_in_limb;
+
+    // Scratch space
+    let mut scratch = LongScratch::new(len_m);
+
+    // Initialize out = base
+    let mut out = base.clone();
+    for (bit_idx, &bit) in bits.iter().enumerate().skip(1) {
+        if out.len() == 1 && out[0].is_zero() {
+            return vec![U256::ZERO];
+        }
+
+        // Compute out = out² (mod modulus)
+        out = square_and_reduce_long(
+            &out,
+            modulus,
+            &mut scratch,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+
+        if bit == 1 {
+            // Compute out = (out * base) (mod modulus)
+            out = mul_and_reduce_long(
+                &out,
+                &base,
+                modulus,
+                &mut scratch,
+                #[cfg(feature = "hints")]
+                hints,
+            );
+            // Recompose the exponent
+            let bits_pos = len - 1 - bit_idx;
+            let limb_idx = bits_pos / 64;
+            let bit_in_limb = bits_pos % 64;
+            rec_exp[limb_idx] |= 1u64 << bit_in_limb;
+        }
+    }
+
+    assert_eq!(rec_exp[..], *exp, "Exponent decomposition mismatch");
+
+    out
 }
 
 /// Compute modular exponentiation from big-endian byte arrays
-///
-/// This function is designed to patch `fn modexp(&self, base: &[u8], exp: &[u8], modulus: &[u8]) -> Vec<u8>`
 ///
 /// ### Safety
 ///
@@ -265,31 +266,22 @@ pub unsafe extern "C" fn modexp_bytes_c(
     let exp_bytes = std::slice::from_raw_parts(exp_ptr, exp_len);
     let modulus_bytes = std::slice::from_raw_parts(modulus_ptr, modulus_len);
 
-    // Convert big-endian bytes to little-endian u64 arrays
-    let base_u64 = bytes_be_to_u64_le(base_bytes);
+    // Convert from big-endian bytes to little-endian u64/U256 arrays
+    let base_u256 = bytes_be_to_u256_le(base_bytes);
     let exp_u64 = bytes_be_to_u64_le(exp_bytes);
-    let modulus_u64 = bytes_be_to_u64_le(modulus_bytes);
+    let modulus_u256 = bytes_be_to_u256_le(modulus_bytes);
 
-    // Handle empty/zero cases
-    if modulus_u64.is_empty() || (modulus_u64.len() == 1 && modulus_u64[0] == 0) {
-        // modulus == 0: return all zeros
-        let result = std::slice::from_raw_parts_mut(result_ptr, modulus_len);
-        result.fill(0);
-        return modulus_len;
-    }
-
-    // Call the u64 version
-    let result_u64 = modexp_u64(
-        &base_u64,
+    let result_u256 = modexp(
+        &base_u256,
         &exp_u64,
-        &modulus_u64,
+        &modulus_u256,
         #[cfg(feature = "hints")]
         hints,
     );
 
     // Convert result back to big-endian bytes with proper length
     let result = std::slice::from_raw_parts_mut(result_ptr, modulus_len);
-    u64_le_to_bytes_be(&result_u64, result);
+    u256_le_to_bytes_be(&result_u256, result);
 
     modulus_len
 }
@@ -308,11 +300,9 @@ fn bytes_be_to_u64_le(bytes: &[u8]) -> Vec<u64> {
         return vec![0];
     }
 
-    // Calculate number of u64 limbs needed
-    let num_limbs = (bytes.len() + 7) / 8;
+    // Process bytes into u64 limbs
+    let num_limbs = bytes.len().div_ceil(8);
     let mut result = vec![0u64; num_limbs];
-
-    // Process bytes from the end (least significant) to the beginning
     for (i, &byte) in bytes.iter().rev().enumerate() {
         let limb_idx = i / 8;
         let byte_idx = i % 8;
@@ -322,18 +312,27 @@ fn bytes_be_to_u64_le(bytes: &[u8]) -> Vec<u64> {
     result
 }
 
-/// Convert little-endian u64 array to big-endian bytes with specified length
-fn u64_le_to_bytes_be(limbs: &[u64], output: &mut [u8]) {
+/// Convert big-endian bytes to little-endian U256 array
+fn bytes_be_to_u256_le(bytes: &[u8]) -> Vec<U256> {
+    let u64_le = bytes_be_to_u64_le(bytes);
+
+    // Pad to multiple of 4 u64s
+    let padded_len = u64_le.len().next_multiple_of(4);
+    let mut padded = vec![0u64; padded_len];
+    padded[..u64_le.len()].copy_from_slice(&u64_le);
+
+    U256::flat_to_slice(&padded).to_vec()
+}
+
+/// Convert little-endian U256 array to big-endian bytes
+fn u256_le_to_bytes_be(limbs: &[U256], output: &mut [u8]) {
+    let flat = U256::slice_to_flat(limbs);
     let out_len = output.len();
     output.fill(0);
 
-    // Calculate how many bytes the result actually has
-    let result_bytes = limbs.len() * 8;
-
-    for (i, &limb) in limbs.iter().enumerate() {
+    for (i, &limb) in flat.iter().enumerate() {
         for j in 0..8 {
             let byte_val = ((limb >> (j * 8)) & 0xFF) as u8;
-            // Position from the end of the result
             let pos_from_end = i * 8 + j;
             if pos_from_end < out_len {
                 output[out_len - 1 - pos_from_end] = byte_val;

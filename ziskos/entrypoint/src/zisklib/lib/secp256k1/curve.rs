@@ -63,81 +63,6 @@ pub fn secp256k1_decompress(
     Ok((*x, y))
 }
 
-/// Converts a non-infinity point `p` on the Secp256k1 curve from projective coordinates to affine coordinates
-pub fn secp256k1_to_affine(
-    p: &[u64; 12],
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> [u64; 8] {
-    let z: [u64; 4] = [p[8], p[9], p[10], p[11]];
-
-    // Point at infinity cannot be converted to affine
-    debug_assert!(z != ZERO_256, "Cannot convert point at infinity to affine");
-
-    let zinv = secp256k1_fp_inv(
-        &z,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    let zinv_sq = secp256k1_fp_square(
-        &zinv,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-
-    let x: [u64; 4] = [p[0], p[1], p[2], p[3]];
-    let y: [u64; 4] = [p[4], p[5], p[6], p[7]];
-
-    let x_res = secp256k1_fp_mul(
-        &x,
-        &zinv_sq,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-    let y_res = secp256k1_fp_mul(
-        &secp256k1_fp_mul(
-            &y,
-            &zinv_sq,
-            #[cfg(feature = "hints")]
-            hints,
-        ),
-        &zinv,
-        #[cfg(feature = "hints")]
-        hints,
-    );
-
-    [x_res[0], x_res[1], x_res[2], x_res[3], y_res[0], y_res[1], y_res[2], y_res[3]]
-}
-
-/// Given points `p1` and `p2`, performs the point addition `p1 + p2` and assigns the result to `p1`.
-/// It assumes that `p1` and `p2` are from the Secp256k1 curve, that `p1,p2 != 𝒪`
-/// Returns true if the result is the point at infinity.
-#[inline]
-fn secp256k1_add_non_infinity_points(
-    p1: &mut SyscallPoint256,
-    p2: &SyscallPoint256,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
-) -> bool {
-    if p1.x != p2.x {
-        let mut params = SyscallSecp256k1AddParams { p1, p2 };
-        syscall_secp256k1_add(
-            &mut params,
-            #[cfg(feature = "hints")]
-            hints,
-        );
-        false
-    } else if p1.y == p2.y {
-        syscall_secp256k1_dbl(
-            p1,
-            #[cfg(feature = "hints")]
-            hints,
-        );
-        false
-    } else {
-        // p1 + (-p1) = 𝒪
-        true
-    }
-}
-
 /// Checks whether the given point `p` is on the Secp256k1 curve.
 /// It assumes that `p` is not the point at infinity.
 pub fn secp256k1_is_on_curve(p: &[u64; 8], #[cfg(feature = "hints")] hints: &mut Vec<u64>) -> bool {
@@ -168,6 +93,36 @@ pub fn secp256k1_is_on_curve(p: &[u64; 8], #[cfg(feature = "hints")] hints: &mut
         hints,
     );
     eq(&lhs, &rhs)
+}
+
+/// Given points `p1` and `p2`, performs the point addition `p1 + p2` and assigns the result to `p1`.
+/// It assumes that `p1` and `p2` are from the Secp256k1 curve, that `p1,p2 != 𝒪`
+/// Returns true if the result is the point at infinity.
+#[inline]
+fn secp256k1_add_non_infinity_points(
+    p1: &mut SyscallPoint256,
+    p2: &SyscallPoint256,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> bool {
+    if p1.x != p2.x {
+        let mut params = SyscallSecp256k1AddParams { p1, p2 };
+        syscall_secp256k1_add(
+            &mut params,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        false
+    } else if p1.y == p2.y {
+        syscall_secp256k1_dbl(
+            p1,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        false
+    } else {
+        // p1 + (-p1) = 𝒪
+        true
+    }
 }
 
 /// Given a non-infinity point `p` and a scalar `k`, computes the scalar multiplication `k·p`

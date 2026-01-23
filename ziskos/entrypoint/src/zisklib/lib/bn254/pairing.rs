@@ -142,14 +142,14 @@ pub fn pairing_check_bn254(
 
         // If p = 𝒪 or q = 𝒪 => MillerLoop(P, 𝒪) = MillerLoop(𝒪, Q) = 1; we can skip
         if g2_is_inf {
-            if !g1_is_inf {
-                if !is_on_curve_bn254(
+            if !g1_is_inf
+                && !is_on_curve_bn254(
                     g1,
                     #[cfg(feature = "hints")]
                     hints,
-                ) {
-                    return Err(PAIRING_CHECK_ERR_G1_NOT_ON_CURVE);
-                }
+                )
+            {
+                return Err(PAIRING_CHECK_ERR_G1_NOT_ON_CURVE);
             }
             continue;
         }

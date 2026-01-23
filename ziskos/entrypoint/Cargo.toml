@@ -25,6 +25,7 @@ tiny-keccak = { version = "2.0.0", features = ["keccak"] }
 serde = { workspace = true, features = ["derive"] }
 bincode = "2.0"
 sha2 = { workspace = true }
+fields = { git = "https://github.com/0xPolygonHermez/pil2-proofman.git", branch = "pre-develop-0.16.0", features = ["verify"] }
 
 [features]
 default = []

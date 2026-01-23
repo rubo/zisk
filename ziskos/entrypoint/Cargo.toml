@@ -25,6 +25,7 @@ tiny-keccak = { version = "2.0.0", features = ["keccak"] }
 serde = { workspace = true, features = ["derive"] }
 bincode = "2.0"
 sha2 = { workspace = true }
+fields = { workspace = true }
 
 [features]
 default = []

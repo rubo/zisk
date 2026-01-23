@@ -1,5 +1,6 @@
 pub mod bls381;
 pub mod bn254;
+pub mod keccak256;
 pub mod kzg;
 pub mod modexp;
 pub mod secp256k1;

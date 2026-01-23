@@ -20,6 +20,7 @@ use ziskos_hints::handlers::bls381::{
 use ziskos_hints::handlers::bn254::{
     bn254_g1_add_hint, bn254_g1_mul_hint, bn254_pairing_check_hint,
 };
+use ziskos_hints::handlers::keccak256::keccak256_hint;
 use ziskos_hints::handlers::kzg::verify_kzg_proof_hint;
 use ziskos_hints::handlers::modexp::modexp_hint;
 use ziskos_hints::handlers::secp256k1::secp256k1_ecrecover_hint;
@@ -616,6 +617,9 @@ impl HintsProcessor {
 
             // KZG Hint Codes
             BuiltInHint::VerifyKzgProof => verify_kzg_proof_hint(&data), // TODO: check
+
+            // Keccak256 Hint Codes
+            BuiltInHint::Keccak256 => keccak256_hint(&data, data_len_bytes),
         }
     }
 }

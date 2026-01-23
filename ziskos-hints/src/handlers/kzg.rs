@@ -19,15 +19,16 @@ pub fn verify_kzg_proof_hint(data: &[u64]) -> Result<Vec<u64>> {
         bytes[PROOF_OFFSET..PROOF_OFFSET + PROOF_SIZE].try_into().unwrap();
 
     let mut hints = Vec::new();
-    unsafe {
+    let result = unsafe {
         zisklib::verify_kzg_proof_c(
             z.as_ptr(),
             y.as_ptr(),
             commitment.as_ptr(),
             proof.as_ptr(),
             &mut hints,
-        );
-    }
+        )
+    };
+    println!("KZG result: {}", result);
 
     Ok(hints)
 }

@@ -86,6 +86,9 @@ const HINT_MODEXP: u32 = 0x0500;
 // KZG hint codes
 const HINT_VERIFY_KZG_PROOF: u32 = 0x0600;
 
+// Keccak256 hint codes
+const HINT_KECCAK256: u32 = 0x0700;
+
 /// Control code variants for stream control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -171,6 +174,10 @@ pub enum BuiltInHint {
     // KZG hint types.
     /// Verify KZG proof.
     VerifyKzgProof = HINT_VERIFY_KZG_PROOF,
+
+    // Keccak256 hint types.
+    /// Compute Keccak-256 hash.
+    Keccak256 = HINT_KECCAK256,
 }
 
 impl Display for BuiltInHint {
@@ -197,6 +204,8 @@ impl Display for BuiltInHint {
             BuiltInHint::ModExp => "MODEXP",
             // KZG Hint
             BuiltInHint::VerifyKzgProof => "VERIFY_KZG_PROOF",
+            // Keccak256 Hint
+            BuiltInHint::Keccak256 => "KECCAK256",
         };
 
         write!(f, "{} ({:#x})", name, *self as u32)
@@ -229,6 +238,8 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_MODEXP => Ok(Self::ModExp),
             // KZG Hint
             HINT_VERIFY_KZG_PROOF => Ok(Self::VerifyKzgProof),
+            // Keccak256 Hint
+            HINT_KECCAK256 => Ok(Self::Keccak256),
             _ => Err(anyhow::anyhow!("Invalid built-in hint code: {:#x}", value)),
         }
     }
@@ -308,6 +319,8 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::ModExp) => HINT_MODEXP,
             // KZG Hint
             HintCode::BuiltIn(BuiltInHint::VerifyKzgProof) => HINT_VERIFY_KZG_PROOF,
+            // Keccak256 Hint
+            HintCode::BuiltIn(BuiltInHint::Keccak256) => HINT_KECCAK256,
 
             // Custom Hints
             HintCode::Custom(code) => code,

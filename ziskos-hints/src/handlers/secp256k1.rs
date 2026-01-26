@@ -1,4 +1,4 @@
-use crate::handlers::validate_hint_min_length;
+use crate::handlers::validate_hint_length;
 use crate::hint_fields;
 use crate::zisklib;
 
@@ -9,9 +9,9 @@ use anyhow::Result;
 pub fn secp256k1_ecrecover_hint(data: &[u64]) -> Result<Vec<u64>> {
     hint_fields![SIG: 64, RECID: 8, MSG: 32, LO_S: 1];
 
-    validate_hint_min_length(data, EXPECTED_LEN_U64, "HINT_SECP256K1_ECRECOVER")?;
+    let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 8) };
 
-    let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, EXPECTED_LEN) };
+    validate_hint_length(bytes, EXPECTED_LEN, "HINT_SECP256K1_ECRECOVER")?;
 
     let sig: &[u8; SIG_SIZE] = bytes[SIG_OFFSET..SIG_OFFSET + SIG_SIZE].try_into().unwrap();
     let recid: &[u8; RECID_SIZE] =

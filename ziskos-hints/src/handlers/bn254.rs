@@ -1,7 +1,4 @@
-use crate::{
-    handlers::{validate_hint_length, validate_hint_min_length},
-    hint_fields, zisklib,
-};
+use crate::{handlers::validate_hint_length, hint_fields, zisklib};
 
 use anyhow::Result;
 
@@ -12,7 +9,7 @@ pub fn bn254_g1_add_hint(data: &[u64]) -> Result<Vec<u64>> {
 
     let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 8) };
 
-    validate_hint_min_length(bytes, EXPECTED_LEN, "HINT_BN254_G1_ADD")?;
+    validate_hint_length(bytes, EXPECTED_LEN, "HINT_BN254_G1_ADD")?;
 
     let p1: &[u8; P1_SIZE] = bytes[P1_OFFSET..P1_OFFSET + P1_SIZE].try_into().unwrap();
     let p2: &[u8; P2_SIZE] = bytes[P2_OFFSET..P2_OFFSET + P2_SIZE].try_into().unwrap();
@@ -33,7 +30,7 @@ pub fn bn254_g1_mul_hint(data: &[u64]) -> Result<Vec<u64>> {
 
     let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 8) };
 
-    validate_hint_min_length(bytes, EXPECTED_LEN, "HINT_BN254_G1_MUL")?;
+    validate_hint_length(bytes, EXPECTED_LEN, "HINT_BN254_G1_MUL")?;
 
     let point: &[u8; POINT_SIZE] =
         bytes[POINT_OFFSET..POINT_OFFSET + POINT_SIZE].try_into().unwrap();

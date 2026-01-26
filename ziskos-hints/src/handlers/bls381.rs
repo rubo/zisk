@@ -1,7 +1,4 @@
-use crate::{
-    handlers::{validate_hint_length, validate_hint_min_length},
-    hint_fields, zisklib,
-};
+use crate::{handlers::validate_hint_length, hint_fields, zisklib};
 
 use anyhow::Result;
 
@@ -12,7 +9,7 @@ pub fn bls12_381_g1_add_hint(data: &[u64]) -> Result<Vec<u64>> {
 
     let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 8) };
 
-    validate_hint_min_length(bytes, EXPECTED_LEN, "HINT_BLS12_381_G1_ADD")?;
+    validate_hint_length(bytes, EXPECTED_LEN, "HINT_BLS12_381_G1_ADD")?;
 
     let a: &[u8; A_SIZE] = bytes[A_OFFSET..A_OFFSET + A_SIZE].try_into().unwrap();
     let b: &[u8; B_SIZE] = bytes[B_OFFSET..B_OFFSET + B_SIZE].try_into().unwrap();
@@ -64,7 +61,7 @@ pub fn bls12_381_g2_add_hint(data: &[u64]) -> Result<Vec<u64>> {
 
     let bytes = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 8) };
 
-    validate_hint_min_length(bytes, EXPECTED_LEN, "HINT_BLS12_381_G2_ADD")?;
+    validate_hint_length(bytes, EXPECTED_LEN, "HINT_BLS12_381_G2_ADD")?;
 
     let a: &[u8; A_SIZE] = bytes[A_OFFSET..A_OFFSET + A_SIZE].try_into().unwrap();
     let b: &[u8; B_SIZE] = bytes[B_OFFSET..B_OFFSET + B_SIZE].try_into().unwrap();

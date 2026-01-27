@@ -1,4 +1,4 @@
-use crate::{handlers::validate_hint_length, hint_fields, zisklib::verify_kzg_proof};
+use crate::{handlers::validate_hint_length, hint_fields, zisklib};
 
 use anyhow::Result;
 
@@ -19,8 +19,15 @@ pub fn verify_kzg_proof_hint(data: &[u64]) -> Result<Vec<u64>> {
         bytes[PROOF_OFFSET..PROOF_OFFSET + PROOF_SIZE].try_into().unwrap();
 
     let mut hints = Vec::new();
-
-    verify_kzg_proof(z, y, commitment, proof, &mut hints);
+    unsafe {
+        zisklib::verify_kzg_proof_c(
+            z.as_ptr(),
+            y.as_ptr(),
+            commitment.as_ptr(),
+            proof.as_ptr(),
+            &mut hints,
+        )
+    };
 
     Ok(hints)
 }

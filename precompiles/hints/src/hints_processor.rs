@@ -10,7 +10,7 @@ use std::collections::{HashMap, VecDeque};
 use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
-use tracing::debug;
+use tracing::{debug, info};
 use zisk_common::io::{StreamProcessor, StreamSink};
 use zisk_common::{BuiltInHint, CtrlHint, HintCode, PrecompileHint};
 use ziskos_hints::handlers::bls381::{
@@ -269,7 +269,14 @@ impl HintsProcessor {
                 if ALLOW_UNALIGNED { hint.data_len_bytes } else { hint.data.len() } + HEADER_SIZE;
 
             if let Some(stats) = &self.stats {
-                stats.lock().unwrap().entry(hint.hint_code).and_modify(|c| *c += 1).or_insert(1);
+                if !matches!(hint.hint_code, HintCode::Ctrl(_)) {
+                    stats
+                        .lock()
+                        .unwrap()
+                        .entry(hint.hint_code)
+                        .and_modify(|c| *c += 1)
+                        .or_insert(1);
+                }
             }
 
             // Check if this is a control code
@@ -363,12 +370,12 @@ impl HintsProcessor {
 
         if has_ctrl_end {
             if let Some(stats) = &self.stats {
-                debug!("Processed hints stats:");
+                info!("Hints stats:");
                 let stats = stats.lock().unwrap();
                 let mut sorted_stats: Vec<_> = stats.iter().collect();
                 sorted_stats.sort_by_key(|(&hint_code, _)| hint_code.to_u32());
                 for (hint_code, count) in sorted_stats {
-                    debug!("Hint type {}: {}", hint_code, count);
+                    info!("    {}: {}", hint_code, count);
                 }
             }
         }

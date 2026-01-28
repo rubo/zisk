@@ -15,7 +15,8 @@ use tracing::{debug, info};
 use zisk_common::io::{StreamProcessor, StreamSink};
 use zisk_common::{BuiltInHint, CtrlHint, HintCode, PrecompileHint};
 use ziskos_hints::handlers::bls381::{
-    bls12_381_g1_add_hint, bls12_381_g1_msm_hint, bls12_381_g2_add_hint, bls12_381_g2_msm_hint,
+    bls12_381_fp2_to_g2_hint, bls12_381_fp_to_g1_hint, bls12_381_g1_add_hint,
+    bls12_381_g1_msm_hint, bls12_381_g2_add_hint, bls12_381_g2_msm_hint,
     bls12_381_pairing_check_hint,
 };
 use ziskos_hints::handlers::bn254::{
@@ -646,8 +647,8 @@ impl HintsProcessor {
             BuiltInHint::Bls12_381G2Add => bls12_381_g2_add_hint(&data), // TODO: check
             BuiltInHint::Bls12_381G2Msm => bls12_381_g2_msm_hint(&data), // TODO: check
             BuiltInHint::Bls12_381PairingCheck => bls12_381_pairing_check_hint(&data), // TODO: check
-            BuiltInHint::Bls12_381FpToG1 => unimplemented!(),
-            BuiltInHint::Bls12_381Fp2ToG2 => unimplemented!(),
+            BuiltInHint::Bls12_381FpToG1 => bls12_381_fp_to_g1_hint(&data),
+            BuiltInHint::Bls12_381Fp2ToG2 => bls12_381_fp2_to_g2_hint(&data),
 
             // Modular Exponentiation Hint Codes
             BuiltInHint::ModExp => modexp_hint(&data), // TODO: check

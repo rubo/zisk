@@ -1,9 +1,9 @@
-mod hint_buffer;
-mod macros;
 mod bls12_381;
 mod bn254;
+mod hint_buffer;
 mod keccak256;
 mod kzg;
+mod macros;
 mod modexp;
 mod secp256k1;
 mod sha256f;
@@ -11,13 +11,16 @@ mod sha256f;
 #[cfg(zisk_hints_metrics)]
 mod metrics;
 
-use crate::hints::hint_buffer::{build_hint_buffer,  HintBuffer};
+use crate::hints::hint_buffer::{build_hint_buffer, HintBuffer};
 use once_cell::sync::Lazy;
-use std::{io::{self, BufWriter, Write}, sync::Arc};
+use std::cell::UnsafeCell;
 use std::path::PathBuf;
 use std::thread::{self, JoinHandle, ThreadId};
 use std::{ffi::CStr, os::raw::c_char};
-use std::cell::UnsafeCell;
+use std::{
+    io::{self, BufWriter, Write},
+    sync::Arc,
+};
 
 #[cfg(zisk_hints_single_thread)]
 use once_cell::sync::OnceCell;
@@ -34,7 +37,8 @@ pub const HINT_START: u32 = 0;
 pub const HINT_END: u32 = 1;
 
 static HINT_BUFFER: Lazy<Arc<HintBuffer>> = Lazy::new(|| build_hint_buffer());
-static HINT_FILE_WRITER_HANDLE: Lazy<HintFileWriterHandleCell> = Lazy::new(HintFileWriterHandleCell::new);
+static HINT_FILE_WRITER_HANDLE: Lazy<HintFileWriterHandleCell> =
+    Lazy::new(HintFileWriterHandleCell::new);
 
 pub struct HintFileWriterHandleCell {
     inner: UnsafeCell<Option<JoinHandle<io::Result<()>>>>,
@@ -44,9 +48,7 @@ unsafe impl Sync for HintFileWriterHandleCell {}
 
 impl HintFileWriterHandleCell {
     pub const fn new() -> Self {
-        Self {
-            inner: UnsafeCell::new(None),
-        }
+        Self { inner: UnsafeCell::new(None) }
     }
 
     pub fn take(&self) -> Option<JoinHandle<io::Result<()>>> {
@@ -97,12 +99,10 @@ pub fn close_precompile_hints() -> io::Result<()> {
     let handle = HINT_FILE_WRITER_HANDLE.take();
     if let Some(handle) = handle {
         match handle.join() {
-            Ok(result) => {
-                match result {
-                    Ok(()) => Ok(()),
-                    Err(e) => return Err(e),
-                }
-            }
+            Ok(result) => match result {
+                Ok(()) => Ok(()),
+                Err(e) => return Err(e),
+            },
             Err(e) => Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("Failed precompile hints writer thread, error: {:?}", e),

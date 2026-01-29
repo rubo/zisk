@@ -213,6 +213,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
                         .expect("zisk_lib: Failed to create HintsShmem");
 
                 HintsProcessor::builder(hints_shmem)
+                    .enable_stats(self.verbose_mode != proofman_common::VerboseMode::Info)
                     .build()
                     .expect("zisk_lib: Failed to create PrecompileHintsProcessor")
             } else {
@@ -220,6 +221,7 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
                     .expect("zisk_lib: Failed to create HintsFile");
 
                 HintsProcessor::builder(hints_file)
+                    .enable_stats(self.verbose_mode != proofman_common::VerboseMode::Info)
                     .build()
                     .expect("zisk_lib: Failed to create PrecompileHintsProcessor")
             };

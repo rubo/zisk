@@ -334,7 +334,13 @@ impl HintsProcessor {
                         (rate, "Hz")
                     };
 
-                    info!("Processed {} hints in {:?} ({:.2} {})", num_hints, elapsed, value, unit);
+                    info!(
+                        "Processed {} hints in {:.0?} ({}{})",
+                        num_hints,
+                        elapsed,
+                        value.round(),
+                        unit
+                    );
 
                     break;
                 }

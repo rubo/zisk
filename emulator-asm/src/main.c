@@ -136,6 +136,7 @@ extern uint64_t MEM_CHUNK_ADDRESS;
 extern uint64_t MEM_CHUNK_START_STEP;
 
 uint64_t realloc_counter = 0;
+uint64_t wait_counter = 0;
 
 extern void zisk_keccakf(uint64_t state[25]);
 /* Used for debugging
@@ -3834,9 +3835,10 @@ void server_run (void)
         uint64_t step_duration_ns = steps == 0 ? 0 : (duration * 1000) / steps;
         uint64_t step_tp_sec = duration == 0 ? 0 : steps * 1000000 / duration;
         uint64_t final_trace_size_percentage = (final_trace_size * 100) / trace_size;
-        printf("Duration = %lu us, realloc counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%%), end=%lu, error=%lu, max steps=%lu, chunk size=%lu\n",
+        printf("Duration = %lu us, realloc counter = %lu, wait counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%%), end=%lu, error=%lu, max steps=%lu, chunk size=%lu\n",
             duration,
             realloc_counter,
+            wait_counter,
             steps,
             step_duration_ns,
             step_tp_sec,
@@ -4950,6 +4952,9 @@ void file_lock(void)
 
 int _wait_for_prec_avail (void)
 {
+    // Increment wait counter
+    wait_counter++;
+
     // Sync precompile shared memory
     if (msync((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE, MS_SYNC) != 0) {
         printf("ERROR: 1 msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));

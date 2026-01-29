@@ -205,7 +205,6 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         // Create hints pipeline with null hints stream initially.
         // Debug flag: true = HintsShmem (shared memory), false = HintsFile (file output)
         let hints_stream = if self.with_hints {
-            println!("Initializing zisk_lib with hints stream.");
             const USE_SHARED_MEMORY_HINTS: bool = true;
 
             let hints_processor = if USE_SHARED_MEMORY_HINTS {
@@ -227,7 +226,6 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
 
             Some(ZiskStream::new(hints_processor))
         } else {
-            println!("Initializing zisk_lib without hints stream.");
             None
         };
 

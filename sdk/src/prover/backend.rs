@@ -9,6 +9,8 @@ use fields::Goldilocks;
 use proofman::{AggProofs, ProofInfo, ProofMan, ProvePhase, ProvePhaseInputs, ProvePhaseResult};
 use proofman_common::{DebugInfo, ProofOptions};
 use std::{fs::File, io::Write, path::PathBuf};
+#[cfg(feature = "stats")]
+use zisk_common::ExecutorStatsEvent;
 use zisk_common::{
     io::{StreamSource, ZiskStdin},
     ExecutorStatsHandle, ProofLog, ZiskExecutionResult, ZiskLib,
@@ -151,10 +153,15 @@ impl ProverBackend {
         // Store the stats in stats.json
         #[cfg(feature = "stats")]
         {
-            let mut _stats = stats.get_inner().lock().unwrap();
-            let stats_id = _stats.next_id();
-            _stats.add_stat(0, stats_id, "END", 0, ExecutorStatsEvent::Mark);
-            _stats.store_stats();
+            let stats_id = stats.get_inner().lock().unwrap().next_id();
+            stats.get_inner().lock().unwrap().add_stat(
+                0,
+                stats_id,
+                "END",
+                0,
+                ExecutorStatsEvent::Mark,
+            );
+            stats.get_inner().lock().unwrap().store_stats();
         }
 
         Ok(ZiskVerifyConstraintsResult { execution: result, duration: elapsed, stats })
@@ -242,10 +249,15 @@ impl ProverBackend {
         // Store the stats in stats.json
         #[cfg(feature = "stats")]
         {
-            let mut _stats = stats.get_inner().lock().unwrap();
-            let stats_id = _stats.next_id();
-            _stats.add_stat(0, stats_id, "END", 0, ExecutorStatsEvent::Mark);
-            _stats.store_stats();
+            let stats_id = stats.get_inner().lock().unwrap().next_id();
+            stats.get_inner().lock().unwrap().add_stat(
+                0,
+                stats_id,
+                "END",
+                0,
+                ExecutorStatsEvent::Mark,
+            );
+            stats.get_inner().lock().unwrap().store_stats();
         }
 
         self.proofman.set_barrier();

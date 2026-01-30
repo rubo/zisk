@@ -1,0 +1,57 @@
+use crate::{
+    syscalls::{
+        syscall_secp256r1_add, syscall_secp256r1_dbl, SyscallPoint256, SyscallSecp256r1AddParams,
+    },
+    zisklib::{
+        eq, fcall_msb_pos_256, fcall_secp256r1_ecdsa_verify, is_one, ONE_256, TWO_256, ZERO_256,
+    },
+};
+
+use super::{
+    constants::{E_B, G_X, G_Y, IDENTITY_X, IDENTITY_Y},
+    curve::{secp256r1_is_on_curve, secp256r1_triple_scalar_mul_with_g},
+    field::{secp256r1_fp_add, secp256r1_fp_mul, secp256r1_fp_square},
+    scalar::secp256r1_fn_neg,
+};
+
+/// Verifies the signature (r, s) over the message hash z using the public key pk
+/// Returns true if the signature is valid, false otherwise
+pub fn secp256r1_ecdsa_verify(pk: &[u64; 8], z: &[u64; 4], r: &[u64; 4], s: &[u64; 4]) -> bool {
+    // Ecdsa verification computes (x, y) = [s⁻¹·z (mod n)]G + [s⁻¹·r (mod n)]PK
+    // and checks that x ≡ r (mod n)
+    // We can equivalently hint y, and verify that
+    //   [z]G + [r]PK + [-s](r,y) == 𝒪,
+    // saving us from expensive fn arithmetic
+
+    // Hint the result
+    let coords = fcall_secp256r1_ecdsa_verify(pk, z, r, s);
+    let point = [r[0], r[1], r[2], r[3], coords[4], coords[5], coords[6], coords[7]];
+
+    // Check the recovered point is valid
+    assert!(secp256r1_is_on_curve(&point)); // Note: Identity point would be raised here
+
+    // Check that [z]G + [r]PK + [-s](r,y) == 𝒪
+    let neg_s = secp256r1_fn_neg(s);
+    secp256r1_triple_scalar_mul_with_g(z, r, &neg_s, pk, &point).is_none()
+}
+
+// ==================== C FFI Functions ====================
+
+/// # Safety
+/// - `pk_ptr` must point to 8 u64s
+/// - `z_ptr`, `r_ptr`, `s_ptr` must point to 4 u64s each
+///
+/// Returns true if signature is valid
+#[no_mangle]
+pub unsafe extern "C" fn secp256r1_ecdsa_verify_c(
+    pk_ptr: *const u64,
+    z_ptr: *const u64,
+    r_ptr: *const u64,
+    s_ptr: *const u64,
+) -> bool {
+    let pk: &[u64; 8] = &*(pk_ptr as *const [u64; 8]);
+    let z: &[u64; 4] = &*(z_ptr as *const [u64; 4]);
+    let r: &[u64; 4] = &*(r_ptr as *const [u64; 4]);
+    let s: &[u64; 4] = &*(s_ptr as *const [u64; 4]);
+    secp256r1_ecdsa_verify(pk, z, r, s)
+}

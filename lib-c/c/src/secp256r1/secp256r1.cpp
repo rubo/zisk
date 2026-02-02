@@ -30,9 +30,10 @@ int inline secp256r1_add_point_ec_fe (bool dbl, const RawpSecp256r1::Element &x1
 
     if (dbl)
     {
-        // s = 3*x1*x1/2*y1
+        // s = (3*x1*x1 + (p-3))/2*y1 = 3*(x1^2 - 1)/2*y1
         secp256r1.mul(aux1, x1, x1);
         secp256r1.fromUI(aux2, 3);
+        secp256r1.add(aux1, aux1, secp256r1.negOne());
         secp256r1.mul(aux1, aux1, aux2);
         secp256r1.add(aux2, y1, y1);
         if (secp256r1.isZero(aux2))

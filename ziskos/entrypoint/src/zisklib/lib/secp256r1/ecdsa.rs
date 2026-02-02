@@ -111,22 +111,48 @@ pub fn secp256r1_ecdsa_verify(
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_secp256r1_ecdsa_verify_c")]
 pub unsafe extern "C" fn secp256r1_ecdsa_verify_c(
-    msg_ptr: *const u64,
-    sig_ptr: *const u64,
-    pk_ptr: *const u64,
+    msg: *const u8,
+    sig: *const u8,
+    pk: *const u8,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> bool {
-    let msg: &[u64; 4] = &*(msg_ptr as *const [u64; 4]);
-    let sig: &[u64; 8] = &*(sig_ptr as *const [u64; 8]);
-    let pk: &[u64; 8] = &*(pk_ptr as *const [u64; 8]);
-    let r: &[u64; 4] = &sig[0..4].try_into().unwrap();
-    let s: &[u64; 4] = &sig[4..8].try_into().unwrap();
+    let msg_bytes: &[u8; 32] = &*(msg as *const [u8; 32]);
+    let sig_bytes: &[u8; 64] = &*(sig as *const [u8; 64]);
+    let pk_bytes: &[u8; 64] = &*(pk as *const [u8; 64]);
+
+    // Parse r, s from big-endian bytes
+    let r_bytes: [u8; 32] = sig_bytes[0..32].try_into().unwrap();
+    let s_bytes: [u8; 32] = sig_bytes[32..64].try_into().unwrap();
+
+    // Parse pk_x, pk_y from big-endian bytes
+    let pk_x_bytes: [u8; 32] = pk_bytes[0..32].try_into().unwrap();
+    let pk_y_bytes: [u8; 32] = pk_bytes[32..64].try_into().unwrap();
+
+    // Convert to little-endian u64 limbs
+    let z = bytes_be_to_u64_le(msg_bytes);
+    let r = bytes_be_to_u64_le(&r_bytes);
+    let s = bytes_be_to_u64_le(&s_bytes);
+    let pk_x = bytes_be_to_u64_le(&pk_x_bytes);
+    let pk_y = bytes_be_to_u64_le(&pk_y_bytes);
+
+    let pk: [u64; 8] = [pk_x[0], pk_x[1], pk_x[2], pk_x[3], pk_y[0], pk_y[1], pk_y[2], pk_y[3]];
     secp256r1_ecdsa_verify(
-        pk,
-        msg,
-        r,
-        s,
+        &pk,
+        &z,
+        &r,
+        &s,
         #[cfg(feature = "hints")]
         hints,
     )
+}
+
+/// Convert big-endian bytes to little-endian u64 limbs (32 bytes -> [u64; 4])
+fn bytes_be_to_u64_le(bytes: &[u8; 32]) -> [u64; 4] {
+    let mut result = [0u64; 4];
+    for i in 0..4 {
+        for j in 0..8 {
+            result[3 - i] |= (bytes[i * 8 + j] as u64) << (8 * (7 - j));
+        }
+    }
+    result
 }

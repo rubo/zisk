@@ -8,7 +8,13 @@ use super::{
 
 /// Verifies the signature (r, s) over the message hash z using the public key pk
 /// Returns true if the signature is valid, false otherwise
-pub fn secp256r1_ecdsa_verify(pk: &[u64; 8], z: &[u64; 4], r: &[u64; 4], s: &[u64; 4]) -> bool {
+pub fn secp256r1_ecdsa_verify(
+    pk: &[u64; 8],
+    z: &[u64; 4],
+    r: &[u64; 4],
+    s: &[u64; 4],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> bool {
     // r and s must be in the range [1, n-1]
     if is_zero(r) || gt(r, &N_MINUS_ONE) {
         return false;
@@ -28,7 +34,11 @@ pub fn secp256r1_ecdsa_verify(pk: &[u64; 8], z: &[u64; 4], r: &[u64; 4], s: &[u6
     if gt(&pk_x, &P_MINUS_ONE) || gt(&pk_y, &P_MINUS_ONE) {
         return false;
     }
-    if !secp256r1_is_on_curve(pk) {
+    if !secp256r1_is_on_curve(
+        pk,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         return false;
     }
 
@@ -39,23 +49,55 @@ pub fn secp256r1_ecdsa_verify(pk: &[u64; 8], z: &[u64; 4], r: &[u64; 4], s: &[u6
     // and ensure that x ≡ r (mod n), saving us from expensive fn arithmetic
 
     // Hint the result
-    let point = fcall_secp256r1_ecdsa_verify(pk, z, r, s);
+    let point = fcall_secp256r1_ecdsa_verify(
+        pk,
+        z,
+        r,
+        s,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     // Check the recovered point is valid
     // Note: Identity point would be raised here
-    if !secp256r1_is_on_curve(&point) {
+    if !secp256r1_is_on_curve(
+        &point,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         return false;
     }
 
     // Check that [z]G + [r]PK + [-s](x,y) == 𝒪
-    let neg_s = secp256r1_fn_neg(s);
-    if secp256r1_triple_scalar_mul_with_g(z, r, &neg_s, pk, &point).is_some() {
+    let neg_s = secp256r1_fn_neg(
+        s,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    if secp256r1_triple_scalar_mul_with_g(
+        z,
+        r,
+        &neg_s,
+        pk,
+        &point,
+        #[cfg(feature = "hints")]
+        hints,
+    )
+    .is_some()
+    {
         return false;
     }
 
     // Check that x ≡ r (mod n)
     let point_x: [u64; 4] = [point[0], point[1], point[2], point[3]];
-    eq(&secp256r1_fn_reduce(&point_x), r)
+    eq(
+        &secp256r1_fn_reduce(
+            &point_x,
+            #[cfg(feature = "hints")]
+            hints,
+        ),
+        r,
+    )
 }
 
 // ==================== C FFI Functions ====================
@@ -66,16 +108,25 @@ pub fn secp256r1_ecdsa_verify(pk: &[u64; 8], z: &[u64; 4], r: &[u64; 4], s: &[u6
 /// - `pk_ptr` must point to 8 u64s
 ///
 /// Returns true if signature is valid
-#[no_mangle]
+#[cfg_attr(not(feature = "hints"), no_mangle)]
+#[cfg_attr(feature = "hints", export_name = "hints_secp256r1_ecdsa_verify_c")]
 pub unsafe extern "C" fn secp256r1_ecdsa_verify_c(
     msg_ptr: *const u64,
     sig_ptr: *const u64,
     pk_ptr: *const u64,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> bool {
     let msg: &[u64; 4] = &*(msg_ptr as *const [u64; 4]);
     let sig: &[u64; 8] = &*(sig_ptr as *const [u64; 8]);
     let pk: &[u64; 8] = &*(pk_ptr as *const [u64; 8]);
     let r: &[u64; 4] = &sig[0..4].try_into().unwrap();
     let s: &[u64; 4] = &sig[4..8].try_into().unwrap();
-    secp256r1_ecdsa_verify(pk, msg, r, s)
+    secp256r1_ecdsa_verify(
+        pk,
+        msg,
+        r,
+        s,
+        #[cfg(feature = "hints")]
+        hints,
+    )
 }

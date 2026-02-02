@@ -5,7 +5,10 @@ use crate::{
 
 use super::constants::{N, N_MINUS_ONE};
 
-pub fn secp256r1_fn_reduce(x: &[u64; 4]) -> [u64; 4] {
+pub fn secp256r1_fn_reduce(
+    x: &[u64; 4],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 4] {
     if lt(x, &N) {
         return *x;
     }
@@ -18,12 +21,16 @@ pub fn secp256r1_fn_reduce(x: &[u64; 4]) -> [u64; 4] {
         module: &N,
         d: &mut [0, 0, 0, 0],
     };
-    syscall_arith256_mod(&mut params);
+    syscall_arith256_mod(
+        &mut params,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *params.d
 }
 
-pub fn secp256r1_fn_neg(x: &[u64; 4]) -> [u64; 4] {
+pub fn secp256r1_fn_neg(x: &[u64; 4], #[cfg(feature = "hints")] hints: &mut Vec<u64>) -> [u64; 4] {
     // x·(-1) + 0
     let mut params = SyscallArith256ModParams {
         a: x,
@@ -32,7 +39,11 @@ pub fn secp256r1_fn_neg(x: &[u64; 4]) -> [u64; 4] {
         module: &N,
         d: &mut [0, 0, 0, 0],
     };
-    syscall_arith256_mod(&mut params);
+    syscall_arith256_mod(
+        &mut params,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *params.d
 }

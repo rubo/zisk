@@ -104,11 +104,7 @@ pub unsafe extern "C" fn keccak256_c(
 /// - `output` must point to a writable buffer of at least 32 bytes
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_native_keccak256_c")]
-pub unsafe extern "C" fn native_keccak256(
-    bytes: *const u8,
-    len: usize,
-    output: *mut u8,
-) {
+pub unsafe extern "C" fn native_keccak256(bytes: *const u8, len: usize, output: *mut u8) {
     #[cfg(zisk_hints)]
     crate::hints::hint_keccak256(bytes, len);
 

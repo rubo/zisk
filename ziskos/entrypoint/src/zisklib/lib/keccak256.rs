@@ -108,7 +108,6 @@ pub unsafe extern "C" fn native_keccak256(
     bytes: *const u8,
     len: usize,
     output: *mut u8,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     #[cfg(zisk_hints)]
     crate::hints::hint_keccak256(bytes, len);
@@ -144,13 +143,5 @@ pub unsafe extern "C" fn native_keccak256(
         let mut hasher = Keccak::v256();
         hasher.update(input_bytes);
         hasher.finalize(out);
-
-        #[cfg(feature = "hints")]
-        {
-            const OUT_LEN_WORDS: usize = OUT_LEN / std::mem::size_of::<u64>();
-            let out_u64: &[u64] =
-                unsafe { core::slice::from_raw_parts(out.as_ptr() as *const u64, OUT_LEN_WORDS) };
-            hints.extend_from_slice(out_u64);
-        }
     }
 }

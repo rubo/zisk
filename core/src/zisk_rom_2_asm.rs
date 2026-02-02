@@ -51,7 +51,7 @@ const REG_CHUNK_PLAYER_ADDRESS: &str = "rbp"; // Used only in chunk player
 //   - rsp
 
 // Only used to calculate histogram position for every rom pc
-const TRACE_ADDR_NUMBER: u64 = 0xc0000020;
+const TRACE_ADDR_NUMBER: u64 = 0xd0000000 + 0x20;
 
 // Fcall params and result lengths
 const FCALL_PARAMS_LENGTH: u64 = 386;

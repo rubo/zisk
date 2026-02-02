@@ -372,6 +372,7 @@ void secp256r1_curve_dbl(
     // Calculate lambda = (3*x1^2) / (2*y1)
     RawpSecp256r1::Element x1_sq;
     secp256r1.square(x1_sq, x_fe);
+    secp256r1.add(x1_sq, x1_sq, secp256r1.negOne());
     RawpSecp256r1::Element three;
     secp256r1.fromUI(three, 3);
     RawpSecp256r1::Element three_x1_sq;

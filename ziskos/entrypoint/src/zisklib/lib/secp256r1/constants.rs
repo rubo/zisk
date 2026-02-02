@@ -9,6 +9,7 @@ pub const E_B: [u64; 4] =
 /// Secp256r1 base field size
 pub const P: [u64; 4] =
     [0xFFFF_FFFF_FFFF_FFFF, 0x0000_0000_FFFF_FFFF, 0x0000_0000_0000_0000, 0xFFFF_FFFF_0000_0001];
+pub const P_MINUS_ONE: [u64; 4] = [P[0] - 1, P[1], P[2], P[3]];
 
 /// Secp256r1 scalar field size
 pub const N: [u64; 4] =
@@ -18,6 +19,16 @@ pub const N_MINUS_ONE: [u64; 4] = [N[0] - 1, N[1], N[2], N[3]];
 /// Secp256r1 group identity point
 pub const IDENTITY_X: [u64; 4] = [0; 4];
 pub const IDENTITY_Y: [u64; 4] = [0; 4];
+pub const IDENTITY: [u64; 8] = [
+    IDENTITY_X[0],
+    IDENTITY_X[1],
+    IDENTITY_X[2],
+    IDENTITY_X[3],
+    IDENTITY_Y[0],
+    IDENTITY_Y[1],
+    IDENTITY_Y[2],
+    IDENTITY_Y[3],
+];
 
 /// Secp256r1 group of points generator
 pub const G_X: [u64; 4] =

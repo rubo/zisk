@@ -199,7 +199,11 @@ pub fn secp256k1_fp_sqrt(
 /// - `out_ptr` must point to at least 4 u64s
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_reduce_c")]
-pub unsafe extern "C" fn secp256k1_fp_reduce_c(x_ptr: *const u64, out_ptr: *mut u64, #[cfg(feature = "hints")] hints: &mut Vec<u64>) {
+pub unsafe extern "C" fn secp256k1_fp_reduce_c(
+    x_ptr: *const u64,
+    out_ptr: *mut u64,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     let x: &[u64; 4] = &*(x_ptr as *const [u64; 4]);
 
     if lt(x, &P) {
@@ -246,7 +250,11 @@ pub unsafe extern "C" fn secp256k1_fp_add_c(
 
     let mut params =
         SyscallArith256ModParams { a: x, b: &[1, 0, 0, 0], c: y, module: &P, d: &mut [0, 0, 0, 0] };
-    syscall_arith256_mod(&mut params, #[cfg(feature = "hints")] hints, );
+    syscall_arith256_mod(
+        &mut params,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *out_ptr.add(0) = params.d[0];
     *out_ptr.add(1) = params.d[1];
@@ -259,7 +267,11 @@ pub unsafe extern "C" fn secp256k1_fp_add_c(
 /// - `out_ptr` must point to at least 4 u64s
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_secp256k1_fp_negate_c")]
-pub unsafe extern "C" fn secp256k1_fp_negate_c(x_ptr: *const u64, out_ptr: *mut u64, #[cfg(feature = "hints")] hints: &mut Vec<u64>) {
+pub unsafe extern "C" fn secp256k1_fp_negate_c(
+    x_ptr: *const u64,
+    out_ptr: *mut u64,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     let x: &[u64; 4] = &*(x_ptr as *const [u64; 4]);
 
     let mut params = SyscallArith256ModParams {
@@ -269,7 +281,11 @@ pub unsafe extern "C" fn secp256k1_fp_negate_c(x_ptr: *const u64, out_ptr: *mut 
         module: &P,
         d: &mut [0, 0, 0, 0],
     };
-    syscall_arith256_mod(&mut params, #[cfg(feature = "hints")] hints, );
+    syscall_arith256_mod(
+        &mut params,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *out_ptr.add(0) = params.d[0];
     *out_ptr.add(1) = params.d[1];
@@ -294,7 +310,11 @@ pub unsafe extern "C" fn secp256k1_fp_mul_c(
 
     let mut params =
         SyscallArith256ModParams { a: x, b: y, c: &[0, 0, 0, 0], module: &P, d: &mut [0, 0, 0, 0] };
-    syscall_arith256_mod(&mut params, #[cfg(feature = "hints")] hints, );
+    syscall_arith256_mod(
+        &mut params,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *out_ptr.add(0) = params.d[0];
     *out_ptr.add(1) = params.d[1];
@@ -323,7 +343,11 @@ pub unsafe extern "C" fn secp256k1_fp_mul_scalar_c(
         module: &P,
         d: &mut [0, 0, 0, 0],
     };
-    syscall_arith256_mod(&mut params, #[cfg(feature = "hints")] hints, );
+    syscall_arith256_mod(
+        &mut params,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *out_ptr.add(0) = params.d[0];
     *out_ptr.add(1) = params.d[1];

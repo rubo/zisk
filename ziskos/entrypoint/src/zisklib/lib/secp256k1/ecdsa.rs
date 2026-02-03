@@ -93,5 +93,12 @@ pub unsafe extern "C" fn secp256k1_ecdsa_verify_c(
     let z: &[u64; 4] = &*(z_ptr as *const [u64; 4]);
     let r: &[u64; 4] = &*(r_ptr as *const [u64; 4]);
     let s: &[u64; 4] = &*(s_ptr as *const [u64; 4]);
-    secp256k1_ecdsa_verify(pk, z, r, s, #[cfg(feature = "hints")] hints)
+    secp256k1_ecdsa_verify(
+        pk,
+        z,
+        r,
+        s,
+        #[cfg(feature = "hints")]
+        hints,
+    )
 }

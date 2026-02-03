@@ -842,20 +842,46 @@ pub fn secp256k1_triple_scalar_mul_with_g(
 // ==================== C FFI Functions ====================
 
 /// Converts a non-infinity point `p` on the Secp256k1 curve from jacobian coordinates to affine coordinates
-pub fn secp256k1_to_affine(p: &[u64; 12], #[cfg(feature = "hints")] hints: &mut Vec<u64>) -> [u64; 8] {
+pub fn secp256k1_to_affine(
+    p: &[u64; 12],
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> [u64; 8] {
     let z: [u64; 4] = [p[8], p[9], p[10], p[11]];
 
     // Point at infinity cannot be converted to affine
     debug_assert!(z != ZERO_256, "Cannot convert point at infinity to affine");
 
-    let zinv = secp256k1_fp_inv(&z, #[cfg(feature = "hints")] hints);
-    let zinv_sq = secp256k1_fp_square(&zinv, #[cfg(feature = "hints")] hints);
+    let zinv = secp256k1_fp_inv(
+        &z,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    let zinv_sq = secp256k1_fp_square(
+        &zinv,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     let x: [u64; 4] = [p[0], p[1], p[2], p[3]];
     let y: [u64; 4] = [p[4], p[5], p[6], p[7]];
 
-    let x_res = secp256k1_fp_mul(&x, &zinv_sq, #[cfg(feature = "hints")] hints);
-    let y_res = secp256k1_fp_mul(&secp256k1_fp_mul(&y, &zinv_sq, #[cfg(feature = "hints")] hints), &zinv, #[cfg(feature = "hints")] hints);
+    let x_res = secp256k1_fp_mul(
+        &x,
+        &zinv_sq,
+        #[cfg(feature = "hints")]
+        hints,
+    );
+    let y_res = secp256k1_fp_mul(
+        &secp256k1_fp_mul(
+            &y,
+            &zinv_sq,
+            #[cfg(feature = "hints")]
+            hints,
+        ),
+        &zinv,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     [x_res[0], x_res[1], x_res[2], x_res[3], y_res[0], y_res[1], y_res[2], y_res[3]]
 }
@@ -877,7 +903,12 @@ pub unsafe extern "C" fn secp256k1_decompress_c(
     let x_bytes: &[u8; 32] = &*(x_bytes_ptr as *const [u8; 32]);
     let x = bytes_be_to_u64_le(x_bytes);
 
-    let (x, y) = match secp256k1_decompress(&x, y_is_odd != 0, #[cfg(feature = "hints")] hints) {
+    let (x, y) = match secp256k1_decompress(
+        &x,
+        y_is_odd != 0,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         Ok((x, y)) => (x, y),
         Err(_) => return 0,
     };
@@ -899,9 +930,17 @@ pub unsafe extern "C" fn secp256k1_decompress_c(
 /// - `out_ptr` must point to at least 8 u64s
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_secp256k1_to_affine_c")]
-pub unsafe extern "C" fn secp256k1_to_affine_c(p_ptr: *const u64, out_ptr: *mut u64, #[cfg(feature = "hints")] hints: &mut Vec<u64>) {
+pub unsafe extern "C" fn secp256k1_to_affine_c(
+    p_ptr: *const u64,
+    out_ptr: *mut u64,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) {
     let p: &[u64; 12] = &*(p_ptr as *const [u64; 12]);
-    let result = secp256k1_to_affine(p, #[cfg(feature = "hints")] hints);
+    let result = secp256k1_to_affine(
+        p,
+        #[cfg(feature = "hints")]
+        hints,
+    );
 
     *out_ptr.add(0) = result[0];
     *out_ptr.add(1) = result[1];
@@ -932,7 +971,13 @@ pub unsafe extern "C" fn secp256k1_double_scalar_mul_with_g_c(
     let k2: &[u64; 4] = &*(k2_ptr as *const [u64; 4]);
     let p: &[u64; 8] = &*(p_ptr as *const [u64; 8]);
 
-    match secp256k1_double_scalar_mul_with_g(k1, k2, p, #[cfg(feature = "hints")] hints) {
+    match secp256k1_double_scalar_mul_with_g(
+        k1,
+        k2,
+        p,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
         None => true,
         Some(res) => {
             *out_ptr.add(0) = res[0];

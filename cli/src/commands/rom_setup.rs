@@ -2,13 +2,14 @@ use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+use crate::{commands::get_proving_key, ux::print_banner};
 use colored::Colorize;
+use fields::Goldilocks;
 use proofman_common::initialize_logger;
-
-use crate::{
-    commands::{get_proving_key, get_zisk_path},
-    ux::print_banner,
-};
+use rom_setup::gen_assembly;
+use rom_setup::rom_merkle_setup;
+use std::fs;
+use zisk_common::ElfBinaryOwned;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -16,7 +17,7 @@ use crate::{
 pub struct ZiskRomSetup {
     /// ELF file path
     #[clap(short = 'e', long)]
-    pub elf: PathBuf,
+    pub elf_path: PathBuf,
 
     /// Setup folder path
     #[clap(short = 'k', long)]
@@ -51,15 +52,24 @@ impl ZiskRomSetup {
         print_banner();
 
         let proving_key = get_proving_key(self.proving_key.as_ref());
-        let zisk_path = get_zisk_path(self.zisk_path.as_ref());
 
-        rom_setup::rom_full_setup(
-            &self.elf,
-            &proving_key,
-            &zisk_path,
-            &self.output_dir,
+        tracing::info!("Computing setup for ROM {}", self.elf_path.display());
+
+        tracing::info!("Computing merkle root");
+        let elf_bin = fs::read(&self.elf_path).map_err(|e| {
+            anyhow::anyhow!("Error reading ELF file {}: {}", self.elf_path.display(), e)
+        })?;
+        let elf = ElfBinaryOwned::new(
+            elf_bin,
+            self.elf_path.file_stem().unwrap().to_str().unwrap().to_string(),
             self.hints,
-            self.verbose,
-        )
+        );
+        rom_merkle_setup::<Goldilocks>(&elf, &self.output_dir, &proving_key)?;
+
+        gen_assembly(&self.elf_path, &self.zisk_path, &self.output_dir, self.verbose, self.hints)?;
+
+        println!();
+        tracing::info!("{}", "ROM setup successfully completed".bright_green().bold());
+        Ok(())
     }
 }

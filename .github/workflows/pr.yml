@@ -51,7 +51,7 @@ jobs:
     container:
       image: ubuntu:22.04
       options:
-        --shm-size=32g
+        --shm-size=48g
         -v /home/gha/cache-setup:/github/home/output:rw
     defaults:
       run:

@@ -348,7 +348,7 @@ impl HintsProcessor {
                         (rate, "Hz")
                     };
 
-                    info!(
+                    debug!(
                         "Processed {} hints in {:.0?} ({}{})",
                         num_hints,
                         elapsed,

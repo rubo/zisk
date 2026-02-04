@@ -1,9 +1,11 @@
 use anyhow::Result;
 use clap::Parser;
 use colored::Colorize;
+use std::fs;
 use std::path::PathBuf;
 use tracing::{info, warn};
 use zisk_build::ZISK_VERSION_MESSAGE;
+use zisk_common::ElfBinaryOwned;
 use zisk_sdk::{ProverClient, ZiskExecuteResult};
 
 use crate::ux::{print_banner, print_banner_field};
@@ -122,13 +124,20 @@ impl ZiskExecute {
             .emu()
             .witness()
             .proving_key_path_opt(self.proving_key.clone())
-            .elf_path(self.elf.clone())
             .verbose(self.verbose)
             .shared_tables(self.shared_tables)
             .print_command_info()
             .build()?;
 
-        prover.execute(stdin, None)
+        let elf_bin = fs::read(&self.elf)
+            .map_err(|e| anyhow::anyhow!("Error reading ELF file {}: {}", self.elf.display(), e))?;
+        let elf = ElfBinaryOwned::new(
+            elf_bin,
+            self.elf.file_stem().unwrap().to_str().unwrap().to_string(),
+            false,
+        );
+        prover.setup(&elf)?;
+        prover.execute(stdin)
     }
 
     pub fn run_asm(
@@ -140,16 +149,25 @@ impl ZiskExecute {
             .asm()
             .witness()
             .proving_key_path_opt(self.proving_key.clone())
-            .elf_path(self.elf.clone())
             .verbose(self.verbose)
             .shared_tables(self.shared_tables)
             .asm_path_opt(self.asm.clone())
             .base_port_opt(self.port)
             .unlock_mapped_memory(self.unlock_mapped_memory)
-            .with_hints(hints_stream.is_some())
             .print_command_info()
             .build()?;
 
-        prover.execute(stdin, hints_stream)
+        let elf_bin = fs::read(&self.elf)
+            .map_err(|e| anyhow::anyhow!("Error reading ELF file {}: {}", self.elf.display(), e))?;
+        let elf = ElfBinaryOwned::new(
+            elf_bin,
+            self.elf.file_stem().unwrap().to_str().unwrap().to_string(),
+            hints_stream.is_some(),
+        );
+        prover.setup(&elf)?;
+        if let Some(hints_stream) = hints_stream {
+            prover.set_hints_stream(hints_stream)?;
+        }
+        prover.execute(stdin)
     }
 }

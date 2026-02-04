@@ -1,14 +1,13 @@
+use fields::Goldilocks;
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
-use std::{env, fs};
 
 use anyhow::Result;
 
 use proofman_common::{json_to_debug_instances_map, DebugInfo, ProofmanResult};
-use rom_setup::{
-    gen_elf_hash, get_elf_bin_file_path, get_elf_data_hash, get_rom_blowup_factor_and_arity,
-    DEFAULT_CACHE_PATH,
-};
+use rom_setup::{get_elf_data_hash, rom_merkle_setup};
+use zisk_common::ElfBinaryLike;
 
 /// Gets the user's home directory as specified by the HOME environment variable.
 pub fn get_home_dir() -> String {
@@ -30,12 +29,6 @@ pub fn get_default_proving_key_snark() -> PathBuf {
 /// Gets the default zisk folder location in the home installation directory.
 pub fn get_home_zisk_path() -> PathBuf {
     let zisk_path = format!("{}/.zisk", get_home_dir());
-    PathBuf::from(zisk_path)
-}
-
-/// Gets the default zisk folder location in the home installation directory.
-pub fn get_default_zisk_path() -> PathBuf {
-    let zisk_path = format!("{}/.zisk/zisk", get_home_dir());
     PathBuf::from(zisk_path)
 }
 
@@ -83,49 +76,23 @@ pub fn get_proving_key_snark(proving_key_snark: Option<&PathBuf>) -> PathBuf {
     proving_key_snark.cloned().unwrap_or_else(get_default_proving_key_snark)
 }
 
-/// Gets the zisk folder.
-/// Uses the default one if not specified by user.
-pub fn get_zisk_path(zisk_path: Option<&PathBuf>) -> PathBuf {
-    zisk_path.cloned().unwrap_or_else(get_default_zisk_path)
+pub fn ensure_custom_commits(
+    proving_key: &Path,
+    elf: &impl ElfBinaryLike,
+) -> Result<(PathBuf, Vec<u8>)> {
+    rom_merkle_setup::<Goldilocks>(elf, &None, proving_key)
 }
 
-pub fn ensure_custom_commits(proving_key: &Path, elf: &Path) -> Result<PathBuf> {
-    // Ensure cache directory exists
-    let default_cache_path = std::env::var("HOME")
-        .map(PathBuf::from)
-        .map_err(|e| anyhow::anyhow!("Failed to read HOME environment variable: {e}"))?
-        .join(DEFAULT_CACHE_PATH);
-
-    if let Err(e) = fs::create_dir_all(&default_cache_path) {
-        if e.kind() != std::io::ErrorKind::AlreadyExists {
-            panic!("Failed to create cache directory: {e:?}");
-        }
-    }
-
-    // Get the blowup factor as the custom commits filename is formed using it
-    // {ELF_HASH}_{PILOUT_HASH}_{ROM_NUM_ROWS}_{BLOWUP_FACTOR}.bin
-    let (blowup_factor, merkle_tree_arity) = get_rom_blowup_factor_and_arity(proving_key);
-
-    // Compute the path for the custom commits file
-    let rom_bin_path =
-        get_elf_bin_file_path(elf, &default_cache_path, blowup_factor, merkle_tree_arity)?;
-
-    // Check if the custom commits file exists, if not generate it
-    if !rom_bin_path.exists() {
-        let _ = gen_elf_hash(elf, rom_bin_path.as_path(), blowup_factor, merkle_tree_arity, false)
-            .map_err(|e| anyhow::anyhow!("Error generating elf hash: {}", e));
-    }
-
-    Ok(rom_bin_path)
-}
-
-pub fn get_custom_commits_map(proving_key: &Path, elf: &Path) -> Result<HashMap<String, PathBuf>> {
-    let rom_bin_path = ensure_custom_commits(proving_key, elf)?;
+pub fn get_custom_commits_map(
+    proving_key: &Path,
+    elf: &impl ElfBinaryLike,
+) -> Result<HashMap<String, PathBuf>> {
+    let (rom_bin_path, _) = ensure_custom_commits(proving_key, elf)?;
     Ok(HashMap::from([("rom".to_string(), rom_bin_path)]))
 }
 
-pub fn get_asm_paths(elf: &Path) -> Result<(String, String)> {
-    let stem = elf.file_stem().unwrap().to_str().unwrap();
+pub fn get_asm_paths(elf: &impl ElfBinaryLike) -> Result<(String, String)> {
+    let stem = elf.name();
     let hash =
         get_elf_data_hash(elf).map_err(|e| anyhow::anyhow!("Error computing ELF hash: {}", e))?;
 

@@ -19,7 +19,6 @@
 //! By structuring these phases, the `ZiskExecutor` ensures high-performance execution while
 //! maintaining clarity and modularity in the computation process.
 
-use asm_runner::MinimalTraces;
 use fields::PrimeField64;
 use pil_std_lib::Std;
 use proofman_common::{create_pool, BufferPool, ProofCtx, ProofmanResult, SetupCtx};
@@ -33,7 +32,7 @@ use data_bus::DataBusTrait;
 use sm_main::{MainInstance, MainPlanner, MainSM};
 use zisk_common::ChunkId;
 use zisk_common::{
-    BusDevice, BusDeviceMetrics, CheckPoint, ExecutorStatsHandle, Instance, InstanceCtx,
+    BusDevice, BusDeviceMetrics, CheckPoint, EmuTrace, ExecutorStatsHandle, Instance, InstanceCtx,
     InstanceType, Plan, Stats, ZiskExecutionResult,
 };
 use zisk_pil::{
@@ -51,7 +50,6 @@ use zisk_common::ExecutorStatsEvent;
 
 use crossbeam::atomic::AtomicCell;
 
-use zisk_common::EmuTrace;
 use zisk_core::ZiskRom;
 use ziskemu::ZiskEmulator;
 
@@ -90,7 +88,7 @@ pub struct ZiskExecutor<F: PrimeField64> {
     zisk_rom: Arc<ZiskRom>,
 
     /// Planning information for main state machines.
-    min_traces: Arc<RwLock<MinimalTraces>>,
+    min_traces: Arc<RwLock<Option<Vec<EmuTrace>>>>,
 
     /// Planning information for secondary state machines.
     secn_planning: RwLock<Vec<Plan>>,
@@ -138,7 +136,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
             chunk_size,
             hints_stream: Mutex::new(hints_stream),
             zisk_rom,
-            min_traces: Arc::new(RwLock::new(MinimalTraces::None)),
+            min_traces: Arc::new(RwLock::new(None)),
             secn_planning: RwLock::new(Vec::new()),
             main_instances: RwLock::new(HashMap::new()),
             secn_instances: RwLock::new(HashMap::new()),
@@ -299,13 +297,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         );
 
         let min_traces_guard = self.min_traces.read().unwrap();
-        let min_traces = &*min_traces_guard;
-
-        let min_traces = match min_traces {
-            MinimalTraces::EmuTrace(min_traces) => min_traces,
-            MinimalTraces::AsmEmuTrace(asm_min_traces) => &asm_min_traces.vec_chunks,
-            _ => unreachable!(),
-        };
+        let min_traces = min_traces_guard.as_ref().expect("min_traces should not be None");
 
         let air_instance = main_instance.compute_witness(
             &self.zisk_rom,
@@ -464,13 +456,8 @@ impl<F: PrimeField64> ZiskExecutor<F> {
         pctx: Arc<ProofCtx<F>>,
         secn_instances: HashMap<usize, &Box<dyn Instance<F>>>,
     ) {
-        let min_traces = self.min_traces.read().unwrap();
-
-        let min_traces = match &*min_traces {
-            MinimalTraces::EmuTrace(min_traces) => min_traces,
-            MinimalTraces::AsmEmuTrace(asm_min_traces) => &asm_min_traces.vec_chunks,
-            _ => unreachable!(),
-        };
+        let min_traces_guard = self.min_traces.read().unwrap();
+        let min_traces = min_traces_guard.as_ref().expect("min_traces should not be None");
 
         // Group the instances by the chunk they need to process
         let (chunks_to_execute, global_id_chunks) =
@@ -720,7 +707,7 @@ impl<F: PrimeField64> ZiskExecutor<F> {
     fn reset(&self) {
         // Reset the internal state of the executor
         *self.execution_result.lock().unwrap() = ZiskExecutionResult::default();
-        *self.min_traces.write().unwrap() = MinimalTraces::None;
+        *self.min_traces.write().unwrap() = None;
         *self.secn_planning.write().unwrap() = Vec::new();
         self.main_instances.write().unwrap().clear();
         self.secn_instances.write().unwrap().clear();
@@ -789,7 +776,7 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
         timer_start_info!(PLAN);
         let (main_planning, public_values) =
             MainPlanner::plan::<F>(&min_traces, main_count, self.chunk_size);
-        *self.min_traces.write().unwrap() = min_traces;
+        *self.min_traces.write().unwrap() = Some(min_traces);
         self.assign_main_instances(&pctx, global_ids, main_planning);
 
         // Add to executor stats

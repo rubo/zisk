@@ -1,20 +1,24 @@
+use crate::get_asm_paths;
 use crate::{
-    check_paths_exist, create_debug_info, ensure_custom_commits,
+    check_paths_exist, ensure_custom_commits,
     prover::{ProverBackend, ProverEngine, ZiskBackend},
-    RankInfo, ZiskAggPhaseResult, ZiskExecuteResult, ZiskLibLoader, ZiskPhaseResult,
-    ZiskProveResult, ZiskVerifyConstraintsResult,
+    RankInfo, ZiskAggPhaseResult, ZiskExecuteResult, ZiskLibLoader, ZiskPhaseResult, ZiskProgramVK,
+    ZiskProof, ZiskProveResult, ZiskPublics, ZiskVerifyConstraintsResult,
 };
+use crate::{ProofMode, ProofOpts};
 use asm_runner::{AsmRunnerOptions, AsmServices};
-use proofman::{AggProofs, ProofMan, ProvePhase, ProvePhaseInputs};
-use proofman_common::{initialize_logger, ParamsGPU, ProofOptions};
+use proofman::{AggProofs, ProofMan, ProvePhase, ProvePhaseInputs, SnarkWrapper};
+use proofman_common::{initialize_logger, ParamsGPU, ProofOptions, VerboseMode};
 use proofman_util::{timer_start_info, timer_stop_and_log_info};
 use rom_setup::DEFAULT_CACHE_PATH;
+use std::sync::OnceLock;
 use std::{collections::HashMap, path::PathBuf};
 use tracing::info;
 use zisk_common::io::{StreamSource, ZiskStdin};
+use zisk_common::ElfBinaryLike;
 use zisk_common::ExecutorStatsHandle;
 use zisk_distributed_common::LoggingConfig;
-use zisk_witness::WitnessLibrary;
+use zisk_witness::get_packed_info;
 
 use anyhow::Result;
 
@@ -33,47 +37,35 @@ impl AsmProver {
     pub fn new(
         verify_constraints: bool,
         aggregation: bool,
-        rma: bool,
-        compressed: bool,
+        snark_wrapper: bool,
         proving_key: PathBuf,
-        proving_key_snark: Option<PathBuf>,
-        elf: PathBuf,
+        proving_key_snark: PathBuf,
         verbose: u8,
         shared_tables: bool,
-        asm_mt_filename: String,
-        asm_rh_filename: String,
         base_port: Option<u16>,
         unlock_mapped_memory: bool,
-        with_hints: bool,
         gpu_params: ParamsGPU,
-        verify_proofs: bool,
-        minimal_memory: bool,
-        save_proofs: bool,
-        output_dir: Option<PathBuf>,
         logging_config: Option<LoggingConfig>,
     ) -> Result<Self> {
         let core_prover = AsmCoreProver::new(
             verify_constraints,
             aggregation,
-            rma,
-            compressed,
+            snark_wrapper,
             proving_key,
             proving_key_snark,
-            elf,
             verbose,
             shared_tables,
-            asm_mt_filename,
-            asm_rh_filename,
             base_port,
             unlock_mapped_memory,
-            with_hints,
             gpu_params,
-            verify_proofs,
-            minimal_memory,
-            save_proofs,
-            output_dir,
             logging_config,
         )?;
+
+        Ok(Self { core_prover })
+    }
+
+    pub fn new_verifier(proving_key: PathBuf, proving_key_snark: PathBuf) -> Result<Self> {
+        let core_prover = AsmCoreProver::new_verifier(proving_key, proving_key_snark)?;
 
         Ok(Self { core_prover })
     }
@@ -88,71 +80,131 @@ impl ProverEngine for AsmProver {
         self.core_prover.rank_info.local_rank
     }
 
-    fn set_stdin(&self, stdin: ZiskStdin) {
-        self.core_prover.backend.witness_lib.set_stdin(stdin);
+    fn set_stdin(&self, stdin: ZiskStdin) -> Result<()> {
+        self.core_prover.backend.set_stdin(stdin)
     }
 
-    fn set_hints_stream(&self, hints_stream: StreamSource) -> anyhow::Result<()> {
-        self.core_prover.backend.witness_lib.set_hints_stream(hints_stream)
+    fn set_hints_stream(&self, hints_stream: StreamSource) -> Result<()> {
+        self.core_prover.backend.set_hints_stream(hints_stream)
     }
 
     fn executed_steps(&self) -> u64 {
         self.core_prover
             .backend
-            .witness_lib
             .execution_result()
             .map(|(exec_result, _)| exec_result.steps)
             .unwrap_or(0)
     }
 
-    fn execute(
-        &self,
-        stdin: ZiskStdin,
-        hints_stream: Option<StreamSource>,
-        output_path: Option<PathBuf>,
-    ) -> Result<ZiskExecuteResult> {
-        self.core_prover.backend.execute(stdin, hints_stream, output_path)
+    fn setup(&self, elf: &impl ElfBinaryLike) -> Result<ZiskProgramVK> {
+        let proving_key = self.core_prover.backend.get_proving_key_path();
+        let (rom_bin_path, vk) = ensure_custom_commits(proving_key, elf)?;
+        let custom_commits_map = HashMap::from([("rom".to_string(), rom_bin_path)]);
+
+        let default_cache_path = std::env::var("HOME")
+            .map(PathBuf::from)
+            .map_err(|e| anyhow::anyhow!("Failed to read HOME environment variable: {e}"))?
+            .join(DEFAULT_CACHE_PATH);
+
+        let (asm_mt_filename, asm_rh_filename) = get_asm_paths(elf)?;
+
+        let asm_mt_path = default_cache_path.join(asm_mt_filename);
+        let asm_rh_path = default_cache_path.join(asm_rh_filename);
+
+        check_paths_exist(&asm_mt_path)?;
+        check_paths_exist(&asm_rh_path)?;
+
+        timer_start_info!(STARTING_ASM_MICROSERVICES);
+        let world_rank = self.core_prover.rank_info.world_rank;
+        let local_rank = self.core_prover.rank_info.local_rank;
+        let asm_services = AsmServices::new(world_rank, local_rank, self.core_prover.base_port);
+
+        let asm_runner_options = AsmRunnerOptions::new()
+            .with_base_port(self.core_prover.base_port)
+            .with_world_rank(world_rank)
+            .with_local_rank(local_rank)
+            .with_unlock_mapped_memory(self.core_prover.unlock_mapped_memory);
+
+        asm_services.start_asm_services(&asm_mt_path, asm_runner_options)?;
+        timer_stop_and_log_info!(STARTING_ASM_MICROSERVICES);
+
+        let witness_lib = ZiskLibLoader::load_asm(
+            self.core_prover.verbose,
+            self.core_prover.shared_tables,
+            asm_mt_path.clone(),
+            asm_rh_path,
+            self.core_prover.base_port,
+            self.core_prover.unlock_mapped_memory,
+            elf.with_hints(),
+        )?;
+
+        self.core_prover
+            .asm_services
+            .set(asm_services)
+            .map_err(|_| anyhow::anyhow!("ASM services have already been initialized."))?;
+
+        self.core_prover.backend.register_witness_lib(
+            elf.elf(),
+            witness_lib,
+            custom_commits_map,
+        )?;
+        Ok(ZiskProgramVK { vk })
+    }
+
+    fn execute(&self, stdin: ZiskStdin, output_path: Option<PathBuf>) -> Result<ZiskExecuteResult> {
+        self.core_prover.backend.execute(stdin, output_path)
     }
 
     fn stats(
         &self,
         stdin: ZiskStdin,
-        hints_stream: Option<StreamSource>,
         debug_info: Option<Option<String>>,
+        minimal_memory: bool,
         mpi_node: Option<u32>,
     ) -> Result<(i32, i32, Option<ExecutorStatsHandle>)> {
-        let debug_info =
-            create_debug_info(debug_info, self.core_prover.backend.proving_key.clone())?;
-
-        self.core_prover.backend.stats(stdin, hints_stream, debug_info, mpi_node)
+        self.core_prover.backend.stats(stdin, debug_info, minimal_memory, mpi_node)
     }
 
     fn verify_constraints_debug(
         &self,
         stdin: ZiskStdin,
-        hints_stream: Option<StreamSource>,
         debug_info: Option<Option<String>>,
     ) -> Result<ZiskVerifyConstraintsResult> {
-        let debug_info =
-            create_debug_info(debug_info, self.core_prover.backend.proving_key.clone())?;
-
-        self.core_prover.backend.verify_constraints_debug(stdin, hints_stream, debug_info)
+        self.core_prover.backend.verify_constraints_debug(stdin, debug_info)
     }
 
-    fn verify_constraints(
-        &self,
-        stdin: ZiskStdin,
-        hints_stream: Option<StreamSource>,
-    ) -> Result<ZiskVerifyConstraintsResult> {
-        self.core_prover.backend.verify_constraints(stdin, hints_stream)
+    fn verify_constraints(&self, stdin: ZiskStdin) -> Result<ZiskVerifyConstraintsResult> {
+        self.core_prover.backend.verify_constraints(stdin)
+    }
+
+    fn vk(&self, elf: &impl ElfBinaryLike) -> Result<ZiskProgramVK> {
+        self.core_prover.backend.vk(elf)
+    }
+
+    fn verify(&self, proof: &ZiskProof, publics: &ZiskPublics, vk: &ZiskProgramVK) -> Result<()> {
+        self.core_prover.backend.verify(proof, publics, vk)
+    }
+
+    fn prove_debug(&self, stdin: ZiskStdin, proof_options: ProofOpts) -> Result<ZiskProveResult> {
+        self.core_prover.backend.prove_debug(stdin, proof_options)
     }
 
     fn prove(
         &self,
         stdin: ZiskStdin,
-        hints_stream: Option<StreamSource>,
+        mode: ProofMode,
+        proof_options: ProofOpts,
     ) -> Result<ZiskProveResult> {
-        self.core_prover.backend.prove(stdin, hints_stream)
+        self.core_prover.backend.prove(stdin, mode, proof_options)
+    }
+
+    fn prove_snark(
+        &self,
+        proof: &ZiskProof,
+        publics: &ZiskPublics,
+        vk: &ZiskProgramVK,
+    ) -> Result<ZiskProof> {
+        self.core_prover.backend.prove_snark(proof, publics, vk)
     }
 
     fn prove_phase(
@@ -174,27 +226,33 @@ impl ProverEngine for AsmProver {
         self.core_prover.backend.aggregate_proofs(agg_proofs, last_proof, final_proof, options)
     }
 
-    fn mpi_broadcast(&self, data: &mut Vec<u8>) {
-        self.core_prover.backend.mpi_broadcast(data);
+    fn mpi_broadcast(&self, data: &mut Vec<u8>) -> Result<()> {
+        self.core_prover.backend.mpi_broadcast(data)
     }
 }
 
 pub struct AsmCoreProver {
     backend: ProverBackend,
-    asm_services: AsmServices,
+    asm_services: OnceLock<AsmServices>,
     rank_info: RankInfo,
+    verbose: VerboseMode,
+    shared_tables: bool,
+    base_port: Option<u16>,
+    unlock_mapped_memory: bool,
 }
 
 impl Drop for AsmCoreProver {
     fn drop(&mut self) {
         // Shut down ASM microservices
         info!(">>> [{}] Stopping ASM microservices.", self.rank_info.world_rank);
-        if let Err(e) = self.asm_services.stop_asm_services() {
-            tracing::error!(
-                ">>> [{}] Failed to stop ASM microservices: {}",
-                self.rank_info.world_rank,
-                e
-            );
+        if let Some(asm_services) = &self.asm_services.get() {
+            if let Err(e) = asm_services.stop_asm_services() {
+                tracing::error!(
+                    ">>> [{}] Failed to stop ASM microservices: {}",
+                    self.rank_info.world_rank,
+                    e
+                );
+            }
         }
     }
 }
@@ -204,60 +262,24 @@ impl AsmCoreProver {
     pub fn new(
         verify_constraints: bool,
         aggregation: bool,
-        rma: bool,
-        compressed: bool,
+        use_snark_wrapper: bool,
         proving_key: PathBuf,
-        _proving_key_snark: Option<PathBuf>,
-        elf: PathBuf,
+        proving_key_snark: PathBuf,
         verbose: u8,
         shared_tables: bool,
-        asm_mt_filename: String,
-        asm_rh_filename: String,
         base_port: Option<u16>,
         unlock_mapped_memory: bool,
-        with_hints: bool,
         gpu_params: ParamsGPU,
-        verify_proofs: bool,
-        minimal_memory: bool,
-        save_proofs: bool,
-        output_dir: Option<PathBuf>,
         logging_config: Option<LoggingConfig>,
     ) -> Result<Self> {
-        let rom_bin_path = ensure_custom_commits(&proving_key, &elf)?;
-        let custom_commits_map = HashMap::from([("rom".to_string(), rom_bin_path)]);
-
-        let default_cache_path = std::env::var("HOME")
-            .map(PathBuf::from)
-            .map_err(|e| anyhow::anyhow!("Failed to read HOME environment variable: {e}"))?
-            .join(DEFAULT_CACHE_PATH);
-
-        let asm_mt_path = default_cache_path.join(asm_mt_filename);
-        let asm_rh_path = default_cache_path.join(asm_rh_filename);
-
         check_paths_exist(&proving_key)?;
-        check_paths_exist(&elf)?;
-        check_paths_exist(&asm_mt_path)?;
-        check_paths_exist(&asm_rh_path)?;
-
-        let mut witness_lib = ZiskLibLoader::load_asm(
-            elf,
-            verbose.into(),
-            shared_tables,
-            asm_mt_path.clone(),
-            asm_rh_path,
-            base_port,
-            unlock_mapped_memory,
-            with_hints,
-        )?;
-
         let proofman = ProofMan::new(
             proving_key.clone(),
-            custom_commits_map,
             verify_constraints,
             aggregation,
             gpu_params,
             verbose.into(),
-            witness_lib.get_packed_info(),
+            get_packed_info(),
         )
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
@@ -270,38 +292,40 @@ impl AsmCoreProver {
             initialize_logger(verbose.into(), Some(world_rank));
         }
 
-        timer_start_info!(STARTING_ASM_MICROSERVICES);
-        let asm_services = AsmServices::new(world_rank, local_rank, base_port);
-
-        let asm_runner_options = AsmRunnerOptions::new()
-            .with_verbose(verbose > 0)
-            .with_base_port(base_port)
-            .with_world_rank(world_rank)
-            .with_local_rank(local_rank)
-            .with_unlock_mapped_memory(unlock_mapped_memory);
-
-        asm_services.start_asm_services(&asm_mt_path, asm_runner_options)?;
-        timer_stop_and_log_info!(STARTING_ASM_MICROSERVICES);
-
-        witness_lib.register_witness(&proofman.get_wcm())?;
-
         proofman.set_barrier();
 
-        let core = ProverBackend {
-            verify_constraints,
-            aggregation,
-            rma,
-            compressed,
-            witness_lib,
-            proving_key: proving_key.clone(),
-            verify_proofs,
-            minimal_memory,
-            save_proofs,
-            output_dir,
-            proofman,
-            rank_info: RankInfo { world_rank, local_rank },
-        };
+        let mut snark_wrapper = None;
+        if use_snark_wrapper {
+            check_paths_exist(&proving_key_snark)?;
+            snark_wrapper = Some(SnarkWrapper::new(&proving_key_snark, verbose.into())?);
+        }
 
-        Ok(Self { backend: core, asm_services, rank_info: RankInfo { world_rank, local_rank } })
+        let core =
+            ProverBackend::new(proofman, snark_wrapper, proving_key, Some(proving_key_snark));
+
+        Ok(Self {
+            backend: core,
+            asm_services: OnceLock::new(),
+            rank_info: RankInfo { world_rank, local_rank },
+            verbose: verbose.into(),
+            shared_tables,
+            base_port,
+            unlock_mapped_memory,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_verifier(proving_key: PathBuf, proving_key_snark: PathBuf) -> Result<Self> {
+        let core_prover = ProverBackend::new_verifier(proving_key, Some(proving_key_snark));
+
+        Ok(Self {
+            backend: core_prover,
+            asm_services: OnceLock::new(),
+            rank_info: RankInfo { world_rank: 0, local_rank: 0 },
+            verbose: VerboseMode::Info,
+            shared_tables: false,
+            base_port: None,
+            unlock_mapped_memory: false,
+        })
     }
 }

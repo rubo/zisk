@@ -16,7 +16,7 @@ use zisk_common::io::{ZiskIO, ZiskStdin};
 use anyhow::anyhow;
 use anyhow::Result;
 
-use crate::{AsmInputC2, AsmService, AsmServices, SharedMemoryWriter};
+use crate::{AsmInputHeader, SharedMemoryWriter};
 
 pub enum AsmSharedMemoryMode {
     ReadOnly,
@@ -271,22 +271,6 @@ impl<H: AsmShmemHeader> AsmSharedMemory<H> {
         // Skip the header size to get the data pointer
         unsafe { self.mapped_ptr.add(size_of::<H>()) }
     }
-
-    pub fn shmem_input_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!("{}_{}_input", AsmServices::shmem_prefix(port, local_rank), asm_service.as_str())
-    }
-
-    pub fn shmem_output_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!("{}_{}_output", AsmServices::shmem_prefix(port, local_rank), asm_service.as_str())
-    }
-
-    pub fn shmem_chunk_done_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
-        format!(
-            "/{}_{}_chunk_done",
-            AsmServices::shmem_prefix(port, local_rank),
-            asm_service.as_str()
-        )
-    }
 }
 
 pub fn open_shmem(name: &str, flags: i32, mode: u32) -> Result<i32> {
@@ -346,16 +330,22 @@ pub unsafe fn unmap(ptr: *mut c_void, size: usize) {
 }
 
 pub fn write_input(stdin: &mut ZiskStdin, shmem_input_writer: &SharedMemoryWriter) {
+    const HEADER_SIZE: usize = size_of::<AsmInputHeader>();
+
     let inputs = stdin.read();
-    let asm_input = AsmInputC2 { zero: 0, input_data_size: inputs.len() as u64 };
-    let shmem_input_size = (inputs.len() + size_of::<AsmInputC2>() + 7) & !7;
+
+    let shmem_input_size = (HEADER_SIZE + inputs.len() + 7) & !7;
 
     let mut full_input = Vec::with_capacity(shmem_input_size);
-    full_input.extend_from_slice(&asm_input.to_bytes());
+
+    let header = AsmInputHeader { zero: 0, input_data_size: 0 };
+    full_input.extend_from_slice(&header.to_bytes());
     full_input.extend_from_slice(&inputs);
     while full_input.len() < shmem_input_size {
         full_input.push(0);
     }
 
     shmem_input_writer.write_input(&full_input).expect("Failed to write input to shared memory");
+
+    shmem_input_writer.write_u64_at(8, inputs.len() as u64);
 }

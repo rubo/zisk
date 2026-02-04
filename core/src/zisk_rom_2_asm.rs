@@ -93,7 +93,7 @@ const F_MOPS_ALIGNED_WRITE: u64 = 0x0000_000D_0000_0000;
 const F_MOPS_BLOCK_LENGTH_SHIFT: u64 = 36;
 
 // const PRECOMPILE_BUFFER_SIZE_IN_BYTES: u64 = 0x100000; // 1MB
-const PRECOMPILE_BUFFER_SIZE_IN_BYTES: u64 = 0x10000000; // 256MB
+const PRECOMPILE_BUFFER_SIZE_IN_BYTES: u64 = 0x400000; // 4MB
 const PRECOMPILE_BUFFER_SIZE_IN_U64: u64 = PRECOMPILE_BUFFER_SIZE_IN_BYTES / 8;
 const PRECOMPILE_BUFFER_SIZE_U64_MASK: u64 = PRECOMPILE_BUFFER_SIZE_IN_U64 - 1;
 
@@ -145,7 +145,7 @@ pub struct ZiskAsmContext {
     mem_chunk_id: String,                   // 0, 1, 2, 3, 4...
     mem_chunk_mask: String,                 // Module 8 of the chunks we want to activate, e.g. 0x03
     mem_rsp: String,                        // Backup of rsp register value from caller
-    mem_free_input: String, // Free input address (0x90000000) used in free call operations
+    mem_free_input: String, // Free input address (0x90000000) used in free call operations, but stored in memory to allow sharing the input shared memory
     mem_precompile_results_address: String, // Address where precompile results are read from
     mem_precompile_written_address: String, // Address where precompile written counter is stored
     mem_precompile_read_address: String, // Address where precompile read counter is stored
@@ -242,6 +242,8 @@ impl ZiskAsmContext {
                 | ZiskOp::Bls12_381ComplexSub
                 | ZiskOp::Bls12_381ComplexMul
                 | ZiskOp::Add256
+                | ZiskOp::Secp256r1Add
+                | ZiskOp::Secp256r1Dbl
         )
     }
 
@@ -617,6 +619,8 @@ impl ZiskRom2Asm {
         *code += ".extern opcode_arith256_mod\n";
         *code += ".extern opcode_secp256k1_add\n";
         *code += ".extern opcode_secp256k1_dbl\n";
+        *code += ".extern opcode_secp256r1_add\n";
+        *code += ".extern opcode_secp256r1_dbl\n";
         *code += ".extern opcode_fcall\n";
         *code += ".extern opcode_bn254_curve_add\n";
         *code += ".extern opcode_bn254_curve_dbl\n";
@@ -1550,28 +1554,34 @@ impl ZiskRom2Asm {
                 SRC_MEM => {
                     *code += &ctx.full_line_comment("b=SRC_MEM".to_string());
 
-                    let b_is_free_input = instruction.b_offset_imm0 == FREE_INPUT_ADDR
-                        && instruction.b_use_sp_imm1 == 0;
+                    let b_is_free_input = (instruction.b_offset_imm0 == FREE_INPUT_ADDR)
+                        && (instruction.b_use_sp_imm1 == 0);
 
                     if !ctx.chunk_player_mem_reads_collect_main() {
-                        // Calculate memory address
-                        *code += &format!(
-                            "\tmov {}, 0x{:x} {}\n",
-                            REG_ADDRESS,
-                            instruction.b_offset_imm0,
-                            ctx.comment_str("address = b_offset_imm0")
-                        );
-                        if instruction.b_use_sp_imm1 != 0 {
-                            *code += &format!(
-                                "\tadd {}, {} {}\n",
-                                REG_ADDRESS,
-                                ctx.mem_sp,
-                                ctx.comment_str("address += sp")
-                            );
-                            ctx.address_is_constant = false;
-                        } else {
+                        if b_is_free_input {
+                            // No need to write REG_ADDRESS, as we will read from mem_free_input
                             ctx.address_is_constant = true;
                             ctx.address_constant_value = instruction.b_offset_imm0;
+                        } else {
+                            // Calculate memory address
+                            *code += &format!(
+                                "\tmov {}, 0x{:x} {}\n",
+                                REG_ADDRESS,
+                                instruction.b_offset_imm0,
+                                ctx.comment_str("address = b_offset_imm0")
+                            );
+                            if instruction.b_use_sp_imm1 != 0 {
+                                *code += &format!(
+                                    "\tadd {}, {} {}\n",
+                                    REG_ADDRESS,
+                                    ctx.mem_sp,
+                                    ctx.comment_str("address += sp")
+                                );
+                                ctx.address_is_constant = false;
+                            } else {
+                                ctx.address_is_constant = true;
+                                ctx.address_constant_value = instruction.b_offset_imm0;
+                            }
                         }
                     }
 
@@ -5790,6 +5800,181 @@ impl ZiskRom2Asm {
                 ctx.c.is_saved = true;
                 ctx.flag_is_always_zero = true;
             }
+            ZiskOp::Secp256r1Add => {
+                *code += &ctx.full_line_comment("Secp256r1Add".to_string());
+
+                // Use the memory address as the first and unique parameter
+                if !ctx.chunk_player_mt_collect_mem() && !ctx.chunk_player_mem_reads_collect_main()
+                {
+                    *code += &format!(
+                        "\tmov rdi, {} {}\n",
+                        ctx.b.string_value,
+                        ctx.comment_str("rdi = b = address")
+                    );
+                }
+
+                // Save data into mem_reads
+                if ctx.minimal_trace() || ctx.zip() || ctx.mem_reads() {
+                    // If zip, check if chunk is active
+                    if ctx.zip() {
+                        *code += &format!(
+                            "\ttest {}, 1 {}\n",
+                            REG_ACTIVE_CHUNK,
+                            ctx.comment_str("active_chunk == 1 ?")
+                        );
+                        *code += &format!("\tjnz pc_{:x}_secp256r1add_active_chunk\n", ctx.pc);
+                        *code += &format!("\tjmp pc_{:x}_secp256r1add_active_chunk_done\n", ctx.pc);
+                        *code += &format!("pc_{:x}_secp256r1add_active_chunk:\n", ctx.pc);
+                    }
+                    Self::precompiled_save_mem_reads(ctx, code, 2, &[8, 8]);
+                    if ctx.zip() {
+                        *code += &format!("pc_{:x}_secp256r1add_active_chunk_done:\n", ctx.pc);
+                    }
+                }
+
+                // Save memory operations into mem_reads
+                if ctx.mem_op() {
+                    Self::mem_op_precompiled_read_and_write(ctx, code, 2, &[8, 8], 0, 0, 8);
+                }
+
+                if !ctx.chunk_player_mt_collect_mem() && !ctx.chunk_player_mem_reads_collect_main()
+                {
+                    // Call the secp256r1_add function
+                    Self::push_internal_registers(ctx, code, false);
+                    //Self::assert_rsp_is_aligned(ctx, code);
+                    *code += "\tcall _opcode_secp256r1_add\n";
+                    Self::pop_internal_registers(ctx, code, false);
+                    //Self::assert_rsp_is_aligned(ctx, code);
+                }
+
+                // Consume mem reads
+                if ctx.chunk_player_mem_reads_collect_main() {
+                    *code += &format!(
+                        "\tmov [{} + {}*8], {} {}\n",
+                        REG_MEM_READS_ADDRESS,
+                        REG_MEM_READS_SIZE,
+                        REG_CHUNK_PLAYER_ADDRESS,
+                        ctx.comment_str("Main[4] = precompiler data address")
+                    );
+                    *code += &format!(
+                        "\tinc {} {}\n",
+                        REG_MEM_READS_SIZE,
+                        ctx.comment_str("mem_reads_size++")
+                    );
+                }
+                if ctx.chunk_player_mt_collect_mem() || ctx.chunk_player_mem_reads_collect_main() {
+                    *code += &format!(
+                        "\tadd {}, 18*8 {}\n",
+                        REG_CHUNK_PLAYER_ADDRESS,
+                        ctx.comment_str("chunk_address += 18*8")
+                    );
+                }
+
+                // Set result
+                *code += &format!("\txor {}, {} {}\n", REG_C, REG_C, ctx.comment_str("c = 0"));
+                ctx.c.is_saved = true;
+                ctx.flag_is_always_zero = true;
+            }
+            ZiskOp::Secp256r1Dbl => {
+                *code += &ctx.full_line_comment("Secp256r1Dbl".to_string());
+
+                // Use the memory address as the first and unique parameter
+                if !ctx.chunk_player_mt_collect_mem() && !ctx.chunk_player_mem_reads_collect_main()
+                {
+                    *code += &format!(
+                        "\tmov rdi, {} {}\n",
+                        ctx.b.string_value,
+                        ctx.comment_str("rdi = b = address")
+                    );
+                }
+
+                // Copy read data into mem_reads
+                if ctx.minimal_trace() || ctx.zip() || ctx.mem_reads() {
+                    // If zip, check if chunk is active
+                    if ctx.zip() {
+                        *code += &format!(
+                            "\ttest {}, 1 {}\n",
+                            REG_ACTIVE_CHUNK,
+                            ctx.comment_str("active_chunk == 1 ?")
+                        );
+                        *code += &format!("\tjnz pc_{:x}_secp256r1dbl_active_chunk\n", ctx.pc);
+                        *code += &format!("\tjmp pc_{:x}_secp256r1dbl_active_chunk_done\n", ctx.pc);
+                        *code += &format!("pc_{:x}_secp256r1dbl_active_chunk:\n", ctx.pc);
+                    }
+                    *code += &format!("\tmov {REG_ADDRESS}, rdi\n");
+                    for k in 0..8 {
+                        *code += &format!(
+                            "\tmov {}, [{} + {}] {}\n",
+                            REG_VALUE,
+                            REG_ADDRESS,
+                            k * 8,
+                            ctx.comment(format!("value = mem[address[{k}]]"))
+                        );
+                        *code += &format!(
+                            "\tmov [{} + {}*8 + {}], {} {}\n",
+                            REG_MEM_READS_ADDRESS,
+                            REG_MEM_READS_SIZE,
+                            k * 8,
+                            REG_VALUE,
+                            ctx.comment(format!("mem_reads[{k}] = value"))
+                        );
+                    }
+
+                    // Increment chunk.steps.mem_reads_size in 8 units
+                    *code += &format!(
+                        "\tadd {}, 8 {}\n",
+                        REG_MEM_READS_SIZE,
+                        ctx.comment_str("mem_reads_size += 8")
+                    );
+                    if ctx.zip() {
+                        *code += &format!("pc_{:x}_secp256r1dbl_active_chunk_done:\n", ctx.pc);
+                    }
+                }
+
+                // Save memory operations into mem_reads
+                if ctx.mem_op() {
+                    Self::mem_op_array(ctx, code, "rdi", false, 8);
+                    Self::mem_op_array(ctx, code, "rdi", true, 8);
+                }
+
+                if !ctx.chunk_player_mt_collect_mem() && !ctx.chunk_player_mem_reads_collect_main()
+                {
+                    // Call the secp256r1_dbl function
+                    Self::push_internal_registers(ctx, code, false);
+                    //Self::assert_rsp_is_aligned(ctx, code);
+                    *code += "\tcall _opcode_secp256r1_dbl\n";
+                    Self::pop_internal_registers(ctx, code, false);
+                    //Self::assert_rsp_is_aligned(ctx, code);
+                }
+
+                // Consume mem reads
+                if ctx.chunk_player_mem_reads_collect_main() {
+                    *code += &format!(
+                        "\tmov [{} + {}*8], {} {}\n",
+                        REG_MEM_READS_ADDRESS,
+                        REG_MEM_READS_SIZE,
+                        REG_CHUNK_PLAYER_ADDRESS,
+                        ctx.comment_str("Main[4] = precompiler data address")
+                    );
+                    *code += &format!(
+                        "\tinc {} {}\n",
+                        REG_MEM_READS_SIZE,
+                        ctx.comment_str("mem_reads_size++")
+                    );
+                }
+                if ctx.chunk_player_mt_collect_mem() || ctx.chunk_player_mem_reads_collect_main() {
+                    *code += &format!(
+                        "\tadd {}, 8*8 {}\n",
+                        REG_CHUNK_PLAYER_ADDRESS,
+                        ctx.comment_str("chunk_address += 8*8")
+                    );
+                }
+
+                // Set result
+                *code += &format!("\txor {}, {} {}\n", REG_C, REG_C, ctx.comment_str("c = 0"));
+                ctx.c.is_saved = true;
+                ctx.flag_is_always_zero = true;
+            }
             ZiskOp::FcallParam => {
                 assert!(ctx.store_b_in_c);
                 assert!(ctx.a.is_constant);
@@ -5905,15 +6090,7 @@ impl ZiskRom2Asm {
                         //Self::assert_rsp_is_aligned(ctx, code);
                     }
 
-                    // Get free input address
-                    *code += &format!(
-                        "\tmov {}, {} {}\n",
-                        REG_ADDRESS,
-                        FREE_INPUT_ADDR,
-                        ctx.comment_str("address = free_input")
-                    );
-
-                    // Copy ctx.result[0] or 0 into free input
+                    // If ctx.result_size == 0 => free_input = 0
                     *code += &format!(
                         "\tmov {}, qword {}[{} + {}*8] {}\n",
                         REG_AUX,
@@ -5924,6 +6101,8 @@ impl ZiskRom2Asm {
                     );
                     *code += &format!("\tcmp {REG_AUX}, 0\n");
                     *code += &format!("\tjz pc_{:x}_fcall_result_zero\n", ctx.pc);
+
+                    // Copy ctx.result[0] to free input address
                     *code += &format!(
                         "\tmov {}, qword {}[{} + {}*8] {}\n",
                         REG_VALUE,
@@ -5939,6 +6118,7 @@ impl ZiskRom2Asm {
                         ctx.comment_str("free_input = value")
                     );
                     *code += &format!("\tjmp pc_{:x}_fcall_result_done\n", ctx.pc);
+
                     *code += &format!("pc_{:x}_fcall_result_zero:\n", ctx.pc);
                     *code += &format!(
                         "\tmov {}, 0 {}\n",

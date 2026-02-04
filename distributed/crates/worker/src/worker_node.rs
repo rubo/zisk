@@ -566,7 +566,7 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
 
         // Start computation in background task
         self.worker.set_current_computation(
-            self.worker.handle_partial_contribution(job.clone(), computation_tx.clone()).await,
+            self.worker.handle_partial_contribution(job.clone(), computation_tx.clone()).await?,
         );
 
         Ok(())
@@ -674,7 +674,7 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
             .collect();
 
         self.worker.set_current_computation(
-            self.worker.handle_prove(job, cont, computation_tx.clone()).await,
+            self.worker.handle_prove(job, cont, computation_tx.clone()).await?,
         );
 
         Ok(())

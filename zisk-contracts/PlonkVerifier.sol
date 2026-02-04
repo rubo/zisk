@@ -43,22 +43,22 @@ contract PlonkVerifier {
     uint16 constant nPublic   = 1;
     uint16 constant nLagrange = 1;
     
-    uint256 constant Qmx  = 572058585897115413933308198688680980455081513448360206617674822477027097352;
-    uint256 constant Qmy  = 19520695395476905182400417552180799699716537403076661072544440793833663810330;
-    uint256 constant Qlx  = 9832908426454593805012267200857420955232427230162451920383591798177680906842;
-    uint256 constant Qly  = 6134887858043114941104727813721017175936417585428553547982984062309748590067;
-    uint256 constant Qrx  = 17937669991980819350134444648322386596504213518209816889288337561956505273579;
-    uint256 constant Qry  = 17380198614013544832408943480535610993360041386943658331661438058754652423608;
-    uint256 constant Qox  = 3746383519605994996570654909729447538060398177432538027019038210460830835996;
-    uint256 constant Qoy  = 1024676947590770618963044613714674542516450089379999729241895272070434668163;
-    uint256 constant Qcx  = 19818475363986446083386548432203783753847786675575871159724364841872033339811;
-    uint256 constant Qcy  = 5734908757991782594800656602635866231598638594033863174601859476090728718317;
-    uint256 constant S1x  = 3813951475049395353035144087536163985766398632609172098517655090832064479201;
-    uint256 constant S1y  = 4661041460539871222837848184860991236413816796875875991414335208951982883573;
-    uint256 constant S2x  = 2346297236765228201735212218580864671321819719934943664794817856462628147766;
-    uint256 constant S2y  = 7675333666783282678195557739194219149780835629320882753298243738718972627161;
-    uint256 constant S3x  = 11920762370636635928452991956851650930207813096445461979758461102591469998444;
-    uint256 constant S3y  = 13252580429342734662311430952976723420942336108640176798978862832832900350015;
+    uint256 constant Qmx  = 15728078222621428176160834771923049445267207177815563086756963442982537322555;
+    uint256 constant Qmy  = 10368134109772487360967338421067531937191459049728961159479449769737397414266;
+    uint256 constant Qlx  = 6266903827059262482682470537784423436414327073503210506957823438202715076858;
+    uint256 constant Qly  = 9930975912673080337533028672610162866366123480191667478375977723280338682627;
+    uint256 constant Qrx  = 7123060314877137702038864858686611023352874626900523603313267911196395216007;
+    uint256 constant Qry  = 1770043357969798948108297406468647422219312923587004610833401748122605130485;
+    uint256 constant Qox  = 429670666919728039002263956209270185134416998857239332019860571923582607053;
+    uint256 constant Qoy  = 11024111753296480975480562321760673479457513637396733200807061983645283791758;
+    uint256 constant Qcx  = 4434809406798938738431069472809456595063321363145767360968983463659931159037;
+    uint256 constant Qcy  = 19430845146272042503995416110175245795271603235563329595858119690639500549372;
+    uint256 constant S1x  = 14529212361763788633811869842580421415134713687938570863064659590110934903740;
+    uint256 constant S1y  = 15130539367607292893898013497807485005818775366682240859886811844322272868379;
+    uint256 constant S2x  = 88575883471378427909504541476422256478241201143920420405836063934407519240;
+    uint256 constant S2y  = 3538048320551462152620488185558124425114005176021275627227409411627962175942;
+    uint256 constant S3x  = 18339485453472040659646089143258381971176107908300548337940061504006306000991;
+    uint256 constant S3y  = 401317798322731345836300355016089251665269411090279566075041830406289046834;
     uint256 constant k1   = 2;
     uint256 constant k2   = 3;
     uint256 constant X2x1 = 21831381940315734285607113342023901060522397560371972897001948545212302161822;
@@ -197,7 +197,54 @@ contract PlonkVerifier {
                 }
             }
             
-            function checkInput() {
+            function checkPointBelongsToBN128Curve(p) {
+                let x := calldataload(p)
+                let y := calldataload(add(p, 32))
+
+                // Check that the point is on the curve
+                // y^2 = x^3 + 3
+                let x3_3 := addmod(mulmod(x, mulmod(x, x, qf), qf), 3, qf)
+                let y2 := mulmod(y, y, qf)
+
+                if iszero(eq(x3_3, y2)) {
+                    mstore(0, 0)
+                    return(0, 0x20)
+                }
+            }  
+
+            function checkProofData() {
+                // Check proof commitments belong to the bn128 curve
+                checkPointBelongsToBN128Curve(pA)
+                checkPointBelongsToBN128Curve(pB)
+                checkPointBelongsToBN128Curve(pC)
+                checkPointBelongsToBN128Curve(pZ)
+                checkPointBelongsToBN128Curve(pT1)
+                checkPointBelongsToBN128Curve(pT2)
+                checkPointBelongsToBN128Curve(pT3)
+                checkPointBelongsToBN128Curve(pWxi)
+                checkPointBelongsToBN128Curve(pWxiw)
+
+                // Check proof commitments coordinates are in the field
+                checkField(calldataload(pA))
+                checkField(calldataload(add(pA, 32)))
+                checkField(calldataload(pB))
+                checkField(calldataload(add(pB, 32)))
+                checkField(calldataload(pC))
+                checkField(calldataload(add(pC, 32)))
+                checkField(calldataload(pZ))
+                checkField(calldataload(add(pZ, 32)))
+                checkField(calldataload(pT1))
+                checkField(calldataload(add(pT1, 32)))
+                checkField(calldataload(pT2))
+                checkField(calldataload(add(pT2, 32)))
+                checkField(calldataload(pT3))
+                checkField(calldataload(add(pT3, 32)))
+                checkField(calldataload(pWxi))
+                checkField(calldataload(add(pWxi, 32)))
+                checkField(calldataload(pWxiw))
+                checkField(calldataload(add(pWxiw, 32)))
+
+                // Check proof evaluations are in the field
                 checkField(calldataload(pEval_a))
                 checkField(calldataload(pEval_b))
                 checkField(calldataload(pEval_c))
@@ -718,7 +765,7 @@ contract PlonkVerifier {
             let pMem := mload(0x40)
             mstore(0x40, add(pMem, lastMem))
             
-            checkInput()
+            checkProofData()
             calculateChallenges(pMem, _pubSignals)
             calculateLagrange(pMem)
             calculatePI(pMem, _pubSignals)

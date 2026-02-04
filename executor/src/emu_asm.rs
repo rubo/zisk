@@ -8,13 +8,12 @@ use crate::{
     DeviceMetricsList, DummyCounter, NestedDeviceMetricsList, StaticSMBundle, MAX_NUM_STEPS,
 };
 use asm_runner::{
-    write_input, AsmMTHeader, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmServices, AsmSharedMemory,
-    MinimalTraces, PreloadedMO, PreloadedMT, PreloadedRH, SharedMemoryWriter,
+    shmem_input_name, write_input, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmService, AsmServices,
+    MOOutputShmem, MTOutputShmem, RHOutputShmem, SharedMemoryWriter,
 };
 use data_bus::DataBusTrait;
 use fields::PrimeField64;
 use proofman_common::ProofCtx;
-use rayon::prelude::*;
 use sm_rom::RomSM;
 #[cfg(feature = "stats")]
 use zisk_common::ExecutorStatsEvent;
@@ -46,15 +45,15 @@ pub struct EmulatorAsm {
     rom_sm: Option<Arc<RomSM>>,
 
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    asm_shmem_mt: Arc<Mutex<PreloadedMT>>,
+    asm_shmem_mt: Arc<Mutex<MTOutputShmem>>,
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    asm_shmem_mo: Arc<Mutex<PreloadedMO>>,
+    asm_shmem_mo: Arc<Mutex<MOOutputShmem>>,
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    asm_shmem_rh: Arc<Mutex<Option<PreloadedRH>>>,
+    asm_shmem_rh: Arc<Mutex<Option<RHOutputShmem>>>,
 
     /// Shared memory writers for each assembly service.
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    shmem_input_writer: [Arc<Mutex<Option<SharedMemoryWriter>>>; AsmServices::SERVICES.len()],
+    shmem_input_writer: Arc<Mutex<Option<SharedMemoryWriter>>>,
 }
 
 impl EmulatorAsm {
@@ -69,10 +68,10 @@ impl EmulatorAsm {
         rom_sm: Option<Arc<RomSM>>,
     ) -> Self {
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        let asm_shmem_mt = PreloadedMT::new(local_rank, base_port, unlock_mapped_memory)
+        let asm_shmem_mt = MTOutputShmem::new(local_rank, base_port, unlock_mapped_memory)
             .expect("Failed to create PreloadedMT");
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        let asm_shmem_mo = PreloadedMO::new(local_rank, base_port, unlock_mapped_memory)
+        let asm_shmem_mo = MOOutputShmem::new(local_rank, base_port, unlock_mapped_memory)
             .expect("Failed to create PreloadedMO");
 
         Self {
@@ -90,7 +89,7 @@ impl EmulatorAsm {
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             asm_shmem_rh: Arc::new(Mutex::new(None)),
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-            shmem_input_writer: std::array::from_fn(|_| Arc::new(Mutex::new(None))),
+            shmem_input_writer: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -105,7 +104,7 @@ impl EmulatorAsm {
     ///
     /// # Returns
     /// A tuple containing:
-    /// * `MinimalTraces` - The computed minimal traces.
+    /// * `Vec<EmuTrace>` - The computed minimal traces.
     /// * `DeviceMetricsList` - Flat device metrics collected during execution.
     /// * `NestedDeviceMetricsList` - Hierarchical device metrics collected during execution.
     /// * `Option<JoinHandle<AsmRunnerMO>>` - Optional join handle for the memory-only ASM runner.
@@ -119,7 +118,7 @@ impl EmulatorAsm {
         stats: &ExecutorStatsHandle,
         _caller_stats_id: u64,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
@@ -141,12 +140,10 @@ impl EmulatorAsm {
         #[cfg(feature = "stats")]
         stats.add_stat(parent_stats_id, stats_id, "ASM_WRITE_INPUT", 0, ExecutorStatsEvent::Begin);
 
-        AsmServices::SERVICES.par_iter().enumerate().for_each(|(idx, service)| {
-            let mut input_writer = self.shmem_input_writer[idx].lock().unwrap();
-            input_writer.get_or_insert_with(|| self.create_shmem_writer(service));
+        let mut input_writer = self.shmem_input_writer.lock().unwrap();
+        input_writer.get_or_insert_with(|| self.create_shmem_writer(&AsmService::MO));
 
-            write_input(&mut stdin.lock().unwrap(), input_writer.as_ref().unwrap());
-        });
+        write_input(&mut stdin.lock().unwrap(), input_writer.as_ref().unwrap());
 
         #[cfg(feature = "stats")]
         stats.add_stat(parent_stats_id, stats_id, "ASM_WRITE_INPUT", 0, ExecutorStatsEvent::End);
@@ -199,11 +196,7 @@ impl EmulatorAsm {
         let (min_traces, main_count, secn_count) = self.run_mt_assembly(sm_bundle, stats);
 
         // Store execute steps
-        let steps = if let MinimalTraces::AsmEmuTrace(asm_min_traces) = &min_traces {
-            asm_min_traces.vec_chunks.iter().map(|trace| trace.steps).sum::<u64>()
-        } else {
-            panic!("Expected AsmEmuTrace, got something else");
-        };
+        let steps = min_traces.iter().map(|trace| trace.steps).sum::<u64>();
 
         let execution_result = ZiskExecutionResult::new(steps);
 
@@ -221,14 +214,9 @@ impl EmulatorAsm {
     }
 
     fn create_shmem_writer(&self, service: &asm_runner::AsmService) -> SharedMemoryWriter {
-        let port = if let Some(base_port) = self.base_port {
-            AsmServices::port_for(service, base_port, self.local_rank)
-        } else {
-            AsmServices::default_port(service, self.local_rank)
-        };
+        let port = AsmServices::port_base_for(self.base_port, self.local_rank);
 
-        let shmem_input_name =
-            AsmSharedMemory::<AsmMTHeader>::shmem_input_name(port, *service, self.local_rank);
+        let shmem_input_name = shmem_input_name(port, self.local_rank);
 
         tracing::debug!(
             "Initializing SharedMemoryWriter for service {:?} at '{}'",
@@ -248,7 +236,7 @@ impl EmulatorAsm {
         &self,
         sm_bundle: &StaticSMBundle<F>,
         stats: &ExecutorStatsHandle,
-    ) -> (MinimalTraces, DeviceMetricsList, NestedDeviceMetricsList) {
+    ) -> (Vec<EmuTrace>, DeviceMetricsList, NestedDeviceMetricsList) {
         #[cfg(feature = "stats")]
         let parent_stats_id = stats.next_id();
         #[cfg(feature = "stats")]
@@ -315,7 +303,6 @@ impl EmulatorAsm {
             .into_iter()
             .map(|arc| Arc::try_unwrap(arc).expect("Arc should have single owner after scope"))
             .collect();
-        let asm_runner_mt = AsmRunnerMT::new(emu_traces);
 
         let mut data_buses = results_mu.into_inner().unwrap();
 
@@ -344,7 +331,7 @@ impl EmulatorAsm {
 
         #[cfg(feature = "stats")]
         stats.add_stat(0, parent_stats_id, "RUN_MT_ASSEMBLY", 0, ExecutorStatsEvent::End);
-        (MinimalTraces::AsmEmuTrace(asm_runner_mt), main_count, secn_count)
+        (emu_traces, main_count, secn_count)
     }
 }
 
@@ -357,7 +344,7 @@ impl<F: PrimeField64> crate::Emulator<F> for EmulatorAsm {
         stats: &ExecutorStatsHandle,
         caller_stats_id: u64,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,

@@ -62,6 +62,8 @@ use zisk_distributed_common::{
     WorkerState, WorkersListDto,
 };
 
+use proofman_util::VadcopFinalProof;
+
 /// Trait for sending messages to workers through various communication channels.
 ///
 /// This trait abstracts the message delivery mechanism, allowing different implementations
@@ -415,13 +417,13 @@ impl Coordinator {
 
         // Clone job.final_proof and error if does not exist
         let final_proof = if job.state == JobState::Completed {
-            job.final_proof.clone().ok_or_else(|| {
+            Some(job.final_proof.clone().ok_or_else(|| {
                 CoordinatorError::Internal(
                     "Final proof is missing during post-launch processing".to_string(),
                 )
-            })?
+            })?)
         } else {
-            Vec::new()
+            None
         };
 
         // Check if webhook URL is configured and spawn it in a separate task
@@ -436,11 +438,17 @@ impl Coordinator {
         // Save proof to disk
         if state == JobState::Completed && !self.config.server.no_save_proofs {
             let folder = self.config.server.proofs_dir.clone();
-            zisk_common::save_proof(job_id.as_str(), folder, &final_proof, false).map_err(|e| {
-                error!("Failed to save proof for job {}: {}", job_id, e);
-                job.cleanup();
-                CoordinatorError::Internal(e.to_string())
-            })?;
+            let vadcop_proof = VadcopFinalProof::new_from_proof(&final_proof.unwrap(), true)
+                .map_err(|e| {
+                    CoordinatorError::Internal(format!("Failed to create VadcopFinalProof: {}", e))
+                })?;
+            zisk_common::save_proof(job_id.as_str(), folder, &vadcop_proof, false).map_err(
+                |e| {
+                    error!("Failed to save proof for job {}: {}", job_id, e);
+                    job.cleanup();
+                    CoordinatorError::Internal(e.to_string())
+                },
+            )?;
         }
 
         // Clean up process data for the job

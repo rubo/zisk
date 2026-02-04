@@ -91,3 +91,51 @@ pub struct Stats {
     /// Number of chunks
     pub num_chunks: usize,
 }
+
+pub trait ElfBinaryLike {
+    fn elf(&self) -> &[u8];
+    fn name(&self) -> &str;
+    fn with_hints(&self) -> bool;
+}
+
+pub struct ElfBinaryOwned {
+    pub elf: Vec<u8>,
+    pub name: String,
+    pub with_hints: bool,
+}
+
+impl ElfBinaryOwned {
+    pub const fn new(elf: Vec<u8>, name: String, with_hints: bool) -> Self {
+        Self { elf, name, with_hints }
+    }
+}
+
+impl ElfBinaryLike for ElfBinaryOwned {
+    fn elf(&self) -> &[u8] {
+        &self.elf
+    }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn with_hints(&self) -> bool {
+        self.with_hints
+    }
+}
+
+pub struct ElfBinary {
+    pub elf: &'static [u8],
+    pub name: &'static str,
+    pub with_hints: bool,
+}
+
+impl ElfBinaryLike for ElfBinary {
+    fn elf(&self) -> &[u8] {
+        self.elf
+    }
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn with_hints(&self) -> bool {
+        self.with_hints
+    }
+}

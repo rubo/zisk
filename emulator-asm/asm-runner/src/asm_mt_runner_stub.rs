@@ -1,23 +1,10 @@
-use zisk_common::{ChunkId, EmuTrace, ExecutorStatsHandle};
+use zisk_common::{EmuTrace, ExecutorStatsHandle};
 
 use std::ffi::c_void;
 use std::fmt::Debug;
 use std::sync::Arc;
 
 use anyhow::Result;
-pub trait Task: Send + Sync + 'static {
-    type Output: Send + 'static;
-    fn execute(self) -> Self::Output;
-}
-
-pub type TaskFactory<'a, T> = Box<dyn Fn(ChunkId, Arc<EmuTrace>) -> T + Send + Sync + 'a>;
-
-#[derive(Debug)]
-pub enum MinimalTraces {
-    None,
-    EmuTrace(Vec<EmuTrace>),
-    AsmEmuTrace(AsmRunnerMT),
-}
 
 pub struct PreloadedMT {}
 

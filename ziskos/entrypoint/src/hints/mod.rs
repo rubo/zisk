@@ -113,6 +113,7 @@ pub fn init_hints_socket(socket_path: PathBuf) -> io::Result<()> {
     let mut socket_writer = UnixSocketWriter::new(&socket_path).map_err(io::Error::other)?;
 
     // Open the connection (waits for client to connect)
+    // TODO: Implement open timeout
     socket_writer.open().map_err(io::Error::other)?;
     println!("Client connected to hints socket! Starting hint data transfer...");
 
@@ -194,14 +195,17 @@ impl UnixSocketWriter {
     }
 }
 
-// TODO: implement error handling
 impl Write for UnixSocketWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner.write(buf).map_err(io::Error::other)
+        self.inner
+            .write(buf)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.inner.flush().map_err(io::Error::other)
+        self.inner
+            .flush()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 

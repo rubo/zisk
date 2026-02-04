@@ -8413,13 +8413,13 @@ impl ZiskRom2Asm {
         // Copy data consuming REG_B u64's starting at REG_A=0, increasing REG_A until REG_A == REG_B
 
         // Initialize REG_A to 0
-        *code += &format!("\txor {}, {} {}\n", REG_A, REG_A, ctx.comment_str("a = 0"));
+        *code += &format!("\txor {}, {} {}\n", REG_FLAG, REG_FLAG, ctx.comment_str("flag = 0"));
 
         // Loop start
         *code += &format!("pc_{:x}_fcall_copy_params_loop_start:\n", ctx.pc);
 
         // End loop when REG_A == REG_B
-        *code += &format!("\tcmp {}, {} {}\n", REG_A, REG_B, ctx.comment_str("a =? b"));
+        *code += &format!("\tcmp {}, {} {}\n", REG_FLAG, REG_B, ctx.comment_str("flag =? b"));
         *code += &format!("\tje pc_{:x}_fcall_copy_params_loop_end\n", ctx.pc);
 
         // Calculate the address of the next precompile u64 value = address + read % buffer_size
@@ -8429,7 +8429,12 @@ impl ZiskRom2Asm {
             ctx.mem_precompile_read_address,
             ctx.comment_str("address = precompile_read")
         );
-        *code += &format!("\tadd {}, {} {}\n", REG_ADDRESS, REG_A, ctx.comment_str("address += a"));
+        *code += &format!(
+            "\tadd {}, {} {}\n",
+            REG_ADDRESS,
+            REG_FLAG,
+            ctx.comment_str("address += flag")
+        );
         *code += &format!(
             "\tand {}, 0x{:x} {}\n",
             REG_ADDRESS,
@@ -8448,14 +8453,14 @@ impl ZiskRom2Asm {
         *code += &format!(
             "\tmov [{} + {}*8 + {}*8], {} {}\n",
             reg_address,
-            REG_A,
+            REG_FLAG,
             FCALL_RESULT,
             REG_VALUE,
             ctx.comment_str("addr[] = value")
         );
 
-        // Increment REG_A
-        *code += &format!("\tinc {} {}\n", REG_A, ctx.comment_str("a++"));
+        // Increment REG_FLAG
+        *code += &format!("\tinc {} {}\n", REG_FLAG, ctx.comment_str("flag++"));
 
         // Jump to loop start
         *code += &format!("\tjmp pc_{:x}_fcall_copy_params_loop_start\n", ctx.pc);
@@ -8467,7 +8472,7 @@ impl ZiskRom2Asm {
         *code += &format!(
             "\tadd {}, {} {}\n",
             ctx.mem_precompile_read_address,
-            REG_A,
+            REG_FLAG,
             ctx.comment_str("precompile_read += fcall_result_size")
         );
     }

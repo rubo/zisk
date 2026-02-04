@@ -4,12 +4,12 @@ use std::{
 };
 
 use crate::{DeviceMetricsList, NestedDeviceMetricsList, StaticSMBundle};
-use asm_runner::{AsmRunnerMO, MinimalTraces};
+use asm_runner::AsmRunnerMO;
 
 use fields::PrimeField64;
 use proofman_common::ProofCtx;
 use sm_rom::RomSM;
-use zisk_common::{io::ZiskStdin, ExecutorStatsHandle, ZiskExecutionResult};
+use zisk_common::{io::ZiskStdin, EmuTrace, ExecutorStatsHandle, ZiskExecutionResult};
 use zisk_core::ZiskRom;
 
 pub struct EmulatorAsm {}
@@ -37,7 +37,7 @@ impl EmulatorAsm {
         _stats: &ExecutorStatsHandle,
         _caller_stats_id: u64,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,

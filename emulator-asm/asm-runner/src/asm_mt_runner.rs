@@ -10,8 +10,9 @@ use std::time::Instant;
 use tracing::{error, info};
 
 use crate::{
-    AsmMTChunk, AsmMTHeader, AsmRunError, AsmService, AsmServices, AsmSharedMemory,
-    SEM_CHUNK_DONE_WAIT_DURATION,
+    sem_chunk_done_name, shmem_output_name, AsmMTChunk, AsmMTHeader, AsmMultiSharedMemory,
+    AsmRunError, AsmService, AsmServices, SEM_CHUNK_DONE_WAIT_DURATION, TRACE_DELTA_SIZE,
+    TRACE_INITIAL_SIZE, TRACE_MAX_SIZE,
 };
 
 use anyhow::{Context, Result};
@@ -19,35 +20,29 @@ use anyhow::{Context, Result};
 #[cfg(feature = "stats")]
 use zisk_common::ExecutorStatsEvent;
 
-pub enum MinimalTraces {
-    None,
-    EmuTrace(Vec<EmuTrace>),
-    AsmEmuTrace(AsmRunnerMT),
+pub struct MTOutputShmem {
+    pub output_shmem: AsmMultiSharedMemory<AsmMTHeader>,
 }
 
-pub struct PreloadedMT {
-    pub output_shmem: AsmSharedMemory<AsmMTHeader>,
-}
-
-impl PreloadedMT {
+impl MTOutputShmem {
     pub fn new(
         local_rank: i32,
         base_port: Option<u16>,
         unlock_mapped_memory: bool,
     ) -> Result<Self> {
-        let port = if let Some(base_port) = base_port {
-            AsmServices::port_for(&AsmService::MT, base_port, local_rank)
-        } else {
-            AsmServices::default_port(&AsmService::MT, local_rank)
-        };
+        let port = AsmServices::port_base_for(base_port, local_rank);
 
-        let output_name =
-            AsmSharedMemory::<AsmMTHeader>::shmem_output_name(port, AsmService::MT, local_rank);
+        let output_name = shmem_output_name(port, AsmService::MT, local_rank, None);
 
-        let output_shared_memory =
-            AsmSharedMemory::<AsmMTHeader>::open_and_map(&output_name, unlock_mapped_memory)?;
+        let output_shmem = AsmMultiSharedMemory::<AsmMTHeader>::open_and_map(
+            &output_name,
+            TRACE_INITIAL_SIZE,
+            TRACE_DELTA_SIZE,
+            TRACE_MAX_SIZE,
+            unlock_mapped_memory,
+        )?;
 
-        Ok(Self { output_shmem: output_shared_memory })
+        Ok(Self { output_shmem })
     }
 }
 
@@ -63,7 +58,7 @@ impl AsmRunnerMT {
 
     #[allow(clippy::too_many_arguments)]
     pub fn run_and_count<F: FnMut(usize, Arc<EmuTrace>)>(
-        preloaded: &mut PreloadedMT,
+        preloaded: &mut MTOutputShmem,
         max_steps: u64,
         chunk_size: u64,
         mut on_chunk: F,
@@ -79,19 +74,12 @@ impl AsmRunnerMT {
         #[cfg(feature = "stats")]
         _stats.add_stat(0, parent_stats_id, "ASM_MT_RUNNER", 0, ExecutorStatsEvent::Begin);
 
-        let port = if let Some(base_port) = base_port {
-            AsmServices::port_for(&AsmService::MT, base_port, local_rank)
-        } else {
-            AsmServices::default_port(&AsmService::MT, local_rank)
-        };
+        let port = AsmServices::port_base_for(base_port, local_rank);
 
-        let sem_chunk_done_name =
-            AsmSharedMemory::<AsmMTHeader>::shmem_chunk_done_name(port, AsmService::MT, local_rank);
+        let sem_chunk_done_name = sem_chunk_done_name(port, AsmService::MT, local_rank);
 
         let mut sem_chunk_done = NamedSemaphore::create(sem_chunk_done_name.clone(), 0)
             .map_err(|e| AsmRunError::SemaphoreError(sem_chunk_done_name.clone(), e))?;
-
-        let start_time = Instant::now();
 
         let handle = std::thread::spawn(move || {
             let asm_services = AsmServices::new(world_rank, local_rank, base_port);
@@ -100,13 +88,13 @@ impl AsmRunnerMT {
             let stats_id = __stats.next_id();
             #[cfg(feature = "stats")]
             __stats.add_stat(parent_stats_id, stats_id, "ASM_MT", 0, ExecutorStatsEvent::Begin);
-
+            let start = Instant::now();
             let result = asm_services.send_minimal_trace_request(max_steps, chunk_size);
 
             #[cfg(feature = "stats")]
             __stats.add_stat(parent_stats_id, stats_id, "ASM_MT", 0, ExecutorStatsEvent::End);
 
-            result
+            (result, start.elapsed())
         });
 
         let mut chunk_id = ChunkId(0);
@@ -114,17 +102,35 @@ impl AsmRunnerMT {
         // Get the pointer to the data in the shared memory.
         let mut data_ptr = preloaded.output_shmem.data_ptr() as *const AsmMTChunk;
 
-        let mut emu_traces = Vec::new();
-
         let __stats = _stats.clone();
 
-        // Threshold (in bytes) used to detect when the shared memory region size has changed.
-        // Computed to optimize the common case where minor size fluctuations are ignored.
-        // It is based on the worst-case scenario of memory usage.
-        let threshold_bytes = (chunk_size as usize * 200) + (44 * 8) + 32;
+        // Calculate threshold for detecting when to map additional shared memory files.
+        // CRITICAL: These constants must match main.c to ensure we check for new files BEFORE
+        // the C++ producer needs to allocate beyond current mapped region. Mismatch will cause
+        // the producer to map new files while we still hold Cow::Borrowed references to old
+        // mappings, creating dangling pointers.
+        //
+        // Constants from main.c:
+        //   MAX_MTRACE_REGS_ACCESS_SIZE = (2 + 2 + 3) * 8    // Register access overhead per step
+        //   MAX_BYTES_DIRECT_MTRACE     = 256                // Direct memory trace data per step
+        //   MAX_BYTES_MTRACE_STEP       = 256 + 56 = 312     // Total per-step overhead
+        //   MAX_TRACE_CHUNK_INFO        = (44 * 8) + 32      // Chunk metadata size
+        const MAX_MTRACE_REGS_ACCESS_SIZE: usize = (2 + 2 + 3) * 8; // 56 bytes
+        const MAX_BYTES_DIRECT_MTRACE: usize = 256;
+        const MAX_BYTES_MTRACE_STEP: usize = MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE;
+        const MAX_TRACE_CHUNK_INFO: usize = (44 * 8) + 32; // 384 bytes
+
+        let threshold_bytes = (chunk_size as usize * MAX_BYTES_MTRACE_STEP) + MAX_TRACE_CHUNK_INFO;
         let mut threshold = unsafe {
-            preloaded.output_shmem.mapped_ptr().add(threshold_bytes) as *const AsmMTChunk
+            preloaded
+                .output_shmem
+                .mapped_ptr()
+                .add(preloaded.output_shmem.total_mapped_size() - threshold_bytes)
+                as *const AsmMTChunk
         };
+
+        // Pre-allocate reasonable initial capacity to avoid early reallocations
+        let mut emu_traces: Vec<Arc<EmuTrace>> = Vec::with_capacity(1024);
 
         let exit_code = loop {
             match sem_chunk_done.timed_wait(SEM_CHUNK_DONE_WAIT_DURATION) {
@@ -144,17 +150,19 @@ impl AsmRunnerMT {
                     // Synchronize with memory changes from the C++ side
                     fence(Ordering::Acquire);
 
-                    // Check if we need to remap the shared memory
+                    // Check if we need to map additional shared memory files.
                     if data_ptr >= threshold
-                        && preloaded
-                            .output_shmem
-                            .check_size_changed(&mut data_ptr)
-                            .context("Failed to check and remap shared memory for MO trace")?
+                        && preloaded.output_shmem.check_size_changed().context(
+                            "Failed to check and map new shared memory files for MT trace",
+                        )?
                     {
-                        threshold = unsafe {
-                            preloaded.output_shmem.mapped_ptr().add(threshold_bytes)
-                                as *const AsmMTChunk
-                        };
+                        // Update threshold based on new total mapped size
+                        threshold =
+                            unsafe {
+                                preloaded.output_shmem.mapped_ptr().add(
+                                    preloaded.output_shmem.total_mapped_size() - threshold_bytes,
+                                ) as *const AsmMTChunk
+                            };
                     }
 
                     let emu_trace = Arc::new(AsmMTChunk::to_emu_trace(&mut data_ptr));
@@ -190,15 +198,14 @@ impl AsmRunnerMT {
                 .context("Child process returned error");
         }
 
-        let total_steps = emu_traces.iter().map(|x| x.steps).sum::<u64>();
-        let mhz = (total_steps as f64 / start_time.elapsed().as_secs_f64()) / 1_000_000.0;
-        info!("··· Assembly execution speed: {}MHz", mhz.round());
-
         // Wait for the assembly emulator to complete writing the trace
-        let response = handle
-            .join()
-            .map_err(|_| AsmRunError::JoinPanic)?
-            .map_err(AsmRunError::ServiceError)?;
+        let (handle, elapsed) = handle.join().map_err(|_| AsmRunError::JoinPanic)?;
+
+        let total_steps = emu_traces.iter().map(|x| x.steps).sum::<u64>();
+        let mhz = (total_steps as f64 / elapsed.as_secs_f64()) / 1_000_000.0;
+        info!("··· Assembly execution speed: {}MHz ({:?})", mhz.round(), elapsed);
+
+        let response = handle.map_err(AsmRunError::ServiceError)?;
 
         assert_eq!(response.result, 0);
         assert!(response.trace_len > 0);

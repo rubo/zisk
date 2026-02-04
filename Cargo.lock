@@ -4396,7 +4396,6 @@ dependencies = [
 name = "sm-main"
 version = "0.16.0"
 dependencies = [
- "asm-runner",
  "fields",
  "mem-common",
  "num-bigint",

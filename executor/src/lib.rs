@@ -23,11 +23,11 @@ pub use static_data_bus_collect::*;
 pub type DeviceMetricsList = Vec<DeviceMetricsByChunk>;
 pub type NestedDeviceMetricsList = HashMap<usize, DeviceMetricsList>;
 
-use asm_runner::{AsmRunnerMO, MinimalTraces};
+use asm_runner::AsmRunnerMO;
 use fields::PrimeField64;
 use proofman_common::ProofCtx;
 use std::{collections::HashMap, sync::Mutex, thread::JoinHandle};
-use zisk_common::{io::ZiskStdin, ExecutorStatsHandle, ZiskExecutionResult};
+use zisk_common::{io::ZiskStdin, EmuTrace, ExecutorStatsHandle, ZiskExecutionResult};
 
 /// Trait for unified execution across different emulator backends
 pub trait Emulator<F: PrimeField64>: Send + Sync {
@@ -40,7 +40,7 @@ pub trait Emulator<F: PrimeField64>: Send + Sync {
         stats: &ExecutorStatsHandle,
         caller_stats_id: u64,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
@@ -70,7 +70,7 @@ impl<F: PrimeField64> Emulator<F> for EmulatorKind {
         stats: &ExecutorStatsHandle,
         caller_stats_id: u64,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,

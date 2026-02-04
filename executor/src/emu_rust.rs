@@ -92,15 +92,8 @@ impl EmulatorRust {
             ..EmuOptions::default()
         };
 
-        let min_traces = ZiskEmulator::compute_minimal_traces(
-            &self.zisk_rom,
-            &input_data,
-            &emu_options,
-            num_threads,
-        )
-        .expect("Error during emulator execution");
-
-        min_traces
+        ZiskEmulator::compute_minimal_traces(&self.zisk_rom, &input_data, &emu_options, num_threads)
+            .expect("Error during emulator execution")
     }
 
     /// Counts metrics for secondary state machines based on minimal traces.

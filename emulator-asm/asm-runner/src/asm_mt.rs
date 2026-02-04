@@ -51,7 +51,10 @@ impl AsmMTChunk {
         let mem_reads_ptr = *mapped_ptr as *const u64;
         let mem_reads_len = chunk.mem_reads_size as usize;
         let mem_reads: Cow<'static, [u64]> = Cow::Borrowed(unsafe {
-            std::mem::transmute(std::slice::from_raw_parts(mem_reads_ptr, mem_reads_len))
+            std::mem::transmute::<&[u64], &[u64]>(std::slice::from_raw_parts(
+                mem_reads_ptr,
+                mem_reads_len,
+            ))
         });
 
         // Advance the pointer after reading memory reads

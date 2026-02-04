@@ -164,8 +164,7 @@ impl<H: AsmShmemHeader> AsmMultiSharedMemory<H> {
         let files_needed = if allocated_size <= self.initial_size {
             1
         } else {
-            1 + ((allocated_size - self.initial_size + self.incremental_size - 1)
-                / self.incremental_size)
+            1 + (allocated_size - self.initial_size).div_ceil(self.incremental_size)
         };
 
         let current_files = self.mapped_files.len();

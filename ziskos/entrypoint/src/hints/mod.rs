@@ -197,15 +197,11 @@ impl UnixSocketWriter {
 
 impl Write for UnixSocketWriter {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.inner
-            .write(buf)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+        self.inner.write(buf).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.inner
-            .flush()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+        self.inner.flush().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 

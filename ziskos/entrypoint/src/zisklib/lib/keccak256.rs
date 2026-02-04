@@ -1,9 +1,46 @@
 use crate::syscalls::syscall_keccak_f;
 
+#[cfg(zisk_hints_debug)]
+use std::os::raw::c_char;
+
+#[cfg(all(not(all(target_os = "zkvm", target_vendor = "zisk")), zisk_hints))]
+extern "C" {
+    fn hint_keccak256(input_ptr: *const u8, input_len: usize);
+}
+
+#[cfg(all(not(all(target_os = "zkvm", target_vendor = "zisk")), zisk_hints_debug))]
+extern "C" {
+    fn hint_log_c(msg: *const c_char);
+}
+
+#[cfg(zisk_hints_debug)]
+pub fn hint_log<S: AsRef<str>>(msg: S) {
+    // On native we call external C function to log hints, since it controls if hints are paused or not
+    #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
+    {
+        use std::ffi::CString;
+
+        if let Ok(c) = CString::new(msg.as_ref()) {
+            unsafe { hint_log_c(c.as_ptr()) };
+        }
+    }
+    // On zkvm/zisk, we can just print directly
+    #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+    {
+        println!("{}", msg.as_ref());
+    }
+}
+
 /// Keccak-256 rate in bytes (1600 - 2*256) / 8 = 136 bytes
 const KECCAK256_RATE: usize = 136;
 
-/// Keccak-256 hash function. For reference: https://keccak.team/keccak_specs_summary.html
+/// Computes the Keccak-256 hash of the input data.
+///
+/// This implements the Keccak sponge construction with:
+/// - Rate: 1088 bits (136 bytes)
+/// - Capacity: 512 bits (64 bytes)
+/// - Output: 256 bits (32 bytes)
+/// - Padding: Keccak padding (0x01...0x80)
 pub fn keccak256(input: &[u8], #[cfg(feature = "hints")] hints: &mut Vec<u64>) -> [u8; 32] {
     let mut state = [0u64; 25];
     let input_len = input.len();
@@ -100,12 +137,12 @@ pub unsafe extern "C" fn keccak256_c(
 #[cfg_attr(feature = "hints", export_name = "hints_native_keccak256_c")]
 pub unsafe extern "C" fn native_keccak256(bytes: *const u8, len: usize, output: *mut u8) {
     #[cfg(zisk_hints)]
-    crate::hints::hint_keccak256(bytes, len);
+    hint_keccak256(bytes, len);
 
     #[cfg(zisk_hints_debug)]
     {
         let input_bytes = unsafe { core::slice::from_raw_parts(bytes, len) };
-        crate::hints::hint_log(format!("hint_keccak256 (bytes: {:?}, len: {})", input_bytes, len));
+        hint_log(format!("hint_keccak256 (bytes: {:?}, len: {})", input_bytes, len));
     }
 
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]

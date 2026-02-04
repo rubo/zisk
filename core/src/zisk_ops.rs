@@ -10,7 +10,7 @@
 #![allow(unused)]
 
 use precompiles_helpers::DmaInfo;
-use ziskos::zisklib::fcall_proxy;
+use ziskos_hints::zisklib::fcall_proxy;
 
 use fields::{poseidon2_hash, Goldilocks, Poseidon16, PrimeField64};
 use paste::paste;
@@ -1514,7 +1514,7 @@ fn internal_precompiled_load_data(
         if ctx.precompiled.input_data.len() != expected_len {
             panic!(
                 "[{title}] ctx.precompiled.input_data.len={} != {expected_len} \
-                [{params_count}+{load_indirections}*{load_chunks}+{load_rem}+{result}] at PC:0x{:08X} STEP:{}",                
+                [{params_count}+{load_indirections}*{load_chunks}+{load_rem}+{result}] at PC:0x{:08X} STEP:{}",
                 ctx.precompiled.input_data.len(), ctx.pc, ctx.step,
             );
         }

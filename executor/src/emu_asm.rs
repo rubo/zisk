@@ -9,7 +9,7 @@ use crate::{
 };
 use asm_runner::{
     write_input, AsmMTHeader, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmService, AsmServices,
-    AsmSharedMemory, PreloadedMO, PreloadedMT, PreloadedRH, SharedMemoryWriter,
+    AsmSharedMemory, MOOutputShmem, MTOutputShmem, RHOutputShmem, SharedMemoryWriter,
 };
 use data_bus::DataBusTrait;
 use fields::PrimeField64;
@@ -45,11 +45,11 @@ pub struct EmulatorAsm {
     rom_sm: Option<Arc<RomSM>>,
 
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    asm_shmem_mt: Arc<Mutex<PreloadedMT>>,
+    asm_shmem_mt: Arc<Mutex<MTOutputShmem>>,
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    asm_shmem_mo: Arc<Mutex<PreloadedMO>>,
+    asm_shmem_mo: Arc<Mutex<MOOutputShmem>>,
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-    asm_shmem_rh: Arc<Mutex<Option<PreloadedRH>>>,
+    asm_shmem_rh: Arc<Mutex<Option<RHOutputShmem>>>,
 
     /// Shared memory writers for each assembly service.
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -68,10 +68,10 @@ impl EmulatorAsm {
         rom_sm: Option<Arc<RomSM>>,
     ) -> Self {
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        let asm_shmem_mt = PreloadedMT::new(local_rank, base_port, unlock_mapped_memory)
+        let asm_shmem_mt = MTOutputShmem::new(local_rank, base_port, unlock_mapped_memory)
             .expect("Failed to create PreloadedMT");
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        let asm_shmem_mo = PreloadedMO::new(local_rank, base_port, unlock_mapped_memory)
+        let asm_shmem_mo = MOOutputShmem::new(local_rank, base_port, unlock_mapped_memory)
             .expect("Failed to create PreloadedMO");
 
         Self {

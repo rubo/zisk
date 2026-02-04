@@ -25,13 +25,13 @@ use zisk_common::ExecutorStatsEvent;
 #[cfg(feature = "save_mem_plans")]
 use mem_common::save_plans;
 
-pub struct PreloadedMO {
+pub struct MOOutputShmem {
     pub output_shmem: AsmMultiSharedMemory<AsmMOHeader>,
     mem_planner: Option<MemPlanner>,
     handle_mo: Option<std::thread::JoinHandle<MemPlanner>>,
 }
 
-impl PreloadedMO {
+impl MOOutputShmem {
     pub fn new(
         local_rank: i32,
         base_port: Option<u16>,
@@ -66,7 +66,7 @@ impl PreloadedMO {
     }
 }
 
-impl Drop for PreloadedMO {
+impl Drop for MOOutputShmem {
     fn drop(&mut self) {
         if let Some(handle_mo) = self.handle_mo.take() {
             match handle_mo.join() {
@@ -94,7 +94,7 @@ impl AsmRunnerMO {
 
     #[allow(clippy::too_many_arguments)]
     pub fn run(
-        preloaded: &mut PreloadedMO,
+        preloaded: &mut MOOutputShmem,
         max_steps: u64,
         chunk_size: u64,
         world_rank: i32,

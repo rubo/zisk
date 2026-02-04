@@ -20,11 +20,11 @@ use anyhow::{Context, Result};
 #[cfg(feature = "stats")]
 use zisk_common::ExecutorStatsEvent;
 
-pub struct PreloadedMT {
+pub struct MTOutputShmem {
     pub output_shmem: AsmMultiSharedMemory<AsmMTHeader>,
 }
 
-impl PreloadedMT {
+impl MTOutputShmem {
     pub fn new(
         local_rank: i32,
         base_port: Option<u16>,
@@ -67,7 +67,7 @@ impl AsmRunnerMT {
 
     #[allow(clippy::too_many_arguments)]
     pub fn run_and_count<F: FnMut(usize, Arc<EmuTrace>)>(
-        preloaded: &mut PreloadedMT,
+        preloaded: &mut MTOutputShmem,
         max_steps: u64,
         chunk_size: u64,
         mut on_chunk: F,

@@ -9,11 +9,11 @@ use anyhow::{Context, Result};
 use named_sem::NamedSemaphore;
 use std::sync::atomic::{fence, Ordering};
 
-pub struct PreloadedRH {
+pub struct RHOutputShmem {
     pub output_shmem: AsmSharedMemory<AsmRHHeader>,
 }
 
-impl PreloadedRH {
+impl RHOutputShmem {
     pub fn new(
         local_rank: i32,
         base_port: Option<u16>,
@@ -60,7 +60,7 @@ impl AsmRunnerRH {
     }
 
     pub fn run(
-        asm_shared_memory: &mut Option<PreloadedRH>,
+        asm_shared_memory: &mut Option<RHOutputShmem>,
         max_steps: u64,
         world_rank: i32,
         local_rank: i32,
@@ -116,7 +116,7 @@ impl AsmRunnerRH {
 
         if asm_shared_memory.is_none() {
             *asm_shared_memory =
-                Some(PreloadedRH::new(local_rank, base_port, unlock_mapped_memory)?);
+                Some(RHOutputShmem::new(local_rank, base_port, unlock_mapped_memory)?);
         }
 
         let asm_rowh_output =

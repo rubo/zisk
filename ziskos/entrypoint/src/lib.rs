@@ -8,13 +8,17 @@ mod fcall;
 mod profile;
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 pub use fcall::*;
-pub use profile::*;
-pub mod zisklib;
-pub mod syscalls;
 pub mod io;
+pub use profile::*;
+pub mod syscalls;
+pub mod zisklib;
 pub mod ziskos_definitions;
 
-#[cfg(all(not(all(target_os = "zkvm", target_vendor = "zisk")), any(zisk_hints, zisk_hints_debug), feature = "user-hints"))]
+#[cfg(all(
+    not(all(target_os = "zkvm", target_vendor = "zisk")),
+    any(zisk_hints, zisk_hints_debug),
+    feature = "user-hints"
+))]
 pub mod hints;
 
 #[macro_export]

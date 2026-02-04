@@ -96,7 +96,12 @@ impl HintBuffer {
 
     #[inline(always)]
     pub fn write_hint_data(&self, data: *const u8, len: usize) {
-        assert!(HEADER_LEN + len <= MAX_WRITER_LEN, "Hint size ({} bytes) exceeds max hint size ({} bytes)", HEADER_LEN + len, MAX_WRITER_LEN);
+        assert!(
+            HEADER_LEN + len <= MAX_WRITER_LEN,
+            "Hint size ({} bytes) exceeds max hint size ({} bytes)",
+            HEADER_LEN + len,
+            MAX_WRITER_LEN
+        );
         let payload = unsafe { std::slice::from_raw_parts(data, len) };
         self.inner.lock().unwrap().write_bytes(payload);
     }
@@ -126,7 +131,6 @@ impl HintBuffer {
                 g.commit_pos = 0;
                 g.buf.split_to(n).freeze()
             };
-
 
             // Write hints from chunk without holding the lock
             let mut chunk_pos = 0usize;

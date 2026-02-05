@@ -1,11 +1,11 @@
-name: Build zisklib (riscv64)
+name: Build ziskos (zisklib) staticlib (riscv64)
 
 on:
   workflow_dispatch:
 
 jobs:
   build-zisklib:
-    name: Build static libziskclib.a for riscv64 zkvm
+    name: Build static libziskos.a for riscv64 zkvm
     runs-on: ubuntu-22.04
     env:
       TARGET: riscv64ima-zisk-zkvm-elf
@@ -43,12 +43,12 @@ jobs:
         run: |
           ./target/release/cargo-zisk sdk install-toolchain
 
-      - name: Build ziskclib static library
+      - name: Build ziskos static library
         run: |
-          cargo +zisk build -p ziskclib --release --target "${TARGET}"
+          cargo +zisk rustc -p ziskos --release --target "${TARGET}" -- --crate-type staticlib
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: zisklib-${{ env.TARGET }}
-          path: target/${{ env.TARGET }}/release/libziskclib.a
+          name: ziskos-${{ env.TARGET }}
+          path: target/${{ env.TARGET }}/release/libziskos.a

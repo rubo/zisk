@@ -1,0 +1,37 @@
+name: Build zisklib (riscv64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-zisklib:
+    name: Build static libziskclib.a for riscv64 linux
+    runs-on: ubuntu-22.04
+    env:
+      TARGET: riscv64-unknown-linux-gnu
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          target: ${{ env.TARGET }}
+          override: true
+
+      - name: Install riscv64 toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-linux-gnu
+
+      - name: Build ziskclib static library
+        run: |
+          cargo build -p ziskclib --release --target "${TARGET}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zisklib-${{ env.TARGET }}
+          path: target/${{ env.TARGET }}/release/libziskclib.a

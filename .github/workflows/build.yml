@@ -5,10 +5,10 @@ on:
 
 jobs:
   build-zisklib:
-    name: Build static libziskclib.a for riscv64 linux
+    name: Build static libziskclib.a for riscv64 zkvm
     runs-on: ubuntu-22.04
     env:
-      TARGET: riscv64gc-unknown-linux-gnu
+      TARGET: riscv64ima-zisk-zkvm-elf
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -18,17 +18,24 @@ jobs:
         with:
           toolchain: stable
           profile: minimal
-          target: ${{ env.TARGET }}
           override: true
 
       - name: Install riscv64 toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-linux-gnu
+          sudo apt-get install -y gcc-riscv64-unknown-elf
+
+      - name: Build cargo-zisk
+        run: |
+          cargo build -p cargo-zisk --release
+
+      - name: Install ZisK toolchain
+        run: |
+          ./target/release/cargo-zisk sdk install-toolchain
 
       - name: Build ziskclib static library
         run: |
-          cargo build -p ziskclib --release --target "${TARGET}"
+          cargo +zisk build -p ziskclib --release --target "${TARGET}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

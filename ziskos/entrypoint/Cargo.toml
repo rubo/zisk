@@ -7,6 +7,10 @@ keywords = { workspace = true }
 repository = { workspace = true }
 categories = { workspace = true }
 
+[lib]
+name = "ziskos"
+crate-type = ["staticlib", "rlib"]
+
 [dependencies]
 lib-c = { workspace = true }
 

@@ -203,7 +203,7 @@ impl AsmRunnerMT {
 
         let total_steps = emu_traces.iter().map(|x| x.steps).sum::<u64>();
         let mhz = (total_steps as f64 / elapsed.as_secs_f64()) / 1_000_000.0;
-        info!("··· Assembly execution speed: {}MHz ({:?})", mhz.round(), elapsed);
+        info!("··· Assembly execution speed: {}MHz ({:2?})", mhz.round(), elapsed);
 
         let response = handle.map_err(AsmRunError::ServiceError)?;
 

@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       TARGET: riscv64ima-zisk-zkvm-elf
+      CARGO_TARGET_RISCV64IMA_ZISK_ZKVM_ELF_RUSTFLAGS: "-Cpasses=lower-atomic -Cprefer-dynamic=no"
+      RUSTFLAGS: "-Cprefer-dynamic=no"
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4

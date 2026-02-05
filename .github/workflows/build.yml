@@ -8,7 +8,7 @@ jobs:
     name: Build static libziskclib.a for riscv64 linux
     runs-on: ubuntu-22.04
     env:
-      TARGET: riscv64-unknown-linux-gnu
+      TARGET: riscv64gc-unknown-linux-gnu
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4

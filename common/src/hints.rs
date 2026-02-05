@@ -45,7 +45,7 @@
 //! For data hints, the hint code (32 bits) is structured as follows:
 //! - **Bit 31 (MSB)**: Indicates if the data is pass-through (1) or requires computation (0)
 //! - **Bits 0-30**: Encode the built-in hint code as defined in the constants
-//!   (e.g., `HINT_SHA256`, `HINT_BN254_G1_ADD`, `HINT_SECP256K1_ECRECOVER`, etc.)
+//!   (e.g., `HINT_SHA256`, `HINT_BN254_G1_ADD`, `HINT_SECP256K1_RECOVER`, etc.)
 //! ```
 
 use std::fmt::Display;
@@ -68,7 +68,7 @@ const HINT_BN254_G1_MUL: u32 = 0x0201;
 const HINT_BN254_PAIRING_CHECK: u32 = 0x0205;
 
 // Secp256k1 hint codes
-const HINT_SECP256K1_ECRECOVER: u32 = 0x0300;
+const HINT_SECP256K1_RECOVER: u32 = 0x0300;
 const HINT_SECP256R1_ECDSA_VERIFY: u32 = 0x0301;
 
 // BLS12-381 hint codes
@@ -147,7 +147,7 @@ pub enum BuiltInHint {
 
     // Secp256k1 hint types.
     /// secp256k1 ECDSA signature recovery.
-    Secp256k1EcRecover = HINT_SECP256K1_ECRECOVER,
+    Secp256k1Recover = HINT_SECP256K1_RECOVER,
     /// secp256r1 (P-256) signature verification.
     Secp256r1EcdsaVerify = HINT_SECP256R1_ECDSA_VERIFY,
 
@@ -190,7 +190,7 @@ impl Display for BuiltInHint {
             BuiltInHint::Bn254G1Mul => "BN254_G1_MUL",
             BuiltInHint::Bn254PairingCheck => "BN254_PAIRING_CHECK",
             // Secp256k1 Hints
-            BuiltInHint::Secp256k1EcRecover => "SECP256K1_ECRECOVER",
+            BuiltInHint::Secp256k1Recover => "SECP256K1_RECOVER",
             BuiltInHint::Secp256r1EcdsaVerify => "SECP256R1_ECDSA_VERIFY",
             // BLS12-381 Hints
             BuiltInHint::Bls12_381G1Add => "BLS12_381_G1_ADD",
@@ -224,7 +224,7 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_BN254_G1_MUL => Ok(Self::Bn254G1Mul),
             HINT_BN254_PAIRING_CHECK => Ok(Self::Bn254PairingCheck),
             // Secp256k1 Hints
-            HINT_SECP256K1_ECRECOVER => Ok(Self::Secp256k1EcRecover),
+            HINT_SECP256K1_RECOVER => Ok(Self::Secp256k1Recover),
             HINT_SECP256R1_ECDSA_VERIFY => Ok(Self::Secp256r1EcdsaVerify),
             // BLS12-381 Hints
             HINT_BLS12_381_G1_ADD => Ok(Self::Bls12_381G1Add),
@@ -303,7 +303,7 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::Bn254G1Mul) => HINT_BN254_G1_MUL,
             HintCode::BuiltIn(BuiltInHint::Bn254PairingCheck) => HINT_BN254_PAIRING_CHECK,
             // Secp256k1 Hints
-            HintCode::BuiltIn(BuiltInHint::Secp256k1EcRecover) => HINT_SECP256K1_ECRECOVER,
+            HintCode::BuiltIn(BuiltInHint::Secp256k1Recover) => HINT_SECP256K1_RECOVER,
             HintCode::BuiltIn(BuiltInHint::Secp256r1EcdsaVerify) => HINT_SECP256R1_ECDSA_VERIFY,
             // BLS12-381 Hints
             HintCode::BuiltIn(BuiltInHint::Bls12_381G1Add) => HINT_BLS12_381_G1_ADD,

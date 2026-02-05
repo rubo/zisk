@@ -45,7 +45,7 @@ uint64_t get_precompile_results(void);
 #define SYS_SIZE (uint64_t)0x10000
 #define OUTPUT_ADDR (SYS_ADDR + SYS_SIZE)
 
-#define TRACE_ADDR         (uint64_t)0xc0000000
+#define TRACE_ADDR         (uint64_t)0xd0000000
 #define TRACE_INITIAL_SIZE (uint64_t)0x180000000 // 6GB
 #define TRACE_DELTA_SIZE   (uint64_t)0x080000000 // 2GB
 #define TRACE_MAX_SIZE     (uint64_t)0x1000000000 // 64GB

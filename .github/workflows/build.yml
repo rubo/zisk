@@ -47,7 +47,7 @@ jobs:
 
       - name: Build ziskos static library
         run: |
-          cargo +zisk build -p ziskos --release --target "${TARGET}"
+          cargo +zisk build -p ziskos --release --target "${TARGET}" --features no_entrypoint
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

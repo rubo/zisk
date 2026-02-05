@@ -11,6 +11,10 @@ categories = { workspace = true }
 name = "ziskos"
 crate-type = ["staticlib", "rlib"]
 
+[features]
+default = []
+no_entrypoint = []
+
 [dependencies]
 lib-c = { workspace = true }
 

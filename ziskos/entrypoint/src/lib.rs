@@ -113,7 +113,11 @@ pub fn set_output(id: usize, value: u32) {
     println!("public {id}: {value:#010x}");
 }
 
-#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+#[cfg(all(
+    target_os = "zkvm",
+    target_vendor = "zisk",
+    not(feature = "no_entrypoint")
+))]
 mod ziskos {
     use crate::ziskos_definitions::ziskos_config::*;
     use core::arch::asm;

@@ -113,15 +113,12 @@ pub fn set_output(id: usize, value: u32) {
     println!("public {id}: {value:#010x}");
 }
 
-#[cfg(all(
-    target_os = "zkvm",
-    target_vendor = "zisk",
-    not(feature = "no_entrypoint")
-))]
+#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 mod ziskos {
     use crate::ziskos_definitions::ziskos_config::*;
     use core::arch::asm;
 
+    #[cfg(not(feature = "no_entrypoint"))]
     #[no_mangle]
     #[link_section = ".text.init"]
     unsafe extern "C" fn _start() -> ! {
@@ -172,6 +169,7 @@ mod ziskos {
         getrandom::register_custom_getrandom!(zkvm_getrandom);
     }
 
+    #[cfg(not(feature = "no_entrypoint"))]
     #[no_mangle]
     unsafe extern "C" fn _zisk_main() {
         {

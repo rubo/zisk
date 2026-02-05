@@ -110,6 +110,9 @@ struct Cli {
 
     #[clap(short = 'r', long, default_value_t = false)]
     pub rma: bool,
+
+    #[clap(long, default_value_t = false)]
+    pub hints: bool,
 }
 
 #[tokio::main]
@@ -131,6 +134,7 @@ async fn main() -> Result<()> {
         elf: cli.elf.clone(),
         asm: cli.asm.clone(),
         emulator: cli.emulator,
+        hints: cli.hints,
         proving_key: cli.proving_key.clone(),
         asm_port: cli.asm_port,
         unlock_mapped_memory: cli.unlock_mapped_memory,

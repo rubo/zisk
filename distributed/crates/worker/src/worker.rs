@@ -137,6 +137,22 @@ impl ProverConfig {
         if emulator {
             prover_service_config.asm = None;
         } else if prover_service_config.asm.is_none() {
+            let stem = prover_service_config
+                .elf
+                .file_stem()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "ELF path '{}' does not have a file stem.",
+                        prover_service_config.elf.display()
+                    )
+                })?
+                .to_str()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "ELF file stem for '{}' is not valid UTF-8.",
+                        prover_service_config.elf.display()
+                    )
+                })?;
             let elf_bin = fs::read(&prover_service_config.elf).map_err(|e| {
                 anyhow::anyhow!(
                     "Error reading ELF file {}: {}",
@@ -148,12 +164,17 @@ impl ProverConfig {
             let elf = ElfBinaryOwned::new(
                 elf_bin,
                 prover_service_config.elf.file_stem().unwrap().to_str().unwrap().to_string(),
-                true,
+                prover_service_config.hints,
             );
             let hash = get_elf_data_hash(&elf)
                 .map_err(|e| anyhow::anyhow!("Error computing ELF hash: {}", e))?;
-            let new_filename = format!("{hash}-mt.bin");
-            let asm_rom_filename = format!("{hash}-rh.bin");
+            let stem = if prover_service_config.hints {
+                format!("{stem}-hints")
+            } else {
+                stem.to_string()
+            };
+            let new_filename = format!("{stem}-{hash}-mt.bin");
+            let asm_rom_filename = format!("{stem}-{hash}-rh.bin");
             asm_rom = Some(default_cache_path.join(asm_rom_filename));
             prover_service_config.asm = Some(default_cache_path.join(new_filename));
         }

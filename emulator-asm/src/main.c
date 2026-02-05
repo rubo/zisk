@@ -4013,6 +4013,8 @@ void server_setup (void)
 
 void server_reset (void)
 {
+    if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain)) *precompile_read_address = 0;
+
     // Reset RAM data for next emulation
     if ((gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
     {

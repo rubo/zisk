@@ -241,4 +241,11 @@ impl StreamSink for HintsShmem {
 
         Ok(())
     }
+
+    fn reset(&self) {
+        // Reset control writer and data writer to initial state for next stream
+        let mut unified = self.unified.borrow_mut();
+        unified.control_writer.write_u64_at(0, 0);
+        unified.data_writer.reset();
+    }
 }

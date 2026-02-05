@@ -910,6 +910,12 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
             }
         }
 
+        if let Ok(mut hints_stream_guard) = self.hints_stream.lock() {
+            if let Some(hints_stream) = hints_stream_guard.as_mut() {
+                hints_stream.reset();
+            }
+        }
+
         // Add to executor stats
         #[cfg(feature = "stats")]
         self.stats.add_stat(

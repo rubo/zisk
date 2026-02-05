@@ -306,7 +306,7 @@ impl HintsProcessor {
                         ));
                     }
                     // Reset global sequence and buffer at stream start
-                    self.reset();
+                    self.reset_state();
                     // Mark stream as active
                     self.stream_active.store(true, Ordering::Release);
                     // Control hint only; skip processing
@@ -599,7 +599,7 @@ impl HintsProcessor {
     ///
     /// Increments the generation counter to invalidate any in-flight workers
     /// from the previous session, preventing them from corrupting the new state.
-    fn reset(&self) {
+    fn reset_state(&self) {
         // Clear error flag - use Release to synchronize with Acquire loads in workers
         self.state.error_flag.store(false, Ordering::Release);
         // Reset sequence counter - Relaxed is sufficient as it's only used within mutex
@@ -681,6 +681,10 @@ impl HintsProcessor {
             BuiltInHint::Keccak256 => keccak256_hint(&data, data_len_bytes),
         }
     }
+
+    fn reset(&self) {
+        self.hints_sink.reset();
+    }
 }
 
 impl Drop for HintsProcessor {
@@ -701,6 +705,10 @@ impl Drop for HintsProcessor {
 impl StreamProcessor for HintsProcessor {
     fn process(&self, data: &[u64], first_batch: bool) -> Result<bool> {
         self.process_hints(data, first_batch)
+    }
+
+    fn reset(&self) {
+        self.reset();
     }
 }
 

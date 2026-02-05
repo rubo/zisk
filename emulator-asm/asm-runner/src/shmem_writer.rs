@@ -204,6 +204,10 @@ impl SharedMemoryWriter {
             (self.ptr.add(offset) as *mut u64).write(value);
         }
     }
+
+    pub fn reset(&mut self) {
+        self.current_ptr = self.ptr;
+    }
 }
 
 impl Drop for SharedMemoryWriter {

@@ -150,6 +150,7 @@ fn modexp_short(
                 #[cfg(feature = "hints")]
                 hints,
             );
+
             // Recompose the exponent
             let bits_pos = len - 1 - bit_idx;
             let limb_idx = bits_pos / 64;
@@ -226,6 +227,7 @@ fn modexp_long(
                 #[cfg(feature = "hints")]
                 hints,
             );
+
             // Recompose the exponent
             let bits_pos = len - 1 - bit_idx;
             let limb_idx = bits_pos / 64;

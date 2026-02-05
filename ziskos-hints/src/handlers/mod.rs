@@ -35,6 +35,7 @@ macro_rules! hint_fields {
 
     (@offsets $offset:expr, $name:ident: $size:expr) => {
         paste::paste! {
+            #[allow(dead_code)]
             const [<$name _OFFSET>]: usize = $offset;
         }
     };

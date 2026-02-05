@@ -23,7 +23,17 @@ jobs:
       - name: Install riscv64 toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-unknown-elf pkg-config libopenmpi-dev openmpi-bin nlohmann-json3-dev nasm libsodium-dev
+          sudo apt-get install -y gcc-riscv64-unknown-elf pkg-config libopenmpi-dev openmpi-bin nlohmann-json3-dev nasm libsodium-dev libomp-dev
+
+      - name: Ensure libiomp5 is available
+        run: |
+          if ! ldconfig -p | grep -q libiomp5; then
+            libomp_path="$(ldconfig -p | awk '/libomp\\.so/ {print $NF; exit}')"
+            if [ -n "$libomp_path" ]; then
+              sudo ln -sf "$libomp_path" /usr/lib/x86_64-linux-gnu/libiomp5.so
+              sudo ldconfig
+            fi
+          fi
 
       - name: Build cargo-zisk
         run: |

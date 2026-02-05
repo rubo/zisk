@@ -97,6 +97,9 @@ pub struct ProverConfig {
 
     /// Whether to use minimal memory mode
     pub minimal_memory: bool,
+
+    /// Whether to include precompile hints in the assembly generation
+    pub hints: bool,
 }
 
 impl ProverConfig {
@@ -224,6 +227,7 @@ impl ProverConfig {
             shared_tables: prover_service_config.shared_tables,
             rma: prover_service_config.rma,
             minimal_memory: prover_service_config.minimal_memory,
+            hints: prover_service_config.hints,
         })
     }
 }
@@ -322,7 +326,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         let elf = ElfBinaryOwned::new(
             elf_bin,
             prover_config.elf.file_stem().unwrap().to_str().unwrap().to_string(),
-            prover_service_config.hints,
+            prover_config.hints,
         );
         prover.setup(&elf)?;
 

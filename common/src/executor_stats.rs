@@ -12,7 +12,7 @@ use zisk_pil::*;
 use crate::Stats;
 
 /// Trait for types that can be converted to a stats ID.
-/// Implemented for `u64` (raw ID) and `StatsScope` (extracts ID via `.id()`).
+/// Implemented for `u64` (raw ID), `StatsScope`, and references `&T` where `T: IntoStatsId`.
 pub trait IntoStatsId {
     fn as_stats_id(&self) -> u64;
 }
@@ -21,13 +21,6 @@ impl IntoStatsId for u64 {
     #[inline]
     fn as_stats_id(&self) -> u64 {
         *self
-    }
-}
-
-impl IntoStatsId for i32 {
-    #[inline]
-    fn as_stats_id(&self) -> u64 {
-        *self as u64
     }
 }
 
@@ -53,8 +46,8 @@ impl<T: IntoStatsId> IntoStatsId for &T {
 /// stats_begin!(self.stats, 0, parent_scope, "PARENT_OP", 0);
 /// stats_begin!(self.stats, &parent_scope, child_scope, "CHILD_OP", 0);
 /// // ... work ...
-/// stats_end!(self.stats, &child_scope, "CHILD_OP", 0);
-/// stats_end!(self.stats, &parent_scope, "PARENT_OP", 0);
+/// stats_end!(self.stats, &child_scope);
+/// stats_end!(self.stats, &parent_scope);
 /// ```
 #[cfg(feature = "stats")]
 #[macro_export]

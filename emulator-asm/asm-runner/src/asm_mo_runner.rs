@@ -98,7 +98,7 @@ impl AsmRunnerMO {
         let mut sem_chunk_done = NamedSemaphore::create(sem_chunk_done_name.clone(), 0)
             .map_err(|e| AsmRunError::SemaphoreError(sem_chunk_done_name.clone(), e))?;
 
-        // Capture parent id for thread (StatsScope is not Send)
+        // Capture parent id for thread
         let _parent_id = _runner_scope.id();
         let _thread_stats = _stats.clone();
 

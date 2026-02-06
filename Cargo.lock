@@ -6180,6 +6180,7 @@ dependencies = [
  "zisk-common",
  "zisk-distributed-common",
  "zisk-distributed-grpc-api",
+ "zisk-sdk",
 ]
 
 [[package]]

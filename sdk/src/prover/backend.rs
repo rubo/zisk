@@ -23,6 +23,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use zisk_common::stats_mark;
 use zisk_common::{
     io::{StreamSource, ZiskStdin},
     ElfBinaryLike, ExecutorStatsHandle, ZiskExecutionResult,
@@ -242,19 +243,10 @@ impl ProverBackend {
             anyhow::anyhow!("Failed to get execution result from emulator prover")
         })?;
 
-        // Store the stats in stats.json
+        stats_mark!(stats, 0, "END", 0);
+
         #[cfg(feature = "stats")]
-        {
-            let stats_id = stats.get_inner().lock().unwrap().next_id();
-            stats.get_inner().lock().unwrap().add_stat(
-                0,
-                stats_id,
-                "END",
-                0,
-                ExecutorStatsEvent::Mark,
-            );
-            stats.get_inner().lock().unwrap().store_stats();
-        }
+        stats.store_stats();
 
         Ok(ZiskVerifyConstraintsResult { execution: result, duration: elapsed, stats })
     }
@@ -312,13 +304,10 @@ impl ProverBackend {
             anyhow::anyhow!("Failed to get execution result from emulator prover")
         })?;
 
-        // Store the stats in stats.json
+        stats_mark!(stats, 0, "END", 0);
+
         #[cfg(feature = "stats")]
-        {
-            let stats_id = _stats.lock().unwrap().get_id();
-            _stats.lock().unwrap().add_stat(0, stats_id, "END", 0, ExecutorStatsEvent::Mark);
-            _stats.lock().unwrap().store_stats();
-        }
+        stats.store_stats();
 
         proofman.set_barrier();
 
@@ -380,18 +369,10 @@ impl ProverBackend {
         })?;
 
         // Store the stats in stats.json
+        stats_mark!(stats, 0, "END", 0);
+
         #[cfg(feature = "stats")]
-        {
-            let stats_id = stats.get_inner().lock().unwrap().next_id();
-            stats.get_inner().lock().unwrap().add_stat(
-                0,
-                stats_id,
-                "END",
-                0,
-                ExecutorStatsEvent::Mark,
-            );
-            stats.get_inner().lock().unwrap().store_stats();
-        }
+        stats.store_stats();
 
         proofman.set_barrier();
 

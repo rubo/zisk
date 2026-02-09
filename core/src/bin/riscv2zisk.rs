@@ -9,6 +9,7 @@ use zisk_core::Riscv2zisk;
 /// -  the path of the input RISC-V ELF file
 /// -  the path of the output Zisk rom file  
 /// -  the generation method
+///
 /// After parsing the arguments, the main function calls Riscv2zisk::runfile to perform the actual
 /// work.
 fn main() {

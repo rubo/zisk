@@ -338,11 +338,7 @@ impl<X> ProverClientBuilder<EmuB, X> {
         );
         println!("{: >12} {}", "Proving Key".bright_green().bold(), proving_key.display());
 
-        println!(
-            "{: >12} {}",
-            "Proving key SNARK".bright_green().bold(),
-            proving_key_snark.display()
-        );
+        println!("{: >12} {}", "SNARK Key".bright_green().bold(), proving_key_snark.display());
 
         println!();
     }
@@ -455,13 +451,9 @@ impl<X> ProverClientBuilder<AsmB, X> {
             println!("{: >12} Prove", "Command".bright_green().bold());
         }
 
-        println!("{: >12} {}", "Proving key".bright_green().bold(), proving_key.display());
+        println!("{: >12} {}", "Proving Key".bright_green().bold(), proving_key.display());
 
-        println!(
-            "{: >12} {}",
-            "Proving key SNARK".bright_green().bold(),
-            proving_key_snark.display()
-        );
+        println!("{: >12} {}", "SNARK Key".bright_green().bold(), proving_key_snark.display());
 
         println!();
     }

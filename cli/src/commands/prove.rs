@@ -41,7 +41,7 @@ pub struct ZiskProve {
     pub inputs: Option<String>,
 
     /// Precompiles Hints path
-    #[clap(long)]
+    #[clap(short = 'H', long)]
     pub hints: Option<String>,
 
     /// Setup folder path
@@ -153,7 +153,7 @@ impl ZiskProve {
             Some(uri) => {
                 let stream = StreamSource::from_uri(uri)?;
                 if matches!(stream, StreamSource::Quic(_)) {
-                    anyhow::bail!("QUIC hints source is not supported for execution.");
+                    anyhow::bail!("QUIC hints source is not supported in CLI mode.");
                 }
                 Some(stream)
             }

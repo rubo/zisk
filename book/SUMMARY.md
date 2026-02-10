@@ -8,6 +8,7 @@
 - [Quickstart](./getting_started/quickstart.md)
 - [Writing Programs](./getting_started/writing_programs.md)
 - [Precompiles](./getting_started/precompiles.md)
+- [Precompile Hints](./getting_started/precompile_hints.md)
 
 # Developer Guide
 - [Ziskof](./developer/ziskof.md)

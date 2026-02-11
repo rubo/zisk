@@ -13,7 +13,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::Instant;
 use tracing::{debug, info};
 use zisk_common::io::{StreamProcessor, StreamSink};
-use zisk_common::{BuiltInHint, CtrlHint, HintCode, PrecompileHint};
+use zisk_common::{
+    BuiltInHint, CtrlHint, HintCode, PartialPrecompileHint, PrecompileHint,
+    PrecompileHintParseResult,
+};
 use ziskos_hints::handlers::bls381::{
     bls12_381_fp2_to_g2_hint, bls12_381_fp_to_g1_hint, bls12_381_g1_add_hint,
     bls12_381_g1_msm_hint, bls12_381_g2_add_hint, bls12_381_g2_msm_hint,
@@ -152,6 +155,7 @@ impl HintsProcessorBuilder {
             custom_handlers: Arc::new(self.custom_handlers),
             stream_active: AtomicBool::new(false),
             instant: Mutex::new(None),
+            pending_partial: Mutex::new(None),
         })
     }
 }
@@ -188,9 +192,13 @@ pub struct HintsProcessor {
 
     /// Timestamp of when the current stream started (for performance metrics)
     instant: Mutex<Option<std::time::Instant>>,
+
+    /// Buffer for incomplete hint data between batches
+    pending_partial: Mutex<Option<PartialPrecompileHint>>,
 }
 
 impl HintsProcessor {
+    /// Default number of worker threads in the thread pool.
     const DEFAULT_NUM_THREADS: usize = 32;
 
     /// Creates a builder for configuring a [`HintsProcessor`].
@@ -244,22 +252,28 @@ impl HintsProcessor {
     /// * `Ok(false)` - Batch processed successfully, no CTRL_END
     /// * `Err` - If a previous error occurred or hints are malformed
     pub fn process_hints(&self, hints: &[u64], first_batch: bool) -> Result<bool> {
-        const ALLOW_UNALIGNED: bool = false;
-        const HEADER_SIZE: usize = if ALLOW_UNALIGNED { 8 } else { 1 };
-
         let mut has_ctrl_end = false;
+
+        // Take any pending partial hint from previous batch
+        let mut pending_partial = self.pending_partial.lock().unwrap().take();
 
         // Parse hints and dispatch to pool
         let mut idx = 0;
-        while idx < hints.len() * HEADER_SIZE {
+        while idx < hints.len() {
             // Check for error before processing each hint
             if self.state.error_flag.load(Ordering::Acquire) {
                 return Err(anyhow::anyhow!("Processing stopped due to previous error"));
             }
-            let hint = if ALLOW_UNALIGNED {
-                PrecompileHint::from_unaligned_u64_slice(hints, idx, true)?
-            } else {
-                PrecompileHint::from_u64_slice(hints, idx, true)?
+            let (parsed_hint, consumed) =
+                PrecompileHint::from_u64_slice(hints, idx, true, pending_partial.take())?;
+
+            let hint = match parsed_hint {
+                PrecompileHintParseResult::Complete(hint) => hint,
+                PrecompileHintParseResult::Partial(partial) => {
+                    // Store partial for next batch and exit loop
+                    *self.pending_partial.lock().unwrap() = Some(partial);
+                    break;
+                }
             };
 
             // println!("Received Hint <= {:?}:", hint);
@@ -278,8 +292,7 @@ impl HintsProcessor {
                 }
             }
 
-            let length =
-                if ALLOW_UNALIGNED { hint.data_len_bytes } else { hint.data.len() } + HEADER_SIZE;
+            let length = consumed;
 
             if let Some(stats) = &self.stats {
                 if !matches!(hint.hint_code, HintCode::Ctrl(_)) {
@@ -674,6 +687,7 @@ impl HintsProcessor {
     }
 
     fn reset(&self) {
+        self.pending_partial.lock().unwrap().take();
         self.hints_sink.reset();
     }
 }
@@ -1303,6 +1317,304 @@ mod tests {
         assert_eq!(results[2], vec![120]); // MED: 30 * 4
         assert_eq!(results[3], vec![80]); // FAST: 40 * 2
         assert_eq!(results[4], vec![150]); // SLOW: 50 * 3
+    }
+
+    // Partial hint tests
+    #[test]
+    fn test_partial_hint_header_data_split() {
+        let p = processor();
+
+        // Hint split exactly at boundary: header in first batch, data in second
+        // Header indicates 8 bytes (1 u64) of data
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 8)];
+        let batch2 = vec![0x1234]; // The data
+
+        // First batch should succeed but not complete the hint
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Verify no results yet (hint is partial)
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 0);
+            assert!(queue.buffer.is_empty());
+        }
+
+        // Second batch completes the hint
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Now we should have the complete result
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_partial_data_split() {
+        let p = processor();
+
+        // Hint with header + some data in first batch, remaining data in second
+        // Header indicates 16 bytes (2 u64s) of data
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 16), 0x1111]; // Header + 1 u64
+        let batch2 = vec![0x2222]; // Remaining 1 u64
+
+        // First batch has partial data
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Verify no results yet
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 0);
+        }
+
+        // Second batch completes the hint
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Now we should have the complete result
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_across_multiple_batches() {
+        let p = processor();
+
+        // Large hint split across 3 batches
+        // Header indicates 32 bytes (4 u64s) of data
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 32), 0x1111]; // Header + 1 u64
+        let batch2 = vec![0x2222, 0x3333]; // 2 more u64s
+        let batch3 = vec![0x4444]; // Final u64
+
+        // First batch
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Second batch
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Still no complete results
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 0);
+        }
+
+        // Third batch completes the hint
+        assert!(p.process_hints(&batch3, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Now we should have the complete result
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_multiple_partial_hints_interleaved() {
+        let p = processor();
+
+        // Start first hint in first batch, start second hint in second batch, and
+        // complete them in different subsequent batches.
+        let batch1 = vec![
+            make_header(TEST_PASSTHROUGH_HINT, 16),
+            0x1111, // First hint: header + partial data (incomplete)
+        ];
+        let batch2 = vec![
+            0x2222,                                // Completes first hint
+            make_header(TEST_PASSTHROUGH_HINT, 8), // Second hint: header only
+        ];
+        let batch3 = vec![0x3333]; // Completes second hint
+
+        // First batch has a single partial hint
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // No results yet
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 0);
+        }
+
+        // Complete first hint
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Should have first result now
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+        }
+
+        // Complete second hint
+        assert!(p.process_hints(&batch3, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Should have both results
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 2);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_with_complete_hints() {
+        let p = processor();
+
+        // Mix partial and complete hints in same batch
+        let batch1 = vec![
+            make_header(TEST_PASSTHROUGH_HINT, 8),
+            0x1111, // Complete hint
+            make_header(TEST_PASSTHROUGH_HINT, 16),
+            0x2222, // Partial hint (needs 1 more u64)
+        ];
+        let batch2 = vec![0x3333]; // Completes partial hint
+
+        // First batch processes one complete, one partial
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Should have result for complete hint
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+        }
+
+        // Complete the partial hint
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Should have both results
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 2);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_zero_length() {
+        let p = processor();
+
+        // Hint with zero data length split across batches
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 0)]; // Header only, zero data
+
+        // Should complete immediately since no data needed
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Should have result
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_stream_control() {
+        let p = processor();
+
+        // Test partial hints with stream control messages
+        let start = vec![make_ctrl_header(HintCode::Ctrl(CtrlHint::Start).to_u32(), 0)];
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 8)]; // Header only
+        let batch2 = vec![0x1234]; // Complete the hint
+        let end = vec![make_ctrl_header(HintCode::Ctrl(CtrlHint::End).to_u32(), 0)];
+
+        // Start stream
+        assert!(p.process_hints(&start, true).is_ok());
+
+        // Partial hint
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Complete hint
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // End stream should wait for all hints to complete
+        assert!(p.process_hints(&end, false).is_ok());
+
+        // Everything should be processed
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+            assert!(queue.buffer.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_reset_clears_pending() {
+        let p = processor();
+
+        // Start a partial hint
+        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 16), 0x1111]; // Needs 1 more u64
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Verify partial hint is pending
+        {
+            let partial = p.pending_partial.lock().unwrap();
+            assert!(partial.is_some());
+        }
+
+        // Reset should clear pending partial
+        p.reset();
+
+        // Verify pending partial is cleared
+        {
+            let partial = p.pending_partial.lock().unwrap();
+            assert!(partial.is_none());
+        }
+
+        // Should be able to process new hints normally
+        let batch2 = vec![make_header(TEST_PASSTHROUGH_HINT, 8), 0x2222];
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+        }
+    }
+
+    #[test]
+    fn test_partial_hint_large_data() {
+        let p = processor();
+
+        // Test with larger data size (80 bytes = 10 u64s)
+        let mut batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 80)];
+        batch1.extend([0x1111, 0x2222, 0x3333]); // Header + 3 u64s
+
+        let batch2 = vec![0x4444, 0x5555, 0x6666, 0x7777]; // 4 more u64s
+        let batch3 = vec![0x8888, 0x9999, 0xAAAA]; // Final 3 u64s
+
+        // Process all batches
+        assert!(p.process_hints(&batch1, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        assert!(p.process_hints(&batch2, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        assert!(p.process_hints(&batch3, false).is_ok());
+        assert!(p.wait_for_completion().is_ok());
+
+        // Should have complete result
+        {
+            let queue = p.state.queue.lock().unwrap();
+            assert_eq!(queue.next_drain_seq, 1);
+            assert!(queue.buffer.is_empty());
+        }
     }
 
     #[test]

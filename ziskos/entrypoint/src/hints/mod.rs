@@ -93,6 +93,9 @@ pub fn init_hints() -> io::Result<()> {
         }
     }
 
+    #[cfg(zisk_hints_metrics)]
+    crate::hints::metrics::reset_metrics();
+    
     HINT_BUFFER.reset();
 
     Ok(())

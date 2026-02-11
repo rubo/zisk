@@ -92,9 +92,6 @@ impl HintBuffer {
 
         let mut g = self.inner.lock().unwrap();
 
-        #[cfg(zisk_hints_metrics)]
-        crate::hints::metrics::inc_hint_count(hint_id);
-
         g.write_bytes(&header);
 
         // g.counter += 1;
@@ -150,6 +147,12 @@ impl HintBuffer {
                     let header_bytes = core::slice::from_raw_parts(chunk_base.add(chunk_pos), 8);
                     u64::from_le_bytes(header_bytes.try_into().unwrap())
                 };
+
+                #[cfg(zisk_hints_metrics)]
+                {
+                    let hint_id = (hint_header >> 32) as u32 & 0x7FFF_FFFF;
+                    crate::hints::metrics::inc_hint_count(hint_id);
+                }
 
                 let hint_data_len = (hint_header & 0xFFFF_FFFF) as usize;
                 let pad = (8 - (hint_data_len & 7)) & 7;

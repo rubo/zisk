@@ -1,4 +1,3 @@
-use num_traits::float::TotalOrder;
 use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::RwLock};
 

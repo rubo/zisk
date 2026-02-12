@@ -7,6 +7,10 @@ keywords = { workspace = true }
 repository = { workspace = true }
 categories = { workspace = true }
 
+[lib]
+name = "ziskos"
+crate-type = ["staticlib", "rlib"]
+
 [dependencies]
 lib-c = { workspace = true }
 
@@ -41,11 +45,20 @@ ctor = { version = "0.2", optional = true }
 
 [features]
 default = ["user-hints"]
-user-hints = ["dep:zisk-common", "dep:bytes", "dep:paste", "dep:once_cell", "dep:ctor", "dep:anyhow"]
+user-hints = [
+    "dep:zisk-common",
+    "dep:bytes",
+    "dep:paste",
+    "dep:once_cell",
+    "dep:ctor",
+    "dep:anyhow",
+]
+no_entrypoint = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-'cfg(zisk_hints)',
-'cfg(zisk_hints_metrics)',
-'cfg(zisk_hints_debug)',
-'cfg(zisk_hints_single_thread)'] }
+    'cfg(zisk_hints)',
+    'cfg(zisk_hints_metrics)',
+    'cfg(zisk_hints_debug)',
+    'cfg(zisk_hints_single_thread)',
+] }

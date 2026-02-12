@@ -111,6 +111,7 @@ mod ziskos {
     use crate::ziskos_definitions::ziskos_config::*;
     use core::arch::asm;
 
+    #[cfg(not(feature = "no_entrypoint"))]
     #[no_mangle]
     #[link_section = ".text.init"]
     unsafe extern "C" fn _start() -> ! {
@@ -161,6 +162,7 @@ mod ziskos {
         getrandom::register_custom_getrandom!(zkvm_getrandom);
     }
 
+    #[cfg(not(feature = "no_entrypoint"))]
     #[no_mangle]
     unsafe extern "C" fn _zisk_main() {
         {
@@ -279,7 +281,9 @@ mod ziskos {
 
         ptr
     }
+    #[cfg(not(feature = "no_entrypoint"))]
     core::arch::global_asm!(include_str!("dma/memcpy.s"));
+    #[cfg(not(feature = "no_entrypoint"))]
     core::arch::global_asm!(include_str!("dma/memmove.s"));
     // core::arch::global_asm!(include_str!("dma/memcmp.s"));
 }

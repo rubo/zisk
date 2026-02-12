@@ -1,0 +1,50 @@
+name: Build ziskos (zisklib) staticlib (riscv64)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-zisklib:
+    name: Build static libziskos.a for riscv64 zkvm
+    runs-on: ubuntu-22.04
+    env:
+      TARGET: riscv64ima-zisk-zkvm-elf
+      CARGO_TARGET_RISCV64IMA_ZISK_ZKVM_ELF_RUSTFLAGS: "-Cpasses=lower-atomic"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install riscv64 toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf pkg-config libopenmpi-dev openmpi-bin nlohmann-json3-dev nasm libsodium-dev libomp-dev
+      - name: Ensure libiomp5 is available
+        run: |
+          if ! ldconfig -p | grep -q libiomp5; then
+            libomp_path="$(ldconfig -p | awk '/libomp\\.so/ {print $NF; exit}')"
+            if [ -n "$libomp_path" ]; then
+              sudo ln -sf "$libomp_path" /usr/lib/x86_64-linux-gnu/libiomp5.so
+              sudo ldconfig
+            fi
+          fi
+      - name: Build cargo-zisk
+        run: |
+          cargo build -p cargo-zisk --release
+      - name: Install ZisK toolchain
+        run: |
+          ./target/release/cargo-zisk sdk install-toolchain
+      - name: Build ziskos static library
+        run: |
+          cargo +zisk build -p ziskos --release --target "${TARGET}" --features no_entrypoint
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ziskos-${{ env.TARGET }}
+          path: target/${{ env.TARGET }}/release/libziskos.a

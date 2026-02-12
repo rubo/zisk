@@ -224,8 +224,7 @@ pub fn pairing_check_bn254(
     if g1_valid.is_empty() {
         return Ok(true);
     }
-    println!("g1v len: {:?}", &g1_valid.len());
-    println!("g2v len: {:?}", &g1_valid.len());
+    
     // Compute batch pairing and check if result is 1
     Ok(is_one(&pairing_batch_bn254(
         &g1_valid,

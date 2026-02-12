@@ -253,6 +253,7 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     num_pairs: usize,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
+    println!("HELLA GOOD");
     // Parse all pairs
     let mut g1_points: Vec<[u64; 8]> = Vec::with_capacity(num_pairs);
     let mut g2_points: Vec<[u64; 16]> = Vec::with_capacity(num_pairs);

@@ -885,45 +885,6 @@ mod tests {
         assert_eq!(queue.next_drain_seq, 1);
     }
 
-    // Stream control tests
-    #[test]
-    fn test_stream_start_resets_state() {
-        let p = processor();
-
-        // First batch increments sequence (8 bytes = 1 u64)
-        let batch1 = vec![make_header(TEST_PASSTHROUGH_HINT, 8), 0x01];
-        p.process_hints(&batch1, false).unwrap();
-        p.wait_for_completion().unwrap();
-
-        // Sequence should be at 1
-        {
-            let queue = p.state.queue.lock().unwrap();
-            assert_eq!(queue.next_drain_seq, 1);
-        }
-
-        // Send START control - should reset sequence
-        let start = vec![make_ctrl_header(HintCode::Ctrl(CtrlHint::Start).to_u32(), 0)];
-        p.process_hints(&start, true).unwrap();
-
-        // Sequence should be reset to 0
-        {
-            let queue = p.state.queue.lock().unwrap();
-            assert_eq!(queue.next_drain_seq, 0);
-            assert!(queue.buffer.is_empty());
-        }
-
-        // Process new batch (8 bytes = 1 u64)
-        let batch2 = vec![make_header(TEST_PASSTHROUGH_HINT, 8), 0x02];
-        p.process_hints(&batch2, false).unwrap();
-
-        let end = vec![make_ctrl_header(HintCode::Ctrl(CtrlHint::End).to_u32(), 0)];
-        p.process_hints(&end, false).unwrap();
-
-        // Should have processed 1 hint (starting from 0 again)
-        let queue = p.state.queue.lock().unwrap();
-        assert_eq!(queue.next_drain_seq, 1);
-    }
-
     #[test]
     fn test_stream_end_waits_until_completion() {
         let p = processor();

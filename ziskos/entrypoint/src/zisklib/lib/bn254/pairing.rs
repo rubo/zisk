@@ -270,12 +270,17 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         let g1_bytes: &[u8; 64] = &*(pair_ptr as *const [u8; 64]);
         let g2_bytes: &[u8; 128] = &*(pair_ptr.add(64) as *const [u8; 128]);
 
-        g1_points.push(g1_bytes_be_to_u64_le_bn254(g1_bytes));
-        g2_points.push(g2_bytes_be_to_u64_le_bn254(g2_bytes));
+        let g1 = g1_bytes_be_to_u64_le_bn254(g1_bytes);
+        let g2 = g2_bytes_be_to_u64_le_bn254(g2_bytes);
+
+        println!("g1 bytes: {:?}", &g1);
+        println!("g2 bytes: {:?}", &g2);
+
+        g1_points.push(g1);
+        g2_points.push(g2);
     }
 
-    println!("g1 bytes: {:?}", g1_points.len());
-    println!("g2 bytes: {:?}", g2_points.len());
+    
 
     // Perform pairing check with validation
     match pairing_check_bn254(

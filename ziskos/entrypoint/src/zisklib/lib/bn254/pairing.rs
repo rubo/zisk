@@ -280,7 +280,8 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         g2_points.push(g2);
     }
 
-    
+    println!("g1 len: {:?}", &g1_points.len());
+    println!("g2 len: {:?}", &g2_points.len());
 
     // Perform pairing check with validation
     match pairing_check_bn254(

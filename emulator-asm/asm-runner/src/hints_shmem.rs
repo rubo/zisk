@@ -247,5 +247,12 @@ impl StreamSink for HintsShmem {
         let mut unified = self.unified.borrow_mut();
         unified.control_writer.write_u64_at(0, 0);
         unified.data_writer.reset();
+
+        // Drain stale semaphore signals from previous execution
+        let mut separate = self.separate.borrow_mut();
+        for res in separate.iter_mut() {
+            while res.sem_available.try_wait().is_ok() {}
+            while res.sem_read.try_wait().is_ok() {}
+        }
     }
 }

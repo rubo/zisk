@@ -359,30 +359,7 @@ impl HintsProcessor {
                         ));
                     }
 
-                    let num_hints = self.num_hint.load(Ordering::Relaxed);
-
-                    if tracing::enabled!(tracing::Level::DEBUG) {
-                        let elapsed = self.instant.lock().as_ref().unwrap().unwrap().elapsed();
-                        let rate = num_hints as f64 / elapsed.as_secs_f64();
-
-                        let (value, unit) = if rate >= 1_000_000.0 {
-                            (rate / 1_000_000.0, "MHz")
-                        } else if rate >= 1_000.0 {
-                            (rate / 1_000.0, "kHz")
-                        } else {
-                            (rate, "Hz")
-                        };
-
-                        debug!(
-                            "Processed {} hints in {:.0?} ({}{})",
-                            num_hints,
-                            elapsed,
-                            value.round(),
-                            unit
-                        );
-                    } else {
-                        info!("··· Processed {} hints", num_hints);
-                    }
+                    self.print_num_processed_hints();
 
                     break;
                 }
@@ -450,6 +427,28 @@ impl HintsProcessor {
         }
 
         Ok(has_ctrl_end)
+    }
+
+    /// Prints the total number of processed hints and processing rate if in debug mode.
+    fn print_num_processed_hints(&self) {
+        let num_hints = self.num_hint.load(Ordering::Relaxed);
+
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let elapsed = self.instant.lock().as_ref().unwrap().unwrap().elapsed();
+            let rate = num_hints as f64 / elapsed.as_secs_f64();
+
+            let (value, unit) = if rate >= 1_000_000.0 {
+                (rate / 1_000_000.0, "MHz")
+            } else if rate >= 1_000.0 {
+                (rate / 1_000.0, "kHz")
+            } else {
+                (rate, "Hz")
+            };
+
+            debug!("Processed {} hints in {:.0?} ({}{})", num_hints, elapsed, value.round(), unit);
+        } else {
+            info!("··· Processed {} hints", num_hints);
+        }
     }
 
     /// Worker thread that processes a single hint and stores the result.

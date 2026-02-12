@@ -130,8 +130,7 @@ pub fn pairing_check_bn254(
     g2_points: &[[u64; 16]],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Result<bool, u8> {
-    println!("g1 len: {:?}", &g1_points.len());
-    println!("g2 len: {:?}", &g2_points.len());
+    
     assert_eq!(g1_points.len(), g2_points.len(), "Number of G1 and G2 points must be equal");
 
     // Collect valid pairs
@@ -215,7 +214,7 @@ pub fn pairing_check_bn254(
         ) {
             return Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP);
         }
-        print!("pushed");
+        println!("pushed");
         g1_valid.push(*g1);
         g2_valid.push(*g2);
     }

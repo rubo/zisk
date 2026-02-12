@@ -130,7 +130,8 @@ pub fn pairing_check_bn254(
     g2_points: &[[u64; 16]],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Result<bool, u8> {
-    
+    println!("g1 len: {:?}", &g1_points.len());
+    println!("g2 len: {:?}", &g2_points.len());
     assert_eq!(g1_points.len(), g2_points.len(), "Number of G1 and G2 points must be equal");
 
     // Collect valid pairs
@@ -214,7 +215,7 @@ pub fn pairing_check_bn254(
         ) {
             return Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP);
         }
-        println!("pushed");
+        print!("pushed");
         g1_valid.push(*g1);
         g2_valid.push(*g2);
     }
@@ -223,7 +224,8 @@ pub fn pairing_check_bn254(
     if g1_valid.is_empty() {
         return Ok(true);
     }
-
+    println!("g1v len: {:?}", &g1_valid.len());
+    println!("g2v len: {:?}", &g1_valid.len());
     // Compute batch pairing and check if result is 1
     Ok(is_one(&pairing_batch_bn254(
         &g1_valid,

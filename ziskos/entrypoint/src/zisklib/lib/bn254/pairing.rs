@@ -274,6 +274,9 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         g2_points.push(g2_bytes_be_to_u64_le_bn254(g2_bytes));
     }
 
+    println!("g1 bytes: {:?}", g1_points[0]);
+    println!("g2 bytes: {:?}", g2_points[1]);
+
     // Perform pairing check with validation
     match pairing_check_bn254(
         &g1_points,

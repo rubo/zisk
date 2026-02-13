@@ -127,10 +127,7 @@ impl PrecompileHintsRelay {
 
         // Safe conversion: &[u64] → Vec<u8> for wire protocol
         let payload = unsafe {
-            std::slice::from_raw_parts(
-                hints.as_ptr() as *const u8,
-                hints.len() * std::mem::size_of::<u64>(),
-            )
+            std::slice::from_raw_parts(hints.as_ptr() as *const u8, std::mem::size_of_val(hints))
         }
         .to_vec();
 

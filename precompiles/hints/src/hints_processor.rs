@@ -329,6 +329,9 @@ impl HintsProcessor {
                             idx
                         ));
                     }
+
+                    debug!("CTRL_START received, starting new stream");
+
                     // Mark stream as active
                     self.stream_active.store(true, Ordering::Release);
                     // Control hint only; skip processing
@@ -703,6 +706,10 @@ impl HintsProcessor {
         self.stream_active.store(false, Ordering::Release);
         self.instant.lock().unwrap().take();
         self.pending_partial.lock().unwrap().take();
+    }
+
+    pub fn set_has_rom_sm(&self, has_rom_sm: bool) {
+        self.hints_sink.set_has_rom_sm(has_rom_sm);
     }
 }
 

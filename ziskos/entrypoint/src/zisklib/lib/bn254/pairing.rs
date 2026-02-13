@@ -116,8 +116,7 @@ pub fn pairing_batch_bn254(
 /// Validates all points have canonical field elements, are on curve, and G2 points are in subgroup.
 ///
 /// # Arguments
-/// * `g1_points` - Vector of G1 points as [u64; 8]
-/// * `g2_points` - Vector of G2 points as [u64; 16]
+/// * `pairs` - Vector of (G1, G2) points
 ///
 /// # Returns
 /// * `Ok(true)` - Pairing check passed (product of pairings == 1)
@@ -128,18 +127,13 @@ pub fn pairing_batch_bn254(
 /// * `Err(PAIRING_CHECK_ERR_G2_NOT_ON_CURVE)` - G2 point not on twist curve
 /// * `Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP)` - G2 point not in subgroup
 pub fn pairing_check_bn254(
-    g1_points: &Vec<[u64; 8]>,
-    g2_points: &Vec<[u64; 16]>,
+    pairs: &Vec<([u64; 8], [u64; 16])>,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Result<bool, u8> {
-    // println!("g1 len: {:?}", &g1_points.len());
-    // println!("g2 len: {:?}", &g2_points.len());
-    assert_eq!(g1_points.len(), g2_points.len(), "Number of G1 and G2 points must be equal");
-
     // Collect valid pairs
-    let mut g1_valid = Vec::with_capacity(g1_points.len());
-    let mut g2_valid = Vec::with_capacity(g2_points.len());
-    for (g1, g2) in g1_points.iter().zip(g2_points.iter()) {
+    let mut g1_valid = Vec::with_capacity(pairs.len());
+    let mut g2_valid = Vec::with_capacity(pairs.len());
+    for (g1, g2) in pairs.iter() {
         let g1_is_inf = eq(g1, &G1_IDENTITY);
         let g2_is_inf = eq(g2, &G2_IDENTITY);
 
@@ -279,8 +273,7 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     //     println!("pairs bytes: {:?}", pair_bytes);
     // }
     // Parse all pairs
-    let mut g1_points: Vec<[u64; 8]> = Vec::with_capacity(num_pairs);
-    let mut g2_points: Vec<[u64; 16]> = Vec::with_capacity(num_pairs);
+    let mut parsed_pairs: Vec<([u64; 8], [u64; 16])> = Vec::with_capacity(num_pairs);
 
     for i in 0..num_pairs {
         let pair_ptr = pairs.add(i * 192);
@@ -294,17 +287,12 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         // println!("g1 bytes: {:?}", &g1);
         // println!("g2 bytes: {:?}", &g2);
 
-        g1_points.push(g1);
-        g2_points.push(g2);
+        parsed_pairs.push((g1, g2));
     }
-
-    // println!("g1 len: {:?}", &g1_points.len());
-    // println!("g2 len: {:?}", &g2_points.len());
 
     // Perform pairing check with validation
     match pairing_check_bn254(
-        &g1_points,
-        &g2_points,
+        &parsed_pairs,
         #[cfg(feature = "hints")]
         hints,
     ) {

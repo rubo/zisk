@@ -107,7 +107,7 @@ impl PrecompileHintsRelay {
         }
 
         // Call async dispatcher - blocks on async work for zero overhead
-        self.send_hints_data(hints.to_vec());
+        self.send_hints_data(hints);
 
         if has_ctrl_end {
             self.send_hints_end();
@@ -122,18 +122,14 @@ impl PrecompileHintsRelay {
         self.runtime_handle.block_on((self.dispatcher)(seq_num, StreamMessageKind::Start, vec![]));
     }
 
-    fn send_hints_data(&self, hints: Vec<u64>) {
+    fn send_hints_data(&self, hints: &[u64]) {
         let seq_num = self.sequence_number.fetch_add(1, Ordering::SeqCst);
 
-        // Convert Vec<u64> to Vec<u8> for wire protocol
+        // Safe conversion: &[u64] → Vec<u8> for wire protocol
         let payload = unsafe {
-            let mut hints_vec = hints.to_vec();
-            let ptr = hints_vec.as_mut_ptr() as *mut u8;
-            let len = hints_vec.len() * std::mem::size_of::<u64>();
-            let capacity = hints_vec.capacity() * std::mem::size_of::<u64>();
-            std::mem::forget(hints_vec);
-            Vec::from_raw_parts(ptr, len, capacity)
-        };
+            std::slice::from_raw_parts(hints.as_ptr() as *const u8, std::mem::size_of_val(hints))
+        }
+        .to_vec();
 
         self.runtime_handle.block_on((self.dispatcher)(seq_num, StreamMessageKind::Data, payload));
     }

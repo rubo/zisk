@@ -69,8 +69,8 @@ pub fn pairing_batch_bn254(
     //  e(P₁, Q₁) · e(P₂, Q₂) · ... · e(Pₙ, Qₙ) = FinalExp(MillerLoop(P₁, Q₁) · MillerLoop(P₂, Q₂) · ... · MillerLoop(Pₙ, Qₙ))
     // We can compute the Miller loop for each pair, multiplying the results together
     // and then just do the final exponentiation once at the end.
-    println!("g1 len: {:?}", &g1_points.len());
-    println!("g2 len: {:?}", &g2_points.len());
+    // println!("g1 len: {:?}", &g1_points.len());
+    // println!("g2 len: {:?}", &g2_points.len());
     let num_points = g1_points.len();
     assert_eq!(num_points, g2_points.len(), "Number of G1 and G2 points must be equal");
 
@@ -132,8 +132,8 @@ pub fn pairing_check_bn254(
     g2_points: &[[u64; 16]],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Result<bool, u8> {
-    println!("g1 len: {:?}", &g1_points.len());
-    println!("g2 len: {:?}", &g2_points.len());
+    // println!("g1 len: {:?}", &g1_points.len());
+    // println!("g2 len: {:?}", &g2_points.len());
     assert_eq!(g1_points.len(), g2_points.len(), "Number of G1 and G2 points must be equal");
 
     // Collect valid pairs
@@ -217,7 +217,7 @@ pub fn pairing_check_bn254(
         ) {
             return Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP);
         }
-        println!("pushed");
+        // println!("pushed");
         g1_valid.push(*g1);
         g2_valid.push(*g2);
     }
@@ -272,12 +272,12 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
     // println!("HELLA GOOD");
-    if pairs.is_null() {
-        println!("pairs bytes: <null>");
-    } else {
-        let pair_bytes: &[u8; 192] = &*(pairs as *const [u8; 192]);
-        println!("pairs bytes: {:?}", pair_bytes);
-    }
+    // if pairs.is_null() {
+    //     println!("pairs bytes: <null>");
+    // } else {
+    //     let pair_bytes: &[u8; 192] = &*(pairs as *const [u8; 192]);
+    //     println!("pairs bytes: {:?}", pair_bytes);
+    // }
     // Parse all pairs
     let mut g1_points: Vec<[u64; 8]> = Vec::with_capacity(num_pairs);
     let mut g2_points: Vec<[u64; 16]> = Vec::with_capacity(num_pairs);
@@ -291,15 +291,15 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         let g1 = g1_bytes_be_to_u64_le_bn254(g1_bytes);
         let g2 = g2_bytes_be_to_u64_le_bn254(g2_bytes);
 
-        println!("g1 bytes: {:?}", &g1);
-        println!("g2 bytes: {:?}", &g2);
+        // println!("g1 bytes: {:?}", &g1);
+        // println!("g2 bytes: {:?}", &g2);
 
         g1_points.push(g1);
         g2_points.push(g2);
     }
 
-    println!("g1 len: {:?}", &g1_points.len());
-    println!("g2 len: {:?}", &g2_points.len());
+    // println!("g1 len: {:?}", &g1_points.len());
+    // println!("g2 len: {:?}", &g2_points.len());
 
     // Perform pairing check with validation
     match pairing_check_bn254(

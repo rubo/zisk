@@ -253,6 +253,14 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     num_pairs: usize,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
+    if pairs.is_null() {
+        println!("`pairs` param: <null>");
+    } else {
+        let pair_bytes: &[u8; 192] = &*(pairs as *const [u8; 192]);
+        println!("`pairs` param: {:?}", pair_bytes);
+    }
+    println!("`num_pairs` param: {:?}", num_pairs);
+    
     // Parse all pairs
     let mut g1_points: Vec<[u64; 8]> = Vec::with_capacity(num_pairs);
     let mut g2_points: Vec<[u64; 16]> = Vec::with_capacity(num_pairs);
@@ -266,6 +274,9 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         g1_points.push(g1_bytes_be_to_u64_le_bn254(g1_bytes));
         g2_points.push(g2_bytes_be_to_u64_le_bn254(g2_bytes));
     }
+
+    println!("`g1_points` length: {:?}", &g1_points.len());
+    println!("`g2_points` length: {:?}", &g2_points.len());
 
     // Perform pairing check with validation
     match pairing_check_bn254(

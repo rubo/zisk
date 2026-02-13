@@ -215,7 +215,7 @@ pub fn pairing_check_bn254(
         ) {
             return Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP);
         }
-        print!("pushed");
+        println!("pushed");
         g1_valid.push(*g1);
         g2_valid.push(*g2);
     }
@@ -255,7 +255,7 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     num_pairs: usize,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
-    println!("HELLA GOOD");
+    // println!("HELLA GOOD");
     if pairs.is_null() {
         println!("pairs bytes: <null>");
     } else {
@@ -282,8 +282,8 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         g2_points.push(g2);
     }
 
-    println!("g1 len: {:?}", &g1_points.len());
-    println!("g2 len: {:?}", &g2_points.len());
+    // println!("g1 len: {:?}", &g1_points.len());
+    // println!("g2 len: {:?}", &g2_points.len());
 
     // Perform pairing check with validation
     match pairing_check_bn254(
@@ -296,4 +296,22 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         Ok(false) => PAIRING_CHECK_FAILED,
         Err(code) => code,
     }
+}
+
+#[test]
+fn bn254_pairing_check_c_identity_pair_returns_success() {
+    let pairs_hex = "192c207ae0491ac1b74673d0f05126dc5a3c4fa0e6d277492fe6f3f6ebb4880c168b043bbbd7ae8e60606a7adf85c3602d0cd195af875ad061b5a6b1ef19b64507caa9e61fc843cf2f3769884e7467dd341a07fac1374f901d6e0da3f47fd2ec2b31ee53ccd0449de5b996cb8159066ba398078ec282102f016265ddec59c3541b38870e413a29c6b0b709e0705b55ab61ccc2ce24bbee322f97bb40b1732a4b28d255308f12e81dc16363f0f4f1410e1e9dd297ccc79032c0379aeb707822f9";
+    assert_eq!(pairs_hex.len() % 2, 0);
+
+    let mut pairs = Vec::with_capacity(pairs_hex.len() / 2);
+    for i in (0..pairs_hex.len()).step_by(2) {
+        let byte = u8::from_str_radix(&pairs_hex[i..i + 2], 16).unwrap();
+        pairs.push(byte);
+    }
+
+    assert_eq!(pairs.len() % 192, 0, "input must be k * 192 bytes");
+    let num_pairs = pairs.len() / 192;
+
+    let result = unsafe { bn254_pairing_check_c(pairs.as_ptr(), num_pairs) };
+    assert_eq!(result, PAIRING_CHECK_SUCCESS);
 }

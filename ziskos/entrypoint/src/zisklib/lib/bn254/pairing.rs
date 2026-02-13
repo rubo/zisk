@@ -259,7 +259,7 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         let pair_bytes: &[u8; 192] = &*(pairs as *const [u8; 192]);
         println!("`pairs` param: {:?}", pair_bytes);
     }
-    // println!("`num_pairs` param: {:?}", num_pairs);
+    println!("`num_pairs` param: {:?}", &num_pairs);
     
     // Parse all pairs
     let mut g1_points: Vec<[u64; 8]> = Vec::with_capacity(num_pairs);

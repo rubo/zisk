@@ -6,6 +6,7 @@ use super::{
     constants::{G1_IDENTITY, G2_IDENTITY, P},
     curve::{g1_bytes_be_to_u64_le_bn254, is_on_curve_bn254},
     final_exp::final_exp_bn254,
+    fp12::mul_fp12_bn254,
     miller_loop::{miller_loop_batch_bn254, miller_loop_bn254},
     twist::{g2_bytes_be_to_u64_le_bn254, is_on_curve_twist_bn254, is_on_subgroup_twist_bn254},
 };
@@ -132,9 +133,11 @@ pub fn pairing_check_bn254(
 ) -> Result<bool, u8> {
     assert_eq!(g1_points.len(), g2_points.len(), "Number of G1 and G2 points must be equal");
 
-    // Collect valid pairs
-    let mut g1_valid = Vec::with_capacity(g1_points.len());
-    let mut g2_valid = Vec::with_capacity(g2_points.len());
+    // Accumulate product of pairings directly to avoid post-validation batching metadata issues.
+    let mut pairing_product = [0u64; 48];
+    pairing_product[0] = 1;
+    let mut has_non_identity_pair = false;
+
     for (g1, g2) in g1_points.iter().zip(g2_points.iter()) {
         let g1_is_inf = eq(g1, &G1_IDENTITY);
         let g2_is_inf = eq(g2, &G2_IDENTITY);
@@ -214,22 +217,28 @@ pub fn pairing_check_bn254(
             return Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP);
         }
 
-        g1_valid.push(*g1);
-        g2_valid.push(*g2);
+        // Multiply e(g1, g2) into the running product in GT.
+        let pair_gt = pairing_bn254(
+            g1,
+            g2,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        pairing_product = mul_fp12_bn254(
+            &pairing_product,
+            &pair_gt,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        has_non_identity_pair = true;
     }
 
     // If all pairs were skipped, result is 1
-    if g1_valid.is_empty() {
+    if !has_non_identity_pair {
         return Ok(true);
     }
 
-    // Compute batch pairing and check if result is 1
-    Ok(is_one(&pairing_batch_bn254(
-        &g1_valid,
-        &g2_valid,
-        #[cfg(feature = "hints")]
-        hints,
-    )))
+    Ok(is_one(&pairing_product))
 }
 
 /// BN254 pairing check with big-endian byte format

@@ -305,6 +305,16 @@ pub unsafe extern "C" fn bn254_pairing_check_c_identity_pair_returns_success() -
         assert_eq!(pairs.len() % 192, 0, "input must be k * 192 bytes");
         let num_pairs = pairs.len() / 192;
 
-        let result = unsafe { bn254_pairing_check_c(pairs.as_ptr(), num_pairs) };
+        #[cfg(feature = "hints")]
+        let mut hints = Vec::new();
+
+        let result = unsafe {
+            bn254_pairing_check_c(
+                pairs.as_ptr(),
+                num_pairs,
+                #[cfg(feature = "hints")]
+                &mut hints,
+            )
+        };
         result
     }

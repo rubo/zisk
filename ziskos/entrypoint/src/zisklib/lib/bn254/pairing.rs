@@ -265,6 +265,24 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     num_pairs: usize,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
+    const PAIR_BYTES: usize = 192;
+    const MAX_PAIRS: usize = 1 << 20;
+
+    if pairs.is_null() {
+        return PAIRING_CHECK_FAILED;
+    }
+    if num_pairs == 0 {
+        return PAIRING_CHECK_SUCCESS;
+    }
+    if num_pairs > MAX_PAIRS {
+        return PAIRING_CHECK_FAILED;
+    }
+    let total_bytes = match num_pairs.checked_mul(PAIR_BYTES) {
+        Some(v) => v,
+        None => return PAIRING_CHECK_FAILED,
+    };
+    let pairs_bytes = std::slice::from_raw_parts(pairs, total_bytes);
+
     // println!("HELLA GOOD");
     // if pairs.is_null() {
     //     println!("pairs bytes: <null>");
@@ -272,14 +290,13 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     //     let pair_bytes: &[u8; 192] = &*(pairs as *const [u8; 192]);
     //     println!("pairs bytes: {:?}", pair_bytes);
     // }
-    // Parse all pairs
-    let mut parsed_pairs: Vec<([u64; 8], [u64; 16])> = Vec::with_capacity(num_pairs);
+    // Parse, validate and accumulate pairings in one pass to avoid extra container metadata handling.
+    let mut pairing_product = [0u64; 48];
+    pairing_product[0] = 1;
 
-    for i in 0..num_pairs {
-        let pair_ptr = pairs.add(i * 192);
-
-        let g1_bytes: &[u8; 64] = &*(pair_ptr as *const [u8; 64]);
-        let g2_bytes: &[u8; 128] = &*(pair_ptr.add(64) as *const [u8; 128]);
+    for pair_chunk in pairs_bytes.chunks_exact(PAIR_BYTES) {
+        let g1_bytes: &[u8; 64] = pair_chunk[0..64].try_into().unwrap();
+        let g2_bytes: &[u8; 128] = pair_chunk[64..PAIR_BYTES].try_into().unwrap();
 
         let g1 = g1_bytes_be_to_u64_le_bn254(g1_bytes);
         let g2 = g2_bytes_be_to_u64_le_bn254(g2_bytes);
@@ -287,18 +304,102 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
         // println!("g1 bytes: {:?}", &g1);
         // println!("g2 bytes: {:?}", &g2);
 
-        parsed_pairs.push((g1, g2));
+        let g1_is_inf = eq(&g1, &G1_IDENTITY);
+        let g2_is_inf = eq(&g2, &G2_IDENTITY);
+
+        // If p = 𝒪 or q = 𝒪 => MillerLoop(P, 𝒪) = MillerLoop(𝒪, Q) = 1; we can skip
+        if g2_is_inf {
+            if !g1_is_inf
+                && !is_on_curve_bn254(
+                    &g1,
+                    #[cfg(feature = "hints")]
+                    hints,
+                )
+            {
+                return PAIRING_CHECK_ERR_G1_NOT_ON_CURVE;
+            }
+            continue;
+        }
+
+        if g1_is_inf {
+            if !is_on_curve_twist_bn254(
+                &g2,
+                #[cfg(feature = "hints")]
+                hints,
+            ) {
+                return PAIRING_CHECK_ERR_G2_NOT_ON_CURVE;
+            }
+            if !is_on_subgroup_twist_bn254(
+                &g2,
+                #[cfg(feature = "hints")]
+                hints,
+            ) {
+                return PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP;
+            }
+            continue;
+        }
+
+        // Validate G1 point field elements
+        let x1: [u64; 4] = g1[0..4].try_into().unwrap();
+        let y1: [u64; 4] = g1[4..8].try_into().unwrap();
+        if !lt(&x1, &P) || !lt(&y1, &P) {
+            return PAIRING_CHECK_ERR_G1_INVALID;
+        }
+
+        // Verify G1 point is on curve
+        if !is_on_curve_bn254(
+            &g1,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return PAIRING_CHECK_ERR_G1_NOT_ON_CURVE;
+        }
+
+        // Validate G2 point field elements
+        let x2_r: [u64; 4] = g2[0..4].try_into().unwrap();
+        let x2_i: [u64; 4] = g2[4..8].try_into().unwrap();
+        let y2_r: [u64; 4] = g2[8..12].try_into().unwrap();
+        let y2_i: [u64; 4] = g2[12..16].try_into().unwrap();
+        if !lt(&x2_r, &P) || !lt(&x2_i, &P) || !lt(&y2_r, &P) || !lt(&y2_i, &P) {
+            return PAIRING_CHECK_ERR_G2_INVALID;
+        }
+
+        // Verify G2 point is on twist curve
+        if !is_on_curve_twist_bn254(
+            &g2,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return PAIRING_CHECK_ERR_G2_NOT_ON_CURVE;
+        }
+
+        // Verify G2 point is in subgroup
+        if !is_on_subgroup_twist_bn254(
+            &g2,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP;
+        }
+
+        let pair_value = pairing_bn254(
+            &g1,
+            &g2,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        pairing_product = mul_fp12_bn254(
+            &pairing_product,
+            &pair_value,
+            #[cfg(feature = "hints")]
+            hints,
+        );
     }
 
-    // Perform pairing check with validation
-    match pairing_check_bn254(
-        &parsed_pairs,
-        #[cfg(feature = "hints")]
-        hints,
-    ) {
-        Ok(true) => PAIRING_CHECK_SUCCESS,
-        Ok(false) => PAIRING_CHECK_FAILED,
-        Err(code) => code,
+    if is_one(&pairing_product) {
+        PAIRING_CHECK_SUCCESS
+    } else {
+        PAIRING_CHECK_FAILED
     }
 }
 

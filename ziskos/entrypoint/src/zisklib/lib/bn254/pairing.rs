@@ -6,6 +6,7 @@ use super::{
     constants::{G1_IDENTITY, G2_IDENTITY, P},
     curve::{g1_bytes_be_to_u64_le_bn254, is_on_curve_bn254},
     final_exp::final_exp_bn254,
+    fp12::mul_fp12_bn254,
     miller_loop::{miller_loop_batch_bn254, miller_loop_bn254},
     twist::{g2_bytes_be_to_u64_le_bn254, is_on_curve_twist_bn254, is_on_subgroup_twist_bn254},
 };
@@ -226,13 +227,27 @@ pub fn pairing_check_bn254(
         return Ok(true);
     }
     
-    // Compute batch pairing and check if result is 1
-    Ok(is_one(&pairing_batch_bn254(
-        &g1_valid,
-        &g2_valid,
-        #[cfg(feature = "hints")]
-        hints,
-    )))
+    // Compute the product of pairings over validated pairs.
+    // This avoids depending on passing two slice fat pointers into the batch path.
+    let mut pairing_product = [0u64; 48];
+    pairing_product[0] = 1;
+
+    for (g1, g2) in g1_valid.iter().zip(g2_valid.iter()) {
+        let pair_value = pairing_bn254(
+            g1,
+            g2,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        pairing_product = mul_fp12_bn254(
+            &pairing_product,
+            &pair_value,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+    }
+
+    Ok(is_one(&pairing_product))
 }
 
 /// BN254 pairing check with big-endian byte format

@@ -116,8 +116,8 @@ pub fn pairing_batch_bn254(
 /// Validates all points have canonical field elements, are on curve, and G2 points are in subgroup.
 ///
 /// # Arguments
-/// * `g1_points` - Slice of G1 points as [u64; 8]
-/// * `g2_points` - Slice of G2 points as [u64; 16]
+/// * `g1_points` - Vector of G1 points as [u64; 8]
+/// * `g2_points` - Vector of G2 points as [u64; 16]
 ///
 /// # Returns
 /// * `Ok(true)` - Pairing check passed (product of pairings == 1)
@@ -128,8 +128,8 @@ pub fn pairing_batch_bn254(
 /// * `Err(PAIRING_CHECK_ERR_G2_NOT_ON_CURVE)` - G2 point not on twist curve
 /// * `Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP)` - G2 point not in subgroup
 pub fn pairing_check_bn254(
-    g1_points: &[[u64; 8]],
-    g2_points: &[[u64; 16]],
+    g1_points: &Vec<[u64; 8]>,
+    g2_points: &Vec<[u64; 16]>,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Result<bool, u8> {
     // println!("g1 len: {:?}", &g1_points.len());

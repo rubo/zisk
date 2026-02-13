@@ -71,7 +71,10 @@ pub fn pairing_batch_bn254(
     // and then just do the final exponentiation once at the end.
 
     let num_points = g1_points.len();
-    assert_eq!(num_points, g2_points.len(), "Number of G1 and G2 points must be equal");
+    if num_points != g2_points.len() {
+        // Fail closed on inconsistent input lengths.
+        return [0u64; 48];
+    }
 
     // Miller loop and multiplication
     let mut g1_points_ml = Vec::with_capacity(num_points);
@@ -131,7 +134,10 @@ pub fn pairing_check_bn254(
     g2_points: &[[u64; 16]],
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> Result<bool, u8> {
-    assert_eq!(g1_points.len(), g2_points.len(), "Number of G1 and G2 points must be equal");
+    if g1_points.len() != g2_points.len() {
+        // Fail closed instead of panicking on inconsistent input lengths.
+        return Ok(false);
+    }
 
     // Accumulate product of pairings directly to avoid post-validation batching metadata issues.
     let mut pairing_product = [0u64; 48];
@@ -262,29 +268,110 @@ pub unsafe extern "C" fn bn254_pairing_check_c(
     num_pairs: usize,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> u8 {
-    // Parse all pairs
-    let mut g1_points: Vec<[u64; 8]> = Vec::with_capacity(num_pairs);
-    let mut g2_points: Vec<[u64; 16]> = Vec::with_capacity(num_pairs);
+    let mut pairing_product = [0u64; 48];
+    pairing_product[0] = 1;
+    let mut has_non_identity_pair = false;
 
     for i in 0..num_pairs {
         let pair_ptr = pairs.add(i * 192);
-
         let g1_bytes: &[u8; 64] = &*(pair_ptr as *const [u8; 64]);
         let g2_bytes: &[u8; 128] = &*(pair_ptr.add(64) as *const [u8; 128]);
 
-        g1_points.push(g1_bytes_be_to_u64_le_bn254(g1_bytes));
-        g2_points.push(g2_bytes_be_to_u64_le_bn254(g2_bytes));
+        let g1 = g1_bytes_be_to_u64_le_bn254(g1_bytes);
+        let g2 = g2_bytes_be_to_u64_le_bn254(g2_bytes);
+
+        let g1_is_inf = eq(&g1, &G1_IDENTITY);
+        let g2_is_inf = eq(&g2, &G2_IDENTITY);
+
+        // If p = 𝒪 or q = 𝒪 => MillerLoop(P, 𝒪) = MillerLoop(𝒪, Q) = 1; we can skip
+        if g2_is_inf {
+            if !g1_is_inf
+                && !is_on_curve_bn254(
+                    &g1,
+                    #[cfg(feature = "hints")]
+                    hints,
+                )
+            {
+                return PAIRING_CHECK_ERR_G1_NOT_ON_CURVE;
+            }
+            continue;
+        }
+
+        if g1_is_inf {
+            if !is_on_curve_twist_bn254(
+                &g2,
+                #[cfg(feature = "hints")]
+                hints,
+            ) {
+                return PAIRING_CHECK_ERR_G2_NOT_ON_CURVE;
+            }
+            if !is_on_subgroup_twist_bn254(
+                &g2,
+                #[cfg(feature = "hints")]
+                hints,
+            ) {
+                return PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP;
+            }
+            continue;
+        }
+
+        // Validate G1 point field elements
+        let x1: [u64; 4] = g1[0..4].try_into().unwrap();
+        let y1: [u64; 4] = g1[4..8].try_into().unwrap();
+        if !lt(&x1, &P) || !lt(&y1, &P) {
+            return PAIRING_CHECK_ERR_G1_INVALID;
+        }
+        if !is_on_curve_bn254(
+            &g1,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return PAIRING_CHECK_ERR_G1_NOT_ON_CURVE;
+        }
+
+        // Validate G2 point field elements
+        let x2_r: [u64; 4] = g2[0..4].try_into().unwrap();
+        let x2_i: [u64; 4] = g2[4..8].try_into().unwrap();
+        let y2_r: [u64; 4] = g2[8..12].try_into().unwrap();
+        let y2_i: [u64; 4] = g2[12..16].try_into().unwrap();
+        if !lt(&x2_r, &P) || !lt(&x2_i, &P) || !lt(&y2_r, &P) || !lt(&y2_i, &P) {
+            return PAIRING_CHECK_ERR_G2_INVALID;
+        }
+        if !is_on_curve_twist_bn254(
+            &g2,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return PAIRING_CHECK_ERR_G2_NOT_ON_CURVE;
+        }
+        if !is_on_subgroup_twist_bn254(
+            &g2,
+            #[cfg(feature = "hints")]
+            hints,
+        ) {
+            return PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP;
+        }
+
+        let pair_gt = pairing_bn254(
+            &g1,
+            &g2,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        pairing_product = mul_fp12_bn254(
+            &pairing_product,
+            &pair_gt,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        has_non_identity_pair = true;
     }
 
-    // Perform pairing check with validation
-    match pairing_check_bn254(
-        &g1_points,
-        &g2_points,
-        #[cfg(feature = "hints")]
-        hints,
-    ) {
-        Ok(true) => PAIRING_CHECK_SUCCESS,
-        Ok(false) => PAIRING_CHECK_FAILED,
-        Err(code) => code,
+    if !has_non_identity_pair {
+        PAIRING_CHECK_SUCCESS
+    } else if is_one(&pairing_product) {
+        PAIRING_CHECK_SUCCESS
+    } else {
+        PAIRING_CHECK_FAILED
     }
 }

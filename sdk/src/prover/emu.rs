@@ -129,8 +129,19 @@ impl ProverEngine for EmuProver {
         instance_id: usize,
         first_row: usize,
         num_rows: usize,
+        offset: Option<usize>,
     ) -> Result<Vec<RowInfo>> {
-        self.core_prover.backend.get_instance_trace(instance_id, first_row, num_rows)
+        self.core_prover.backend.get_instance_trace(instance_id, first_row, num_rows, offset)
+    }
+
+    fn get_instance_fixed(
+        &self,
+        instance_id: usize,
+        first_row: usize,
+        num_rows: usize,
+        offset: Option<usize>,
+    ) -> Result<Vec<RowInfo>> {
+        self.core_prover.backend.get_instance_fixed(instance_id, first_row, num_rows, offset)
     }
 
     fn verify_constraints_debug(

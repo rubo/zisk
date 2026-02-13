@@ -1,5 +1,6 @@
 mod bls12_381;
 mod bn254;
+mod custom;
 mod hint_buffer;
 mod keccak256;
 mod kzg;
@@ -101,15 +102,8 @@ pub fn init_hints() -> io::Result<()> {
     Ok(())
 }
 
-pub fn init_hints_file(
-    hints_file_path: PathBuf,
-    ready: Option<oneshot::Sender<()>>,
-) -> io::Result<()> {
+pub fn init_hints_file(hints_file_path: PathBuf) -> io::Result<()> {
     init_hints()?;
-
-    if let Some(tx) = ready {
-        let _ = tx.send(());
-    }
 
     let handle = thread::spawn(move || write_hints_to_file(hints_file_path));
     HINT_WRITER_HANDLE.store(handle);
@@ -160,7 +154,7 @@ pub fn close_hints() -> io::Result<()> {
     }
 }
 
-pub fn write_hints<W: Write>(writer: &mut W) -> io::Result<()> {
+fn write_hints<W: Write>(writer: &mut W) -> io::Result<()> {
     let disable_prefix = std::env::var("HINTS_DISABLE_PREFIX").unwrap_or_default() == "1";
 
     // Write HINT_START

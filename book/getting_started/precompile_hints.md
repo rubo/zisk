@@ -345,7 +345,7 @@ RUSTFLAGS='--cfg zisk_hints' cargo build --release
 
 After compiling, executing the guest program will generate the hints binary file at the specified location (if `init_hints_file` was used) or start writing hints to the specified Unix socket (if `init_hints_socket` was used).
 
-If a hints file was generated, it can be consumed using the `--hints` flag in the `cargo-zisk` commands that support hints (as explained in [section 2](#2-hints-in-cli-execution)).
+If a hints file was generated, it can be consumed using the `--hints` flag in the `cargo-zisk` commands that support hints (as explained in [Hints in CLI Execution](#2-hints-in-cli-execution)).
 
 If you want to display metrics in the console about the number of hints generated during native guest execution, you can additionally compile the guest with the `--cfg zisk_hints_metrics` flag.
 

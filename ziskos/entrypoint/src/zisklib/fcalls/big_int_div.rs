@@ -3,7 +3,7 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
+        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param, ziskos_inputcpy};
         use super::FCALL_BIG_INT_DIV_ID;
     }
 }
@@ -41,16 +41,28 @@ pub fn fcall_division(
 
         ziskos_fcall!(FCALL_BIG_INT_DIV_ID);
 
-        let len_quo = ziskos_fcall_get() as usize;
-        for i in 0..len_quo {
-            quo[i] = ziskos_fcall_get();
-        }
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            let len_quo = ziskos_fcall_get() as usize;
+            for i in 0..len_quo {
+                quo[i] = ziskos_fcall_get();
+            }
 
-        let len_rem = ziskos_fcall_get() as usize;
-        for i in 0..len_rem {
-            rem[i] = ziskos_fcall_get();
-        }
+            let len_rem = ziskos_fcall_get() as usize;
+            for i in 0..len_rem {
+                rem[i] = ziskos_fcall_get();
+            }
 
-        (len_quo, len_rem)
+            (len_quo, len_rem)
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            let len_quo = ziskos_fcall_get() as usize;
+            ziskos_inputcpy!(quo, len_quo * 8);
+            let len_rem = ziskos_fcall_get() as usize;
+            ziskos_inputcpy!(rem, len_rem * 8);
+
+            (len_quo, len_rem)
+        }
     }
 }

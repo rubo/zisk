@@ -1,12 +1,14 @@
 require "std_lookup.pil"
 
-const int DMA_PRE_POST_TABLE_SIZE = 280 * 3;
+const int DMA_PRE_POST_TABLE_SIZE = 288 * 4;
 
 const int DMA_PRE_POST_ENABLED_SECOND_READ_F  = P2_8;
 const int DMA_PRE_POST_DST_OFFSET_GT_SRC_F    = P2_9;
 const int DMA_PRE_POST_SR_VALUE_F             = P2_10;
 const int DMA_PRE_POST_MEMCMP_RESULT_IS_NEG_F = P2_13;
 const int DMA_PRE_POST_MEMCMP_RESULT_NZ_F     = P2_14;
+const int DMA_PRE_POST_IS_POST                = P2_15;
+const int DMA_PRE_POST_LOAD_SRC               = P2_16;
 
 airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
     col fixed FLAGS;
@@ -23,8 +25,8 @@ airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
     // DMA_PRE_POST_DST_OFFSET_GT_SRC_F    = P2_9     OUT  @[dst_offset_gt_src_offset] (1 bit)
     // DMA_PRE_POST_SR_VALUE_F             = P2_10    OUT  @[sr_value] (0-7) (3 bits)
     // DMA_PRE_POST_MEMCMP_RESULT_IS_NEG_F = P2_13    IN   @[memcmp_result_is_negative] (1 bit)
-    // DMA_PRE_POST_MEMCMP_RESULT_NZ_F      = P2_14   IN   @[memcmp_result_nz] (1 bit)
-
+    // DMA_PRE_POST_MEMCMP_RESULT_NZ_F     = P2_14    IN   @[memcmp_result_nz] (1 bit)
+    // DMA_PRE_POST_IS_POST                = P2_15    IN   @[is_post] (1 bit)
     // POST OPERATION objective execute the last incomplete "write":
     //      dst_offset = 0
     //      count ∈ [1,7]
@@ -33,25 +35,16 @@ airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
 
     const int flags_memcmp_result_positive = DMA_PRE_POST_MEMCMP_RESULT_NZ_F;
     const int flags_memcmp_result_negative = DMA_PRE_POST_MEMCMP_RESULT_NZ_F + DMA_PRE_POST_MEMCMP_RESULT_IS_NEG_F;
-    const int l_factors_positive[8];
-    const int l_factors_negative[8];
-    const int h_factors_positive[8];
-    const int h_factors_negative[8];
     
-    for (int count = 0; count < 8; ++ count) {
-        const int l_factor = (1 << (8 * count));
-        const int h_factor = (1 << (8 * count));
-
-        l_factors_positive[count] = count < 4 ? l_factor : 0;
-        l_factors_negative[count] = count < 4 ? -l_factor : 0;
-        h_factors_positive[count] = count >= 4 ? h_factor : 0;
-        h_factors_negative[count] = count >= 4 ? -h_factor : 0;
-    }
-    
+    const int l_factors[8] = [ 1,  P2_8,  P2_16,  P2_24,   0,     0,     0,       0];
+    const int h_factors[8] = [ 0,     0,      0,      0,   1,  P2_8,  P2_16,  P2_24];
+        
     for (int src_offset = 0; src_offset < 8; ++src_offset) {
         table_offsets[src_offset] = index;
-        for (int count = 1; count < 8; ++ count) {
-            for (int k = 0; k < 3; ++k) {
+        // For the edge case of memcmp when dst_offset = 0 and count is a multiple of 8 that need
+        // to be validate for DmaPrePost, at least if last byte is the first different.
+        for (int count = 1; count < 9; ++ count) {
+            for (int k = 0; k < 4; ++k) {
                 const int lindex = index + k;
                 SRC_OFFSET[lindex] = src_offset;
                 DST_OFFSET[lindex] = 0;
@@ -64,21 +57,30 @@ airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
             const int enabled_second_read = (src_offset + count) > 8 ? 1:0;
             // selr_value = src_offset
             // dst_offset_gt_src_offset = 0
-            expr flags = selectors + DMA_PRE_POST_ENABLED_SECOND_READ_F * enabled_second_read
-                                   + DMA_PRE_POST_SR_VALUE_F * src_offset;
-            FLAGS[index] = flags;
-            FLAGS[index + 1] = flags + flags_memcmp_result_positive;
-            FLAGS[index + 2] = flags + flags_memcmp_result_negative;
+            expr flags_load_src = selectors + DMA_PRE_POST_ENABLED_SECOND_READ_F * enabled_second_read 
+                                   + DMA_PRE_POST_LOAD_SRC
+                                   + DMA_PRE_POST_SR_VALUE_F * src_offset
+                                   + DMA_PRE_POST_IS_POST; // dst_offset = 0 ==> post operation
+
+            expr flags_no_load_src = selectors + DMA_PRE_POST_SR_VALUE_F * src_offset
+                                   + DMA_PRE_POST_IS_POST; // dst_offset = 0 ==> post operation
+
+            FLAGS[index] = flags_load_src;
+            FLAGS[index + 1] = flags_load_src + flags_memcmp_result_positive;
+            FLAGS[index + 2] = flags_load_src + flags_memcmp_result_negative;
+            FLAGS[index + 3] = flags_no_load_src;
 
             const int factor_index = count - 1;
             L_FACTOR[index] = 0;            
-            L_FACTOR[index + 1] = l_factors_positive[factor_index];
-            L_FACTOR[index + 2] = l_factors_negative[factor_index];
+            L_FACTOR[index + 1] = l_factors[factor_index];
+            L_FACTOR[index + 2] = -l_factors[factor_index];
+            L_FACTOR[index + 3] = 0;
 
             H_FACTOR[index] = 0;
-            H_FACTOR[index + 1] = h_factors_positive[factor_index];
-            H_FACTOR[index + 2] = h_factors_negative[factor_index];
-            index += 3;
+            H_FACTOR[index + 1] = h_factors[factor_index];
+            H_FACTOR[index + 2] = -h_factors[factor_index];
+            H_FACTOR[index + 3] = 0;
+            index += 4;
         }
     }
 
@@ -91,7 +93,7 @@ airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
         for (int src_offset = 0; src_offset < 8; ++src_offset) {
             table_offsets[dst_offset * 8 + src_offset] = index;
             for (int count = 1; count < (9 - dst_offset); ++ count) {
-                for (int k = 0; k < 3; ++k) {
+                for (int k = 0; k < 4; ++k) {
                     const int lindex = index + k;
                     SRC_OFFSET[lindex] = src_offset;
                     DST_OFFSET[lindex] = dst_offset;
@@ -107,24 +109,32 @@ airtemplate DmaPrePostTable(int N = DMA_PRE_POST_TABLE_SIZE) {
                 const int selr_value = dst_offset > src_offset ? dst_offset - src_offset: src_offset - dst_offset;
                 // selr_value = src_offset
                 // dst_offset_gt_src_offset = 0
-                expr flags = selectors + DMA_PRE_POST_ENABLED_SECOND_READ_F * enabled_second_read
-                                       + DMA_PRE_POST_DST_OFFSET_GT_SRC_F * dst_offset_gt_src_offset 
-                                       + DMA_PRE_POST_SR_VALUE_F * selr_value;
 
-                FLAGS[index] = flags;
-                FLAGS[index + 1] = flags + flags_memcmp_result_positive;
-                FLAGS[index + 2] = flags + flags_memcmp_result_negative;
+                expr flags_load_src = selectors + DMA_PRE_POST_ENABLED_SECOND_READ_F * enabled_second_read
+                                                + DMA_PRE_POST_DST_OFFSET_GT_SRC_F * dst_offset_gt_src_offset 
+                                                + DMA_PRE_POST_LOAD_SRC
+                                                + DMA_PRE_POST_SR_VALUE_F * selr_value;
+
+                expr flags_no_load_src = selectors + DMA_PRE_POST_DST_OFFSET_GT_SRC_F * dst_offset_gt_src_offset 
+                                                   + DMA_PRE_POST_SR_VALUE_F * selr_value;
+
+                FLAGS[index] = flags_load_src;
+                FLAGS[index + 1] = flags_load_src + flags_memcmp_result_positive;
+                FLAGS[index + 2] = flags_load_src + flags_memcmp_result_negative;
+                FLAGS[index + 3] = flags_no_load_src;
 
                 const int factor_index = dst_offset + count - 1;
                 L_FACTOR[index] = 0;            
-                L_FACTOR[index + 1] = l_factors_positive[factor_index];
-                L_FACTOR[index + 2] = l_factors_negative[factor_index];
+                L_FACTOR[index + 1] = l_factors[factor_index];
+                L_FACTOR[index + 2] = -l_factors[factor_index];
+                L_FACTOR[index + 3] = 0;
 
                 H_FACTOR[index] = 0;
-                H_FACTOR[index + 1] = h_factors_positive[factor_index];
-                H_FACTOR[index + 2] = h_factors_negative[factor_index];
+                H_FACTOR[index + 1] = h_factors[factor_index];
+                H_FACTOR[index + 2] = -h_factors[factor_index];
+                H_FACTOR[index + 3] = 0;
 
-                index += 3;
+                index += 4;
             }
         }
     }

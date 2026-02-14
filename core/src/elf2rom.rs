@@ -3,22 +3,31 @@
 use crate::{
     add_end_and_lib,
     elf_extraction::{
-        collect_elf_payload, collect_elf_payload_from_bytes, merge_adjacent_ro_sections, ElfPayload,
+        collect_elf_payload_from_bytes, get_symbol_addresses_from_bytes,
+        merge_adjacent_ro_sections, ElfPayload,
     },
     riscv2zisk_context::{add_entry_exit_jmp, add_zisk_code, add_zisk_init_data},
     AsmGenerationMethod, RoData, ZiskInst, ZiskRom, ZiskRom2Asm, ROM_ADDR, ROM_ADDR_MAX, ROM_ENTRY,
 };
 use rayon::prelude::*;
-use std::{error::Error, path::Path};
+use std::{error::Error, fs, path::Path};
 
 /// Executes the ROM transpilation process: from ELF to Zisk
 pub fn elf2rom(elf_file: &Path) -> Result<ZiskRom, Box<dyn Error>> {
     // Load the embedded float library
     const FLOAT_LIB_DATA: &[u8] = include_bytes!("../../lib-float/c/lib/ziskfloat.elf");
 
+    let elf_data =
+        fs::read(elf_file).map_err(|_| format!("Error reading ELF file={}", elf_file.display()))?;
+
     // Extract all relevant sections from the ELF file
-    let payloads: Vec<ElfPayload> =
-        vec![collect_elf_payload_from_bytes(FLOAT_LIB_DATA)?, collect_elf_payload(elf_file)?];
+    let payloads: Vec<ElfPayload> = vec![
+        collect_elf_payload_from_bytes(FLOAT_LIB_DATA)?,
+        collect_elf_payload_from_bytes(&elf_data)?,
+    ];
+
+    // Get DMA function addresses: (memcpy, memcmp, memset, memmove)
+    let dma_addrs = get_dma_symbol_addresses(&elf_data);
 
     // Create an empty ZiskRom instance
     let mut rom: ZiskRom = ZiskRom { next_init_inst_addr: ROM_ENTRY, ..Default::default() };
@@ -29,7 +38,7 @@ pub fn elf2rom(elf_file: &Path) -> Result<ZiskRom, Box<dyn Error>> {
     for (i, payload) in payloads.into_iter().enumerate() {
         // 1. Add executable code sections
         for section in &payload.exec {
-            add_zisk_code(&mut rom, section.addr, &section.data);
+            add_zisk_code(&mut rom, section.addr, &section.data, dma_addrs);
         }
 
         // 2. Add read-write data sections (will be copied to RAM)
@@ -63,6 +72,21 @@ pub fn elf2rom(elf_file: &Path) -> Result<ZiskRom, Box<dyn Error>> {
     //println! {"elf2rom() got rom.insts.len={}", rom.insts.len()};
 
     Ok(rom)
+}
+
+/// Get DMA function addresses from ELF data
+/// Returns (memcpy, memcmp, memset, memmove), with 0 for missing symbols
+fn get_dma_symbol_addresses(elf_data: &[u8]) -> (u64, u64, u64, u64) {
+    let symbols = ["memcpy", "memcmp", "memset", "memmove"];
+    match get_symbol_addresses_from_bytes(elf_data, &symbols) {
+        Ok(addrs) => (
+            addrs.get("memcpy").copied().unwrap_or(0),
+            addrs.get("memcmp").copied().unwrap_or(0),
+            addrs.get("memset").copied().unwrap_or(0),
+            addrs.get("memmove").copied().unwrap_or(0),
+        ),
+        Err(_) => (0, 0, 0, 0),
+    }
 }
 
 /// Optimizes instruction lookup by organizing instructions into direct-access arrays.

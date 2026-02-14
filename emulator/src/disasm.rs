@@ -242,8 +242,8 @@ fn inst_to_asm(inst: &ZiskInst, labels: &HashMap<u64, String>, next_pc: Option<u
             }
         }
         SRC_IMM => {
-            let imm = (inst.a_offset_imm0 as i64 | ((inst.a_use_sp_imm1 as i64) << 32)) as i64;
-            if imm >= 0 && imm <= 9 {
+            let imm = inst.a_offset_imm0 as i64 | ((inst.a_use_sp_imm1 as i64) << 32);
+            if (0..=9).contains(&imm) {
                 format!("{}", imm)
             } else {
                 format!("0x{:x}", imm as u64)
@@ -274,8 +274,8 @@ fn inst_to_asm(inst: &ZiskInst, labels: &HashMap<u64, String>, next_pc: Option<u
                 }
             }
             SRC_IMM => {
-                let imm = (inst.b_offset_imm0 as i64 | ((inst.b_use_sp_imm1 as i64) << 32)) as i64;
-                if imm >= 0 && imm <= 9 {
+                let imm = inst.b_offset_imm0 as i64 | ((inst.b_use_sp_imm1 as i64) << 32);
+                if (0..=9).contains(&imm) {
                     format!("{}", imm)
                 } else {
                     format!("0x{:x}", imm as u64)
@@ -296,12 +296,10 @@ fn inst_to_asm(inst: &ZiskInst, labels: &HashMap<u64, String>, next_pc: Option<u
                     } else {
                         format!("[a+sp{}]{}", offset, width)
                     }
+                } else if offset >= 0 {
+                    format!("[a+{}]{}", offset, width)
                 } else {
-                    if offset >= 0 {
-                        format!("[a+{}]{}", offset, width)
-                    } else {
-                        format!("[a{}]{}", offset, width)
-                    }
+                    format!("[a{}]{}", offset, width)
                 }
             }
             _ => "?".to_string(),
@@ -387,7 +385,7 @@ fn inst_to_asm(inst: &ZiskInst, labels: &HashMap<u64, String>, next_pc: Option<u
     if inst.store_pc {
         comments.push("store_pc");
     }
-    if inst.op_with_step {
+    if inst.is_precompiled {
         comments.push("with_step");
     }
 

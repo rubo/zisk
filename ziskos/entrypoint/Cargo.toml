@@ -22,3 +22,7 @@ cfg-if = "1.0"
 tiny-keccak = { version = "2.0.0", features = ["keccak"] }
 serde = { workspace = true, features = ["derive"] }
 bincode = { workspace = true }
+
+[features]
+default = ["inputcpy"]
+inputcpy = []

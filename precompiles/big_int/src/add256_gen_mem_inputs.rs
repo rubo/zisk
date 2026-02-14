@@ -24,7 +24,7 @@ pub fn generate_add256_mem_inputs<P: MemProcessor>(
 ) {
     // Start by generating the params (indirection read, direct, indirection write)
     for iparam in 0..PARAMS {
-        MemBusHelpers::mem_aligned_load(
+        MemBusHelpers::mem_aligned_read(
             addr_main + iparam as u32 * 8,
             step_main,
             data[OPERATION_PRECOMPILED_BUS_DATA_SIZE + iparam],
@@ -36,7 +36,7 @@ pub fn generate_add256_mem_inputs<P: MemProcessor>(
     for iparam in 0..READ_PARAMS {
         let param_addr = data[OPERATION_PRECOMPILED_BUS_DATA_SIZE + iparam] as u32;
         for ichunk in 0..PARAM_CHUNKS {
-            MemBusHelpers::mem_aligned_load(
+            MemBusHelpers::mem_aligned_read(
                 param_addr + ichunk as u32 * 8,
                 step_main,
                 data[START_READ_PARAMS + iparam * PARAM_CHUNKS + ichunk],

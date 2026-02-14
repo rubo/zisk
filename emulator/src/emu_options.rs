@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use std::fmt;
-use zisk_core::{DEFAULT_MAX_STEPS, DEFAULT_MAX_STEPS_STR};
+use zisk_core::{DEFAULT_MAX_STEPS, DEFAULT_MAX_STEPS_STR, MAX_INPUT_SIZE};
 
 pub const ZISK_VERSION_MESSAGE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
@@ -124,6 +124,8 @@ pub struct EmuOptions {
     /// Requires options: -S -X
     #[clap(long, value_name = "DISASM_FILE")]
     pub disasm: Option<String>,
+    #[clap(long, value_name = "MAX_INPUT_MEM", default_value = "134217728")] // 128 MiB
+    pub max_input_mem: u64,
 }
 
 impl Default for EmuOptions {
@@ -161,6 +163,7 @@ impl Default for EmuOptions {
             no_thousands_sep: false,
             top_roi_filter: false,
             disasm: None,
+            max_input_mem: MAX_INPUT_SIZE, // 128 MiB
         }
     }
 }
@@ -196,6 +199,7 @@ impl fmt::Display for EmuOptions {
         writeln!(f, "NO_THOUSANDS_SEP: {:?}", self.no_thousands_sep)?;
         writeln!(f, "TOP_ROI_FILTER: {:?}", self.top_roi_filter)?;
         writeln!(f, "DISASM: {:?}", self.disasm)?;
+        writeln!(f, "MAX_INPUT_MEM: {:?}", self.max_input_mem)?;
         Ok(())
     }
 }

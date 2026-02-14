@@ -90,9 +90,9 @@ impl<'a> Emu<'a> {
         emu
     }
 
-    pub fn create_emu_context(&mut self, inputs: Vec<u8>) -> EmuContext {
+    pub fn create_emu_context(&mut self, inputs: Vec<u8>, options: &EmuOptions) -> EmuContext {
         // Initialize an empty instance
-        let mut ctx = EmuContext::new(inputs);
+        let mut ctx = EmuContext::new(inputs, options);
 
         // Create a new read section for every RO data entry of the rom
         for i in 0..self.rom.ro_data.len() {
@@ -1531,7 +1531,7 @@ impl<'a> Emu<'a> {
         callback: Option<impl Fn(EmuTrace)>,
     ) {
         // Context, where the state of the execution is stored and modified at every execution step
-        self.ctx = self.create_emu_context(inputs.clone());
+        self.ctx = self.create_emu_context(inputs.clone(), options);
 
         let mut elf = ElfSymbolReader::new();
         if options.read_symbols {
@@ -1808,7 +1808,7 @@ impl<'a> Emu<'a> {
         par_options: &ParEmuOptions,
     ) -> Vec<EmuTrace> {
         // Context, where the state of the execution is stored and modified at every execution step
-        self.ctx = self.create_emu_context(inputs);
+        self.ctx = self.create_emu_context(inputs, options);
 
         // Init pc to the rom entry address
         self.ctx.trace.start_state.pc = ROM_ENTRY;
@@ -1918,7 +1918,7 @@ impl<'a> Emu<'a> {
         let instruction = self.rom.get_instruction(self.ctx.inst_ctx.pc);
 
         let pc = self.ctx.inst_ctx.pc;
-        //println!("PCLOG={}", instruction.to_text());
+        // println!("PCLOG={}", instruction.to_text());
 
         // Build the 'a' register value  based on the source specified by the current instruction
         self.source_a(instruction);
@@ -1927,6 +1927,9 @@ impl<'a> Emu<'a> {
         self.source_b(instruction);
 
         // Call the operation
+        if instruction.input_size > 0 {
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        }
         (instruction.func)(&mut self.ctx.inst_ctx);
 
         // Retrieve statistics data
@@ -2044,6 +2047,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
         }
 
         // Call the operation
@@ -2130,16 +2134,11 @@ impl<'a> Emu<'a> {
         data_bus: &mut DB,
     ) -> bool {
         let instruction = self.rom.get_instruction(self.ctx.inst_ctx.pc);
-
         #[cfg(feature = "minimal_trace_index_debug")]
         println!(
             "MINIMAL_TRACE step_emu_trace            {} {}",
             self.ctx.inst_ctx.step, mem_reads_index
         );
-        // println!(
-        //     "DEBUG_TRACE {:09} 0x{:08x} {:?}",
-        //     self.ctx.inst_ctx.step, self.ctx.inst_ctx.pc, self.ctx.inst_ctx.regs
-        // );
 
         self.source_a_mem_reads_consume_databus(instruction, mem_reads, mem_reads_index, data_bus);
         self.source_b_mem_reads_consume_databus(instruction, mem_reads, mem_reads_index, data_bus);
@@ -2147,7 +2146,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
-
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             // round_up => (size + 7) >> 3
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
@@ -2222,7 +2221,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
-
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             // round_up => (size + 7) >> 3
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
@@ -2362,6 +2361,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
                 let mem_read = mem_reads[*mem_reads_index];
@@ -2453,6 +2453,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
                 let mem_read = mem_reads[*mem_reads_index];
@@ -2559,7 +2560,7 @@ impl<'a> Emu<'a> {
         // trace.set_a_src_sp(inst.a_src == SRC_SP),
         // #[cfg(feature = "sp")]
         // trace.set_a_use_sp_imm1(inst.a_use_sp_imm1),
-        trace.set_op_with_step(inst.op_with_step);
+        trace.set_is_precompiled(inst.is_precompiled);
         trace.set_b_src_imm(inst.b_src == SRC_IMM);
         trace.set_b_src_mem(inst.b_src == SRC_MEM);
         trace.set_b_src_reg(inst.b_src == SRC_REG);

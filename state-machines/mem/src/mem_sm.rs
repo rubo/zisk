@@ -69,15 +69,20 @@ impl<F: PrimeField64> MemSM<F> {
         for i in 0..num_rows {
             let addr = trace[i].addr.as_canonical_u64() * 8;
             let step = trace[i].step.as_canonical_u64();
+            let main_step = MemHelpers::mem_step_to_main_step(step);
             let op = if trace[i].wr.is_zero() { 'R' } else { 'W' };
             let values =
                 [trace[i].value[0].as_canonical_u64(), trace[i].value[1].as_canonical_u64()];
             let value = values[0] | (values[1] << 32);
-            writeln!(writer, "{i:<8} {addr:#010X} {step} {op} {values:?} 0x{value:016X}").unwrap();
+            writeln!(
+                writer,
+                "{i:<8} {addr:#010X} {step:>13} {main_step:>12} {op} {values:?} 0x{value:016X}"
+            )
+            .unwrap();
             let dual = !trace[i].sel_dual.is_zero();
             if dual {
                 let step = trace[i].step_dual.as_canonical_u64();
-                writeln!(writer, "{i:<8} {addr:#010X} {step} R {values:?} 0x{value:016X} DUAL")
+                writeln!(writer, "{i:<8} {addr:#010X} {step:>13} {main_step:>12} R {values:?} 0x{value:016X} DUAL")
                     .unwrap();
             }
         }
@@ -220,7 +225,7 @@ impl<F: PrimeField64> MemModule<F> for MemSM<F> {
             trace[i].set_wr(mem_op.is_write);
 
             #[cfg(feature = "debug_mem")]
-            if (lsb_increment >= MEM_INC_C_SIZE) || (msb_increment > MEM_INC_C_SIZE) {
+            if (l_increment >= (1 << 22)) || (h_increment >= (1 << 16)) {
                 panic!("MemSM: increment's out of range: {} i:{} addr_changes:{} mem_op.addr:0x{:X} last_addr:0x{:X} mem_op.step:{} last_step:{}",
                     increment, i, addr_changes as u8, mem_op.addr, last_addr, mem_op.step, last_step);
             }

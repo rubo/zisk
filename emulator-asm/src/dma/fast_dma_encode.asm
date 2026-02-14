@@ -18,23 +18,37 @@
 #
 # ENCODED METADATA (bits):
 #     0-2: pre_count          - Bytes to copy before alignment (0-7)
-#     3-5: post_count         - Bytes to copy after aligned chunks (0-7)
-#     6-7: pre_writes         - Number of pre/post partial writes (0, 1, or 2)
-#    8-10: dst_offset         - Byte offset within dst qword (0-7)
-#   11-13: src_offset         - Byte offset within src qword (0-7)
-#      14: double_src_pre     - Flag: pre-read spans two src qwords
-#      15: double_src_post    - Flag: post-read spans two src qwords
-#   16-17: extra_src_reads    - Additional src qword reads needed (0-3)
-#      18: src64_inc_by_pre   - Flag: indicate loop use src64 + 8 
-#      19: unaligned_dst_src  - Flag: dst and src has diferent alignement
-#   32-63: loop_count         - Number of 8-byte chunks in main copy loop
+#     3-6: post_count         - Bytes to copy after aligned chunks (0-8) (* 8 memset case)
+#     7-8: pre_writes         - Number of pre/post partial writes (0, 1, or 2)
+#    9-11: dst_offset         - Byte offset within dst qword (0-7)
+#   12-14: src_offset         - Byte offset within src qword (0-7)
+#      15: double_src_pre     - Flag: pre-read spans two src qwords
+#      16: double_src_post    - Flag: post-read spans two src qwords
+#   17-18: extra_src_reads    - Additional src qword reads needed (0-3)
+#      19: src64_inc_by_pre   - Flag: indicate loop use src64 + 8 
+#      20: unaligned_dst_src  - Flag: dst and src has diferent alignement
+#   21-28: fill_byte/cmp_res  - Byte value for fill or compare result
+#      29: requires_dma       - Flag: indicates if operation requires DMA (*)
+#   30-31: reserved 
+#   32-34: pre_count (loop)   - Byte value for fill or compare result
+#   35-63: loop_count         - Number of 8-byte chunks in main copy loop
+#
+# (*) when compare exists an edge case when dst is aligned and effetive_count is multiple of 8, only
+#     PRE_POST machine could verify the different byte, in this case POST could be 8 bytes of length.
+#     effective_count is the number of bytes to check to compare.
+#
+# (*) The requires_dma flag is set by function caller when the operation it's a memcmp, because for
+#     this operation always a DMA is required.
+#
 ################################################################################
 
-.global fast_dma_encode
-
+.global fast_dma_encode_memcpy
+.global fast_dma_encode_memcmp
+.global fast_dma_encode_memset
+.global fast_dma_encode_inputcpy
 .section .text
 
-fast_dma_encode:
+fast_dma_encode_memcpy:
     mov     rax, rdi
     and     rax, 0x07               # dst_offset (0-7)
     shl     rax, 7                  # dst_offset << 7
@@ -48,13 +62,13 @@ fast_dma_encode:
     # Calculate table_count
     mov     r8, rdx
     cmp     r8, 16
-    jb      .L_count_lt_16
+    jb      .L_memcpy_count_lt_16
     
     # count >= 16: table_count = (count & 0x07) | 0x08
     and     r8, 0x07
     or      r8, 0x08
 
-.L_count_lt_16:
+.L_memcpy_count_lt_16:
     or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
     
     # Look up encoded value in table (direct access since it's in the same file)
@@ -66,6 +80,72 @@ fast_dma_encode:
     add     rax, r8                 # result += (count << 29)
     
     ret
+
+// result ?
+
+fast_dma_encode_memcmp:
+    mov     rax, rdi
+    and     rax, 0x07               # dst_offset (0-7)
+    shl     rax, 7                  # dst_offset << 7
+
+    mov     r8, rsi
+    and     r8, 0x07                # src_offset (0-7)
+    shl     r8, 4                   # src_offset << 4
+
+    or      rax, r8                 # combine dst and src offsets
+
+    # Calculate table_count
+    mov     r8, rdx
+    cmp     r8, 16
+    jb      .L_memcmp_count_lt_16
+    
+    # count >= 16: table_count = (count & 0x07) | 0x08
+    and     r8, 0x07
+    or      r8, 0x08
+
+.L_memcmp_count_lt_16:
+    or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
+    
+    # Look up encoded value in table (direct access since it's in the same file)
+    mov     rax, [fast_dma_encode_table + rax * 8]
+
+    # Add (count >> 3) to result
+    mov     r8, rdx
+    shl     r8, 29                  # r8 = count << 29
+    add     rax, r8                 # result += (count << 29)
+    or      rax, REQUIRES_DMA_MASK
+    
+    ret
+
+// byte ?
+
+fast_dma_encode_memset:
+    mov     rax, rdi
+    and     rax, 0x07               # dst_offset (0-7)
+    shl     rax, 7                  # dst_offset << 7
+
+    # Calculate table_count
+    mov     r8, rdx
+    cmp     r8, 16
+    jb      .L_memset_count_lt_16
+    
+    # count >= 16: table_count = (count & 0x07) | 0x08
+    and     r8, 0x07
+    or      r8, 0x08
+
+.L_memset_count_lt_16:
+    or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
+    
+    # Look up encoded value in table (direct access since it's in the same file)
+    mov     rax, [fast_dma_encode_table + rax * 8]
+
+    # Add (count >> 3) to result
+    mov     r8, rdx
+    shl     r8, 29                  # r8 = count << 29
+    add     rax, r8                 # result += (count << 29)
+    
+    ret
+
 
 # Mark stack as non-executable (required by modern linkers)
 .section .note.GNU-stack,"",%progbits

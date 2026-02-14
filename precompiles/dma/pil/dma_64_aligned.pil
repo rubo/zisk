@@ -20,6 +20,7 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     const int enable_memcmp = (enable & E_DMA_MEMCMP) ? 1 : 0; 
     const int enable_inputcpy = (enable & E_DMA_INPUTCPY) ? 1 : 0;
     const int enable_memset = (enable & E_DMA_MEMSET) ? 1 : 0;
+    const int enables_count = enable_memcpy + enable_memcmp + enable_inputcpy + enable_memset;
                                 
     if (enable_count_load == -1) {
         enable_count_load = enable_memcpy;
@@ -101,8 +102,8 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     // sel_xmemcpy                  1 ┐  
     // sel_memeq                    1 │
     // sel_memset                   1 ├ @[flags] → continuations (latch)
-    // sel_memcpy_count_load        1 │
     // sel_inputcpy                 1 ┘
+    // sel_memcpy_count_load        1 this only was active first clock
     // ┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
     // b0                                   32  intermediate
     // extended_arg                         32  intermediate
@@ -152,26 +153,35 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
 
     // temporal building expression for segment flags
     expr _flags = 0;
+
+    expr _sel_mem_load = 0;
     
     const int enable_full = enable_memcpy && enable_memcmp && enable_memset && enable_inputcpy &&
                             enable_count_load;
 
+    const int F_SEL_MEMCPY = 1;
+    const int F_SEL_MEMCMP = 2;
+    const int F_SEL_INPUTCPY = 4;
+    const int F_SEL_MEMSET = 8;
+
     if (enable_memcpy) {
-        col witness bits(1) air.sel_xmemcpy;
-        sel_xmemcpy * (1 - sel_xmemcpy) === 0;
-        _sel += sel_xmemcpy;
-        _op += sel_xmemcpy * OP_DMA_XMEMCPY;
-        _flags += sel_xmemcpy;
+        col witness bits(1) air.sel_memcpy;
+        sel_memcpy * (1 - sel_memcpy) === 0;
+        _sel += sel_memcpy;
+        _sel_mem_load += sel_memcpy;
+        _op += sel_memcpy * OP_DMA_XMEMCPY;
+        _flags += F_SEL_MEMCPY * sel_memcpy;
     } else {
-        const expr air.sel_xmemcpy = 0;
+        const expr air.sel_memcpy = 0;
     }
 
     if (enable_memcmp) {
         col witness bits(1) air.sel_memeq;
         sel_memeq * (1 - sel_memeq) === 0;    
         _sel += sel_memeq;
+        _sel_mem_load += sel_memeq;
         _op += sel_memeq * OP_DMA_XMEMEQ;
-        _flags += 2 * sel_memeq;
+        _flags += F_SEL_MEMCMP * sel_memeq;
     } else {
         const expr air.sel_memeq = 0;
     }
@@ -203,7 +213,7 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
 
         _sel += sel_memset;
         _op += sel_memset * OP_DMA_XMEMSET;
-        _flags += 2 * sel_memset;
+        _flags += F_SEL_MEMSET * sel_memset;
     } else {
         const int air.sel_memset = 0;
         const int air.fill_byte = 0;
@@ -215,9 +225,15 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     if (enable_count_load) {
         col witness bits(1) air.sel_memcpy_count_load;
         sel_memcpy_count_load * (1 - sel_memcpy_count_load) === 0;
-        _sel += sel_memcpy_count_load;
-        _op += sel_memcpy_count_load * OP_DMA_MEMCPY;
-        _flags += 4 * sel_memcpy_count_load;
+
+        // enable read the counter from memory only could be active if operation memcpy is active.
+        sel_memcpy_count_load * (1 - sel_memcpy) === 0;
+
+        // this selector only could be active the first clock of operation, after that must be 0.
+        sel_memcpy_count_load * (1 - previous_seq_end) === 0;
+
+        // the selector "update" the operation from XMEMCPY to regular MEMCPY
+        _op += sel_memcpy_count_load * (OP_DMA_MEMCPY - OP_DMA_XMEMCPY);
     } else {
         const int air.sel_memcpy_count_load = 0;
     }
@@ -228,16 +244,15 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
 
         _sel += sel_inputcpy;
         _op += sel_inputcpy * OP_DMA_INPUTCPY;
-        _flags += 8 * sel_memset;
+        _flags += F_SEL_INPUTCPY * sel_inputcpy;
     } else {
         const expr air.sel_inputcpy = 0;
     }
 
-    const expr sel_memcpy = sel_xmemcpy + sel_memcpy_count_load;
-
     const expr op = _op;
     const expr flags = _flags;
     const expr sel = _sel;
+    const expr sel_mem_load = _sel_mem_load;
     sel * (1 - sel) === 0;      
 
     // Binary constraints
@@ -375,9 +390,9 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
         for (int i = 0; i < op_x_row; i++) {
             value[i][0] = l_value_chunks[i][0] + h_value_chunks[i][0] * P2_8;
             value[i][1] = l_value_chunks[i][1] + h_value_chunks[i][1] * P2_8;
-            range_check(h_value_chunks[i][0], 0, P2_24-1);
-            range_check(h_value_chunks[i][1], 0, P2_24-1);
-            range_dual_byte(l_value_chunks[i][0], l_value_chunks[i][1], sel_op[i]);
+            range_check(h_value_chunks[i][0], 0, P2_24-1, sel_op[i]);
+            range_check(h_value_chunks[i][1], 0, P2_24-1, sel_op[i]);
+            range_dual_byte(l_value_chunks[i][1], l_value_chunks[i][0], sel_op[i]);
         }
     } else if (has_src) {
         col witness bits(32) air.value[op_x_row][RC];
@@ -392,16 +407,41 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
         assert(false, "Invalid case");
     }
 
+    if (enable_memset && has_src) {
+        // a new col must be separated for memload.
+        col witness bits(1) air.sel_op_mem_load[op_x_row];        
+    } else {
+        const expr air.sel_op_mem_load[op_x_row];
+    }
+
     for (int i = 0; i < op_x_row; i++) {
         if (has_src) {
+            if (enable_memset) {
+                sel_op_mem_load[i] * (1 - sel_op_mem_load[i]) === 0;
+                sel_op_mem_load[i] <== sel_op[i] * sel_mem_load;
+            } else {    
+                sel_op_mem_load[i] = sel_op[i];   
+            }
             precompiled_mem_load(
-                sel: sel_op[i],
+                sel: sel_op_mem_load[i],
                 main_step:,
                 addr: src64 * 8 + 8 * i,
                 value: value[i]
             );
         }
 
+
+        if (enable_memset && enables_count > 1) {
+            // add constraint to force that memset operation value "read" must be fill word
+            // only if this instance isn't a dedicated memset instance. In case of dedicated
+            // instance value really was directly fill_dword.
+            sel_memset * (value[i][0] - fill_dword) === 0;
+            sel_memset * (value[i][1] - fill_dword) === 0;
+        }
+
+        // load previous value before write operation, because only some bytes must be written
+        // only in case of memcpy, inputcpy and memset really write to memory, in memcmp do
+        // a read with same value, this value must match with src and dst.        
         precompiled_mem_op(
             is_write: sel_memcpy + sel_memset + sel_inputcpy,
             sel: sel_op[i],
@@ -421,18 +461,24 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     //   
     // If not finish sequence in previous row, means current it's a continuation of previous sequence
     // count64 match with previous value plus ops_selected.
-    continue_seq_on_l1 * (count64 - (segment_previous_count64 - ops_selected)) == 0;
-    continue_seq_on_no_l1 * (count64 - ('count64 - ops_selected)) === 0;
+    continue_seq_on_l1 * (count64 - (segment_previous_count64 - op_x_row)) === 0;
+    continue_seq_on_no_l1 * (count64 - ('count64 - op_x_row)) === 0;
 
     // If finish sequence count64 match with ops_selected, because final count64 must be 0.
     // new_seq_on_l1 * (count64 - ops_selected) === 0;
     // new_seq_on_no_l1 * (count64 - ops_selected) === 0;
     seq_end * (count64 - ops_selected) === 0;
+    (1 - seq_end) * (ops_selected - op_x_row) === 0;
     
     // If previous row was a seq_end, start with new dst/src addresses, else increment by ops_selected
-    continue_seq_on_l1 * (dst64 - (segment_previous_dst64 + ops_selected)) === 0;   // continuation: L1 @[dst64_cont]
-    continue_seq_on_no_l1 * (dst64 - ('dst64 + ops_selected)) === 0;                // continuation: !L1 @[dst64_cont]    
+    continue_seq_on_l1 * (dst64 - (segment_previous_dst64 + op_x_row)) === 0;   // continuation: L1 @[dst64_cont]
+    continue_seq_on_no_l1 * (dst64 - ('dst64 + op_x_row)) === 0;                // continuation: !L1 @[dst64_cont]    
     
+    if (has_src) {
+        continue_seq_on_l1 * (src64 - (segment_previous_src64 + op_x_row)) === 0;
+        continue_seq_on_no_l1 * (src64 - ('src64 + op_x_row)) === 0;
+    }
+
     // NOTE: transition of src64 is defined only 
 
     // LATCHS:
@@ -526,7 +572,19 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     } else if (!extended_arg_could_be_count) {
         _extended_arg = fill_byte;
     } else {
-        _extended_arg = count64 * 8 * (sel_xmemcpy + sel_memeq) + fill_byte;
+        // sel_memcpy_count_load only could be active when sel_memcpy is active, means that
+        // this pair of selector take following values:
+        //
+        //  ┌─ sel_memcpy
+        //  │  ┌─── sel_memcpy_count_load 
+        //  │  │  ┌─── sel_memcpy - sel_memcpy_count_load 
+        //
+        //  0  0  0 disable, only active if it's memcmp(memeq)
+        //  0  1 -1 not allowed by constraints
+        //  1  0  1 means a xmemcpy, the count must be on extended_arg
+        //  1  1  1 means memcpy, the count value must be read from memory
+    
+        _extended_arg = count64 * 8 * (sel_memcpy - sel_memcpy_count_load + sel_memeq) + fill_byte;
     }
 
     if (degree(_extended_arg) > max_bus_op_degree) {
@@ -549,25 +607,7 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
 
     // Used to cancel padding operations
     assumes_padding_operation(op: 0, padding_size: padding_size);
-
-    // TRANSITIONS
-    // dst64
-    // src64
-    // count64
-    // 
-    if (has_src) {
-        continue_seq_on_l1 * (src64 - (segment_previous_src64 + op_x_row)) === 0;
-        continue_seq_on_no_l1 * (src64 - ('src64 + ops_selected)) === 0;
-    }
-
-    continue_seq_on_l1 * (dst64 - (segment_previous_dst64 + op_x_row)) === 0;
-    continue_seq_on_no_l1 * (dst64 - ('dst64 + op_x_row)) === 0;    
-
-    continue_seq_on_l1 * (count64 - (segment_previous_count64 + op_x_row)) === 0;
-    continue_seq_on_no_l1 * (count64 - ('count64 + ops_selected)) === 0;    
-
-    (1 - seq_end) * (ops_selected - op_x_row) === 0;
-
+ 
     // FUTURE IMPROVEMENTS
     //
     // Delegate/Split a operation, if a operation uses more than 1 row, the final row could
@@ -575,4 +615,8 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     // instance large and cheap instances, without selectors, that only admins full rows, and 
     // the remaing part is done by other small instantation that has selectors. With this design
     // the cost of one memcpy could be near 6-7 columns + costs of memory.
+    // 
+    // Analyze if it's possible that the equal memcmp could be done directly by Dma64Aligned without
+    // using controller, pre or post.
+
 }   

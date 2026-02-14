@@ -6874,6 +6874,19 @@ impl ZiskRom2Asm {
             ZiskOp::DmaMemCmp => {
                 unimplemented!();
             }
+            ZiskOp::DmaInputCpy => {
+                unimplemented!();
+            }
+            ZiskOp::DmaXMemSet => {
+                unimplemented!();
+            }
+            ZiskOp::DmaXMemCpy => {
+                unimplemented!();
+            }
+            ZiskOp::DmaXMemCmp => {
+                unimplemented!();
+            }
+
             ZiskOp::Dma64Aligned => {
                 unimplemented!("Internal opcode Dma64Aligned");
             }
@@ -6885,9 +6898,6 @@ impl ZiskRom2Asm {
             }
             ZiskOp::DmaPost => {
                 unimplemented!("Internal opcode DmaPost");
-            }
-            ZiskOp::DmaCmpByte => {
-                unimplemented!("Internal opcode DmaCmpByte");
             }
         }
     }

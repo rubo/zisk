@@ -30,9 +30,9 @@
 .extern fast_dma_encode
 
 .include "dma_constants.inc"
-.equ MOPS_ALIGNED_READ_2W, ((2 << MOPS_BLOCK_WORDS_SBITS) + MOPS_ALIGNED_BLOCK_READ)
-.equ LOOP_COUNT_TO_MOPS_BLOCK, (MOPS_BLOCK_WORDS_SBITS - LOOP_COUNT_SBITS)
-.equ PRE_WRITES_TO_MOPS_BLOCK, (MOPS_BLOCK_WORDS_SBITS - PRE_WRITES_SBITS)
+.equ MOPS_ALIGNED_READ_2W, ((2 << MOPS_BLOCK_WORDS_RS) + MOPS_ALIGNED_BLOCK_READ)
+.equ LOOP_COUNT_TO_MOPS_BLOCK, (MOPS_BLOCK_WORDS_RS - LOOP_COUNT_RS)
+.equ PRE_WRITES_TO_MOPS_BLOCK, (MOPS_BLOCK_WORDS_RS - PRE_WRITES_RS)
 
 .section .text
 
@@ -137,7 +137,7 @@ direct_dma_memcpy_mops:
     mov     [r12 + r13 * 8], r9        # ~4 cycles - write dst post-value to trace
 
     mov     r9, rax
-    shr     r9, PRE_AND_LOOP_BYTES_SBITS
+    shr     r9, PRE_AND_LOOP_BYTES_RS
     add     r9, rsi
     and     r9, ALIGN_MASK
 
@@ -162,9 +162,9 @@ direct_dma_memcpy_mops:
 
 .L_src_to_mops:
     mov     rcx, rax                       # 1 cycle - rcx = encoded
-    shr     rcx, LOOP_COUNT_SBITS          # 1 cycle - rcx = loop (32 bits)
+    shr     rcx, LOOP_COUNT_RS          # 1 cycle - rcx = loop (32 bits)
     jz      .L_save_dst_with_loop_count_zero
-    shl     rcx, MOPS_BLOCK_WORDS_SBITS    # 1 cycle - rcx = loop | 0 (4 bits) | (32 bits)
+    shl     rcx, MOPS_BLOCK_WORDS_RS    # 1 cycle - rcx = loop | 0 (4 bits) | (32 bits)
 
     test    rax, UNALIGNED_DST_SRC_MASK
     jnz     .L_src_extra_for_unaligned_loop
@@ -271,7 +271,7 @@ direct_dma_memcpy_mops:
 .L_copy_forward_loop:
     # Copy aligned qwords (main bulk of data)
     mov     rcx, rax                # 1 cycle
-    shr     rcx, LOOP_COUNT_SBITS   # 1 cycle - rcx = loop_count (bits 32-63)
+    shr     rcx, LOOP_COUNT_RS   # 1 cycle - rcx = loop_count (bits 32-63)
     rep     movsq                   # ~1.5-2 cycles per qword (aligned, optimized)
                                     # rsi, rdi advanced by loop_count * 8
 
@@ -283,7 +283,7 @@ direct_dma_memcpy_mops:
 
     # Extract and copy post_count bytes (1-7 bytes after aligned data)
     mov     rcx, rax                # 1 cycle
-    shr     rcx, POST_COUNT_SBITS   # 1 cycle - shift post_count to position
+    shr     rcx, POST_COUNT_RS   # 1 cycle - shift post_count to position
     and     rcx, 0x07               # 1 cycle - rcx = post_count (bits 43-45)
 
     rep     movsb                   # ~3-5 cycles per byte

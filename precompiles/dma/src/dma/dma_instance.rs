@@ -5,13 +5,18 @@
 //! execution plans.
 
 use crate::dma::dma_collector::DmaCollector;
-use crate::{DmaCheckPoint, DmaSM};
+#[cfg(feature = "save_dma_collectors")]
+use crate::save_dma_collectors;
+#[cfg(feature = "save_dma_inputs")]
+use crate::DmaInput;
+use crate::{DmaCheckPoint, DmaModule};
 use fields::PrimeField64;
 use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
 use std::sync::Arc;
-use zisk_common::ChunkId;
-use zisk_common::{BusDevice, CheckPoint, Instance, InstanceCtx, InstanceType, PayloadType};
-use zisk_pil::DmaTrace;
+use zisk_common::{
+    BusDevice, CheckPoint, ChunkId, Instance, InstanceCtx, InstanceType, PayloadType,
+};
+use zisk_pil::{DmaInputCpyTrace, DmaMemCpyTrace, DmaTrace};
 
 /// The `DmaInstance` struct represents an instance for the Dma State Machine.
 ///
@@ -19,7 +24,7 @@ use zisk_pil::DmaTrace;
 /// to compute witnesses for the Dma State Machine.
 pub struct DmaInstance<F: PrimeField64> {
     /// Dma state machine.
-    dma_sm: Arc<DmaSM<F>>,
+    module: Arc<dyn DmaModule<F>>,
 
     /// Instance context.
     ictx: InstanceCtx,
@@ -36,22 +41,22 @@ impl<F: PrimeField64> DmaInstance<F> {
     /// # Returns
     /// A new `DmaInstance` instance initialized with the provided state machine and
     /// context.
-    pub fn new(dma_sm: Arc<DmaSM<F>>, ictx: InstanceCtx) -> Self {
-        Self { dma_sm, ictx }
+    pub fn new(module: Arc<dyn DmaModule<F>>, ictx: InstanceCtx) -> Self {
+        Self { module, ictx }
     }
 
     pub fn build_dma_collector(&self, chunk_id: ChunkId) -> DmaCollector {
-        assert_eq!(
-            self.ictx.plan.air_id,
-            DmaTrace::<F>::AIR_ID,
+        debug_assert!(
+            [DmaTrace::<F>::AIR_ID, DmaMemCpyTrace::<F>::AIR_ID, DmaInputCpyTrace::<F>::AIR_ID,]
+                .contains(&self.ictx.plan.air_id),
             "DmaInstance: Unsupported air_id: {:?}",
             self.ictx.plan.air_id
         );
 
         let meta = self.ictx.plan.meta.as_ref().unwrap();
         let collect_info = meta.downcast_ref::<DmaCheckPoint>().unwrap();
-        let (num_ops, collect_counter) = collect_info.chunks[&chunk_id];
-        DmaCollector::new(num_ops, collect_counter)
+        let (num_ops, collect_counters) = collect_info.chunks[&chunk_id];
+        DmaCollector::new(chunk_id, num_ops, collect_counters)
     }
 }
 
@@ -73,12 +78,37 @@ impl<F: PrimeField64> Instance<F> for DmaInstance<F> {
         collectors: Vec<(usize, Box<dyn BusDevice<PayloadType>>)>,
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<Option<AirInstance<F>>> {
+        #[cfg(feature = "save_dma_collectors")]
+        let (debug, inputs): (Vec<_>, Vec<_>) = collectors
+            .into_iter()
+            .map(|(_, collector)| {
+                let collector = collector.as_any().downcast::<DmaCollector>().unwrap();
+                (collector.get_debug_info(), collector.inputs)
+            })
+            .unzip();
+        #[cfg(not(feature = "save_dma_collectors"))]
         let inputs: Vec<_> = collectors
             .into_iter()
             .map(|(_, collector)| collector.as_any().downcast::<DmaCollector>().unwrap().inputs)
             .collect();
 
-        Ok(Some(self.dma_sm.compute_witness(&inputs, trace_buffer)?))
+        #[cfg(any(feature = "save_dma_collectors", feature = "save_dma_inputs"))]
+        let air_instance_id =
+            _pctx.dctx_find_air_instance_id(self.ictx.plan.global_id.unwrap()).unwrap();
+
+        #[cfg(feature = "save_dma_collectors")]
+        save_dma_collectors(
+            &format!("{}_collector_{air_instance_id:04}.txt", self.module.get_name()),
+            debug,
+        )?;
+
+        #[cfg(feature = "save_dma_inputs")]
+        DmaInput::dump_to_file(
+            &inputs,
+            &format!("{}_inputs_{air_instance_id:04}.txt", self.module.get_name()),
+        )?;
+
+        Ok(Some(self.module.compute_witness(&inputs, trace_buffer)?))
     }
 
     /// Retrieves the checkpoint associated with this instance.
@@ -108,7 +138,7 @@ impl<F: PrimeField64> Instance<F> for DmaInstance<F> {
         let meta = self.ictx.plan.meta.as_ref().unwrap();
         let collect_info = meta.downcast_ref::<DmaCheckPoint>().unwrap();
         let (num_ops, collect_counter) = collect_info.chunks[&chunk_id];
-        Some(Box::new(DmaCollector::new(num_ops, collect_counter)))
+        Some(Box::new(DmaCollector::new(chunk_id, num_ops, collect_counter)))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

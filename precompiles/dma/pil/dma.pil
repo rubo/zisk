@@ -28,8 +28,6 @@ const int OP_DMA_POST_XMEMSET = OP_DMA_PRE_XMEMSET + OP_DMA_POST_OFFSET;
 
 airtemplate Dma(int N = 2**21, 
                 const int RC = 2, 
-                const int op_x_row = 4, 
-                const int selectors = 1,
                 const int enable = E_DMA_ALL,
                 const int enable_extended = 1) {
     
@@ -40,7 +38,6 @@ airtemplate Dma(int N = 2**21,
 
     assert(enable_extended == 0 || enable_extended == 1);
     assert((enable_memcpy + enable_memcmp + enable_inputcpy + enable_memset) > 0);
-    assert(op_x_row >= 1);
     assert(RC == 2);
 
     const int has_src = (enable_memcpy || enable_memcmp);
@@ -213,6 +210,8 @@ airtemplate Dma(int N = 2**21,
         const expr air.sel_inputcpy = 0;
     }
 
+    const expr use_src = sel_memcpy + sel_memcmp;
+
     const expr bus_op = _bus_op;
     const expr loop_op = _loop_op;
     const expr pre_op = _pre_op;
@@ -313,6 +312,9 @@ airtemplate Dma(int N = 2**21,
 
         const expr air.src = h_src64 * 2**10 + l_src64 * 2**3 + src_offset;
         const expr air.src64 = h_src64 * 2**10 + l_src64 * 2**3;
+        if (enable_memset) {
+            (sel_memset + sel_inputcpy) * src_offset_after_pre === 0;
+        }
 
         range_check(expression: h_src64, min: 0, max: 2**22-1, sel: sel);
         lookup_assumes(DUAL_RANGE_7_BITS_ID, expressions: [l_src64, l_dst64], sel: sel);
@@ -355,6 +357,7 @@ airtemplate Dma(int N = 2**21,
 
         pre_result_nz * post_result_nz === 0;
 
+        // previous constraint => result_nz * (1 - result_nz) === 0;
         result_nz = pre_result_nz + post_result_nz;
 
         col witness bits(32) air.bus_pre_result[2];
@@ -403,7 +406,14 @@ airtemplate Dma(int N = 2**21,
         const int air.bus_post_result[2] = [0, 0];
     }
 
-    const expr flags = use_pre + use_loop * 2 + use_post * 4 + src64_inc_by_pre * 8 + count_lt_256 * 16 + result_nz * 32;
+    const expr flags = use_pre * DMA_ROM_USE_PRE_F + 
+                       use_loop * DMA_ROM_LOOP_F + 
+                       use_post * DMA_ROM_USE_POST_F + 
+                       src64_inc_by_pre * DMA_ROM_SRC64_INC_BY_PRE_F + 
+                       count_lt_256 * DMA_ROM_COUNT_LT_256_F + 
+                       result_nz * DMA_ROM_NEQ_F +
+                       use_src * DMA_ROM_USE_SRC_F;
+
     lookup_assumes(DMA_ROM_ID, expressions: [dst_offset, src_offset, l_count, flags, pre_count, src_offset_after_pre, l_count64], sel: sel);
 
     // OP_DMA_MEMSET isn't implemented because usually memset used with static value known
@@ -470,6 +480,8 @@ airtemplate Dma(int N = 2**21,
     // OP_DMA_PRE_XMEMCMP   (dst, src, dst_offset, src_offset,  pre_count, main_step, 0, r_nz, R0, R1)
     // OP_DMA_PRE_XMEMSET   (dst, 0,   dst_offset,          0,  pre_count, main_step, value)
 
+    println(_pre_op);
+    println(pre_op);
     permutation_assumes(DMA_BUS_ID, [pre_op, 
                                      dst64, 
                                      src64, 

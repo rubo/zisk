@@ -145,9 +145,9 @@ impl MemProcessor for MemCounterProcessor<'_> {
 }
 
 impl MemBusHelpers {
-    /// Generates an aligned memory load operation.
+    /// Generates an aligned memory read operation.
     /// The address must be 8-byte aligned.
-    pub fn mem_aligned_load<P: MemProcessor>(
+    pub fn mem_aligned_read<P: MemProcessor>(
         addr: u32,
         step: u64,
         mem_value: u64,
@@ -211,7 +211,7 @@ impl MemBusHelpers {
 
     /// Generates multiple aligned memory load operations from a slice of values.
     /// The address must be 8-byte aligned.
-    pub fn mem_aligned_load_from_slice<P: MemProcessor>(
+    pub fn mem_aligned_read_from_slice<P: MemProcessor>(
         addr: u32,
         step: u64,
         values: &[u64],
@@ -237,6 +237,23 @@ impl MemBusHelpers {
         assert!(addr % 8 == 0);
         let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 3;
         for (i, &value) in values.iter().enumerate() {
+            let data: [u64; 7] =
+                [MEMORY_STORE_OP, (addr as usize + i * 8) as u64, mem_step, 8, 0, 0, value];
+            mem_processor.process_mem_data(&data);
+        }
+    }
+    /// Generates multiple aligned memory write operations with same fill pattern
+    /// The address must be 8-byte aligned.
+    pub fn mem_aligned_write_pattern<P: MemProcessor>(
+        addr: u32,
+        step: u64,
+        value: u64,
+        count64: usize,
+        mem_processor: &mut P,
+    ) {
+        assert!(addr % 8 == 0);
+        let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 3;
+        for i in 0..count64 {
             let data: [u64; 7] =
                 [MEMORY_STORE_OP, (addr as usize + i * 8) as u64, mem_step, 8, 0, 0, value];
 

@@ -21,6 +21,7 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
 
     const int has_src = (enable_memcpy || enable_memcmp);
     const int enabled_count = enable_memcpy + enable_memcmp + enable_inputcpy + enable_memset;
+    const int enable_write_mem = enable_memcpy || enable_inputcpy || enable_memset;
     const int enabled_all = enabled_count == 4;
 
     col witness bits(MAIN_STEP_BITS) main_step;
@@ -37,16 +38,24 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
     // enable_inputcpy   x     x     ✓     x     ✓
     // enable_memset     x     x     x     x     ✓
 
+    col witness bits(1) is_post;    
+    is_post * (1 - is_post) === 0;
+
     // prepare operation selectors
 
     expr _sel = 0;
+    expr _sel_write = 0;
+    expr _sel_byte_rc = 0;
 
     // definition @[sel_memcpy]
-
+    expr _pre_op = 0;
     if (enable_memcpy) {
         col witness bits(1) air.sel_memcpy;
         sel_memcpy * (1 - sel_memcpy) === 0;
         _sel += sel_memcpy;
+        _sel_write += sel_memcpy;
+        _sel_byte_rc += sel_memcpy;
+        _pre_op += sel_memcpy * OP_DMA_PRE_XMEMCPY;
     } else {
         const int air.sel_memcpy = 0;
     }
@@ -57,7 +66,10 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         col witness bits(1) air.sel_memcmp;
         sel_memcmp * (1 - sel_memcmp) === 0;
         _sel += sel_memcmp;
+        // @[_sel_write] it's active for sel_memcmp because read the same that preloads before read, 
+        // only need to verify that the value will written and pre read value are the same
 
+        _sel_byte_rc += sel_memcmp;
         col witness bits(1) air.memcmp_result_nz;
         memcmp_result_nz * (1 - memcmp_result_nz) === 0;
         // memcmp_result_nz only could be 1 if it's an memcmp operation
@@ -66,6 +78,8 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         col witness bits(32) air.l_memcmp_result;
         // memcmp_result_nz is 0 the memcmp_result must be 0
         (1 - memcmp_result_nz) * l_memcmp_result === 0;
+
+        _pre_op += sel_memcmp * OP_DMA_PRE_XMEMCMP;
     } else {
         const int air.sel_memcmp = 0;
         const int air.memcmp_result[2] = [0, 0];
@@ -77,6 +91,9 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         col witness bits(1) air.sel_inputcpy;
         sel_inputcpy * (1 - sel_inputcpy) === 0;
         _sel += sel_inputcpy;
+        _sel_write += sel_inputcpy;
+        _sel_byte_rc += sel_inputcpy;
+        _pre_op += sel_inputcpy * OP_DMA_PRE_INPUTCPY;        
     } else {
         const int air.sel_inputcpy = 0;
     }
@@ -87,20 +104,30 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         col witness bits(1) air.sel_memset;
         sel_memset * (1 - sel_memset) === 0;
         _sel += sel_memset;
+        _sel_write += sel_memset;
+        _pre_op += sel_memset * OP_DMA_PRE_XMEMSET;        
     } else {
         const int air.sel_memset = 0;
     }
-
+    
     // definition @[sel]
 
     const expr sel = _sel; 
+
+    // sel_write and sel_byte_rc are a subset of sel, how sel is binary sel_write and sel_byte_rc 
+    // are also binary
+    const expr sel_write = _sel_write;
+    const expr sel_byte_rc = _sel_byte_rc;
+
     if (enabled_count > 1) {
         sel * (1 - sel) === 0;
     }
 
+    const expr pre_post_op = _pre_op + is_post * OP_DMA_POST_OFFSET;
+
     // Prepare source and flags to selected the "row"
     const int RB;
-    expr _rom_flags = 0;
+    expr rom_flags = 0;
 
     if (has_src) {
         col witness bits(1) air.selr[7];
@@ -119,6 +146,7 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         const expr air.sr_0to6 = _sr_0to6;
         _sr_value = _sr_value + 7 * sr[7];
 
+        const expr air.load_src = sel_memcpy + sel_memcmp;
         const expr sr_value = _sr_value;
 
         sr_0to6 * (1 - sr_0to6) === 0;
@@ -139,10 +167,16 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         enabled_second_read * (1 - sel) === 0;
 
         // update rom flags
+        // sr_value is a expression of bits for this reason range check of sr_value is restricted
+        // to range [0, 7]
 
-        _rom_flags += DMA_PRE_POST_DST_OFFSET_GT_SRC_F * dst_offset_gt_src_offset +  
+        println(rom_flags);
+        rom_flags +=  DMA_PRE_POST_DST_OFFSET_GT_SRC_F * dst_offset_gt_src_offset +  
                       DMA_PRE_POST_ENABLED_SECOND_READ_F * enabled_second_read +
-                      DMA_PRE_POST_SR_VALUE_F * sr_value;
+                      DMA_PRE_POST_SR_VALUE_F * sr_value +
+                      DMA_PRE_POST_IS_POST * is_post +
+                      DMA_PRE_POST_LOAD_SRC * load_src;
+        println(rom_flags);
 
         RB = RC * 4 * 2;
     } else {
@@ -155,32 +189,29 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         }
     }
 
+    if (enable_memset) {
+        // if memset it's enable, take first rb as fill_free, and define a constraint
+        // to be sure that all are equals (sr must be 0).
+        col witness bits(8) air.fill_byte;
+        (1 - sel_memset) * fill_byte === 0;
+    }
+
     const int RV = RB / 4;
 
     if (RB > 0) {
         col witness bits(8) air.rb[RB];
         const expr air.r_values[RV];
         for (int i = 0; i < RB; i+=2) {
-            range_dual_byte(rb[i+1], rb[i], sel);
+            range_dual_byte(rb[i+1], rb[i], sel_byte_rc);
+            if (enable_memset) {
+                sel_memset * (rb[i] - fill_byte) === 0;
+                sel_memset * (rb[i+1] - fill_byte) === 0;
+            }   
         }
 
         for (int i = 0; i < RV; ++i) { 
             r_values[i] = rb[i*4] + P2_8 * rb[i*4+1]  + P2_16 * rb[i*4+2]  + P2_24 * rb[i*4+3];
         }
-        if (enable_memset) {
-            // if memset it's enable, take first rb as fill_free, and define a constraint
-            // to be sure that all are equals (sr must be 0).
-            const expr air.fill_byte = rb[0]; 
-            const int _len = RC * 4;            
-            for (int i = 1; i < _len; ++i) {
-                sel_memset * (rb[i] - rb[0]) === 0;
-            }
-        }
-    } else if (enable_memset) {
-        // if memset it's enable, take first rb as fill_free, and define a constraint
-        // to be sure that all are equals (sr must be 0).
-        col witness bits(8) air.fill_byte;
-        (1 - sel_memset) * fill_byte === 0;
     }
 
     const int PRB = RC * 4;        // Pre-write bytes
@@ -188,19 +219,20 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
 
     const expr p_values[RC];
     
-    for (int i = 0; i < RC; i+=2) {
+    for (int i = 0; i < PRB; i+=2) {
         range_dual_byte(pb[i+1], pb[i], sel);
     }
     for (int i = 0; i < RC; ++i) { 
         p_values[i] = pb[i*4] + P2_8 * pb[i*4+1]  + P2_16 * pb[i*4+2]  + P2_24 * pb[i*4+3];
     }
     
+    println(rom_flags);
     col witness bits(1) sb[8];
     for (int i = 0; i < 8; ++i) {
         sb[i] * (1 - sb[i]) === 0;
-        _rom_flags += sb[i] * (1 << (7-i));
+        rom_flags += sb[i] * (1 << (7-i));
     }
-
+    println(rom_flags);
     if (enable_memcmp) {
         // The DMA controller send throw bus, an flag @[memcmp_nz] to indicate that operation
         // must detect that last byte of count was different. This flag only could be active
@@ -251,10 +283,10 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         const expr air.memcmp_result[2];
         memcmp_result[0] = l_memcmp_result;
         memcmp_result[1] = 0xFFFF_FFFF * memcmp_result_is_negative;
-        
-        _rom_flags += DMA_PRE_POST_MEMCMP_RESULT_IS_NEG_F * memcmp_result_is_negative +
-                      DMA_PRE_POST_MEMCMP_RESULT_NZ_F * memcmp_result_nz;
-
+        println(rom_flags);        
+        rom_flags += DMA_PRE_POST_MEMCMP_RESULT_IS_NEG_F * memcmp_result_is_negative +
+                     DMA_PRE_POST_MEMCMP_RESULT_NZ_F * memcmp_result_nz;
+        println(rom_flags);
         lookup_assumes(DMA_BYTE_CMP_TABLE_ID, [last_dst_byte, 
                                                 memcmp_result_is_negative, 
                                                 abs_diff_dst_src
@@ -371,11 +403,9 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
         // Read previous value before write
         // Write final value
 
-        precompiled_mem_load(sel: sel_memcpy + sel_memcmp, main_step:, addr: src64 * 8, value: [r_values[0], r_values[1]]);
+        precompiled_mem_load(sel: load_src, main_step:, addr: src64 * 8, value: [r_values[0], r_values[1]]);
         precompiled_mem_load(sel: enabled_second_read, main_step:, addr: src64 * 8 + 8, value: [r_values[2], r_values[3]]);
-
         
-
     } else if (enable_inputcpy) {
         // at this point memcpy, memcmp are disabled, but enable_memset could be enabled
         expr _write_value_0 = 0;
@@ -405,8 +435,18 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
     // Read previous value before write
     // Write final value
 
+    // this load is always used to read previous value that was partially modified or verified
     precompiled_mem_load(sel:, main_step:, addr: dst64 * 8, value: p_values);
-    precompiled_mem_store(sel:, main_step:, addr: dst64 * 8, value: bus_write_value);
+
+    if (enable_write_mem) {
+        // when is a memcmp reads, no writes
+        precompiled_mem_store(sel: sel_write, main_step:, addr: dst64 * 8, value: bus_write_value);
+    }
+    if (enable_memcmp) {
+        // for memcmp we need to verify that value read from memory are the same that value generated to write, because this value is the one that "compensate" the difference between src and dst, if this value is different that value read from memory, the memcmp result will be different that expected.
+        sel_memcmp * (p_values[0] - bus_write_value[0]) === 0;
+        sel_memcmp * (p_values[1] - bus_write_value[1]) === 0;
+    }
 
     // DMA ===> DMA_PRE_POST (PRE)
     // --------------------------------------------------------------------------------
@@ -417,7 +457,7 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
     // OP_DMA_PRE_XMEMSET   (dst, 0,   dst_offset,          0,  pre_count, main_step, value)
 
     // Send operation to bus
-    permutation_proves(DMA_BUS_ID, [DMA_MEM_PRE_POST, 
+    permutation_proves(DMA_BUS_ID, [pre_post_op, 
                                     dst64 * 8, 
                                     src64 * 8, 
                                     dst_offset, 
@@ -437,6 +477,9 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
     // DMA_PRE_POST_MEMCMP_RESULT_IS_NEG_F = P2_13       @[memcmp_result_is_negative] (1 bit)
     // DMA_PRE_POST_MEMCMP_RESULT_NZ       = P2_14       @[memcmp_result_nz] (1 bit)
 
-    const expr rom_flags = _rom_flags;
+    println(rom_flags);
     lookup_assumes(DMA_PRE_POST_TABLE_ID, [rom_flags, dst_offset, src_offset, count, ...diff_factor], sel: sel);
+
+    // TBO: For single memcmp operation, we only need two reads, and after generate two values to compare, less
+    // columns.
 }

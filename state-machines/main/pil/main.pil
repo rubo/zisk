@@ -360,17 +360,13 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
     // Sent to bus the external operation
 
     // Precompiles are generated throw transpilation because them not exists directly in RISCV
-    // The traspiler has context about the precompiled and knows that if a and b are 32-bit address
-    // in this case for specific precompileds you could use a_imm[1] and b_imm[1] to specify an
-    // offset over the address. Also has the possibility to send and extend static argument known in
-    // transpilation time.
-
+    
     // The flag m32 is used to avoid send "garbage" values to bus, to simplify the other state
     // state machines and to increase the hits to FROPS (frequent operations).
 
     assumes_operation(op: , 
-                      a: [a[0] + a_src_reg * a_imm[1], (1 - m32) * a[1]], 
-                      b: [b[0] + b_src_reg * b_imm[1], (1 - m32) * b[1]], 
+                      a: [a[0], (1 - m32) * a[1]], 
+                      b: [b[0], (1 - m32) * b[1]], 
                       c: , 
                       flag:, 
                       main_step: STEP * is_precompiled, 

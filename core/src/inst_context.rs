@@ -120,6 +120,9 @@ pub struct InstContext {
     /// DataExt 64 bytes size. With this information it is possible to specify which variable part of the minimal trace
     /// is associated with the current instruction. Used by DMA precompile.
     pub data_ext_len: usize,
+
+    /// Precompiles uses jmp_offset1 as extended param (static value known in transpilation time)
+    pub extended_arg: i64,
 }
 
 /// RisK instruction context implementation
@@ -142,6 +145,7 @@ impl InstContext {
             precompiled: PrecompiledInstContext::default(),
             fcall: FcallInstContext::default(),
             data_ext_len: 0,
+            extended_arg: 0,
         }
     }
 

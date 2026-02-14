@@ -4,6 +4,10 @@
 //! It manages collected inputs and interacts with the `DmaSM` to compute witnesses for
 //! execution plans.
 
+#[cfg(feature = "save_dma_collectors")]
+use crate::save_dma_collectors;
+#[cfg(feature = "save_dma_inputs")]
+use crate::DmaUnalignedInput;
 use crate::{DmaCheckPoint, DmaUnalignedCollector, DmaUnalignedSM};
 use fields::PrimeField64;
 use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
@@ -18,7 +22,7 @@ use zisk_pil::DmaUnalignedTrace;
 /// to compute witnesses for the DmaUnaligned State Machine.
 pub struct DmaUnalignedInstance<F: PrimeField64> {
     /// Dma state machine.
-    dma_64_aligned_sm: Arc<DmaUnalignedSM<F>>,
+    dma_unaligned_sm: Arc<DmaUnalignedSM<F>>,
 
     /// Instance context.
     ictx: InstanceCtx,
@@ -31,20 +35,20 @@ impl<F: PrimeField64> DmaUnalignedInstance<F> {
     /// Creates a new `DmaUnalignedInstance`.
     ///
     /// # Arguments
-    /// * `dma_64_aligned_sm` - An `Arc`-wrapped reference to the Dma 64 Aligned State Machine.
+    /// * `dma_unaligned_sm` - An `Arc`-wrapped reference to the Dma Unaligned State Machine.
     /// * `ictx` - The `InstanceCtx` associated with this instance, containing the execution plan.
     /// * `bus_id` - The bus ID associated with this instance.
     ///
     /// # Returns
     /// A new `DmaUnalignedInstance` instance initialized with the provided state machine and
     /// context.
-    pub fn new(dma_64_aligned_sm: Arc<DmaUnalignedSM<F>>, ictx: InstanceCtx) -> Self {
+    pub fn new(dma_unaligned_sm: Arc<DmaUnalignedSM<F>>, ictx: InstanceCtx) -> Self {
         let is_last_segment = {
             let meta = ictx.plan.meta.as_ref().unwrap();
             let checkpoint = meta.downcast_ref::<DmaCheckPoint>().unwrap();
             checkpoint.is_last_segment
         };
-        Self { dma_64_aligned_sm, ictx, is_last_segment }
+        Self { dma_unaligned_sm, ictx, is_last_segment }
     }
 
     pub fn build_dma_collector(&self, chunk_id: ChunkId) -> DmaUnalignedCollector {
@@ -59,6 +63,7 @@ impl<F: PrimeField64> DmaUnalignedInstance<F> {
         let collect_info = meta.downcast_ref::<DmaCheckPoint>().unwrap();
         let (num_inputs, collect_counter) = collect_info.chunks[&chunk_id];
         DmaUnalignedCollector::new(
+            chunk_id,
             num_inputs,
             collect_counter,
             Some(chunk_id) == collect_info.last_chunk,
@@ -84,16 +89,34 @@ impl<F: PrimeField64> Instance<F> for DmaUnalignedInstance<F> {
         collectors: Vec<(usize, Box<dyn BusDevice<PayloadType>>)>,
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<Option<AirInstance<F>>> {
+        #[cfg(feature = "save_dma_collectors")]
+        let (debug, inputs): (Vec<_>, Vec<_>) = collectors
+            .into_iter()
+            .map(|(_, collector)| {
+                let collector = collector.as_any().downcast::<DmaUnalignedCollector>().unwrap();
+                (collector.get_debug_info(), collector.inputs)
+            })
+            .unzip();
+        #[cfg(not(feature = "save_dma_collectors"))]
         let inputs: Vec<_> = collectors
             .into_iter()
             .map(|(_, collector)| {
                 collector.as_any().downcast::<DmaUnalignedCollector>().unwrap().inputs
             })
             .collect();
-        // Extract segment id from instance context
+
         let segment_id = self.ictx.plan.segment_id.unwrap();
 
-        Ok(Some(self.dma_64_aligned_sm.compute_witness(
+        #[cfg(feature = "save_dma_collectors")]
+        save_dma_collectors(&format!("dma_unaligned_collector_{segment_id:04}.txt"), debug)?;
+
+        #[cfg(feature = "save_dma_inputs")]
+        DmaUnalignedInput::dump_to_file(
+            &inputs,
+            &format!("dma_unaligned_inputs_{segment_id:04}.txt"),
+        )?;
+
+        Ok(Some(self.dma_unaligned_sm.compute_witness(
             &inputs,
             segment_id,
             self.is_last_segment,
@@ -129,6 +152,7 @@ impl<F: PrimeField64> Instance<F> for DmaUnalignedInstance<F> {
         let collect_info = meta.downcast_ref::<DmaCheckPoint>().unwrap();
         let (num_inputs, collect_counter) = collect_info.chunks[&chunk_id];
         Some(Box::new(DmaUnalignedCollector::new(
+            chunk_id,
             num_inputs,
             collect_counter,
             Some(chunk_id) == collect_info.last_chunk,

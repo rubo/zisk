@@ -6,7 +6,7 @@ use super::BusDevice;
 
 use crate::Metrics;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum BusDeviceMode {
     Counter,
     CounterAsm,

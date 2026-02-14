@@ -249,10 +249,10 @@ direct_dma_memcpy_mtrace:
     # Total qwords = loop_count (bits 0-31) + extra_src_reads (bits 48-50)
 
     mov     R_AUX2, R_ENCODE           # 1 cycle - R_AUX2 = encoded
-    shr     R_AUX2, LOOP_COUNT_SBITS   # 1 cycle - R_AUX2 = loop_count (bits 32-63)
+    shr     R_AUX2, LOOP_COUNT_RS   # 1 cycle - R_AUX2 = loop_count (bits 32-63)
     
     mov     R_AUX, R_ENCODE               # 1 cycle - R_AUX = encoded
-    shr     R_AUX, EXTRA_SRC_READS_SBITS  # 1 cycle - shift extra_src_reads to position
+    shr     R_AUX, EXTRA_SRC_READS_RS  # 1 cycle - shift extra_src_reads to position
     and     R_AUX, 0x03                   # 1 cycle - R_AUX = extra_src_reads (bits 48-50)
     add     R_AUX2, R_AUX                 # 1 cycle - R_AUX2 = total qwords to copy
 
@@ -323,7 +323,7 @@ direct_dma_memcpy_mtrace:
 .L_copy_forward_loop:
     # Copy aligned qwords (main bulk of data)
     mov     R_AUX2, R_ENCODE          # 1 cycle
-    shr     R_AUX2, LOOP_COUNT_SBITS  # 1 cycle - R_AUX2 = loop_count (bits 32-63)
+    shr     R_AUX2, LOOP_COUNT_RS  # 1 cycle - R_AUX2 = loop_count (bits 32-63)
     rep     movsq                     # ~1.5-2 cycles per qword (aligned, optimized)
                                       # R_SRC, R_DST advanced by loop_count * 8
 
@@ -335,7 +335,7 @@ direct_dma_memcpy_mtrace:
 
     # Extract and copy post_count bytes (1-7 bytes after aligned data)
     mov     R_AUX2, R_ENCODE           # 1 cycle
-    shr     R_AUX2, POST_COUNT_SBITS   # 1 cycle - shift post_count to position
+    shr     R_AUX2, POST_COUNT_RS   # 1 cycle - shift post_count to position
     and     R_AUX2, 0x07               # 1 cycle - R_AUX2 = post_count (bits 43-45)
 
     rep     movsb                      # ~3-5 cycles per byte

@@ -1,8 +1,6 @@
-use crate::Stats;
+use crate::{EmuOptions, Stats};
 use zisk_common::EmuTrace;
-use zisk_core::{
-    InstContext, INPUT_ADDR, MAX_INPUT_SIZE, RAM_ADDR, RAM_SIZE, REGS_IN_MAIN_TOTAL_NUMBER,
-};
+use zisk_core::{InstContext, INPUT_ADDR, RAM_ADDR, RAM_SIZE, REGS_IN_MAIN_TOTAL_NUMBER};
 
 /// ZisK emulator context data container, storing the state of the emulation
 pub struct EmuContext {
@@ -17,13 +15,14 @@ pub struct EmuContext {
     pub last_callback_step: u64,
     pub trace: EmuTrace,
     pub do_stats: bool,
+    pub max_input_mem: u64,
     pub stats: Stats,
 }
 
 /// RisK emulator context implementation
 impl EmuContext {
     /// RisK emulator context constructor
-    pub fn new(input: Vec<u8>) -> EmuContext {
+    pub fn new(input: Vec<u8>, options: &EmuOptions) -> EmuContext {
         let mut ctx = EmuContext {
             inst_ctx: InstContext::default(),
             tracerv: Vec::new(),
@@ -36,10 +35,11 @@ impl EmuContext {
             last_callback_step: 0,
             do_stats: false,
             stats: Stats::default(),
+            max_input_mem: options.max_input_mem, // 128 MiB
         };
 
         // Check the input data size is inside the proper range
-        if input.len() > (MAX_INPUT_SIZE - 16) as usize {
+        if input.len() > (ctx.max_input_mem - 16) as usize {
             panic!("EmuContext::new() input size too big size={}", input.len());
         }
 
@@ -59,6 +59,6 @@ impl EmuContext {
 
 impl Default for EmuContext {
     fn default() -> Self {
-        Self::new(Vec::new())
+        Self::new(Vec::new(), &EmuOptions::default())
     }
 }

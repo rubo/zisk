@@ -909,6 +909,20 @@ impl Mem {
         dst_section.buffer[dst_offset..dst_offset + count].copy_from_slice(bytes);
     }
 
+    pub fn memset(&mut self, dst: u64, count: u64, data: u8) {
+        // Early return if source and destination are the same or count is zero
+        if count == 0 {
+            return;
+        }
+
+        // Then, write to destination
+        let dst_section = self.get_writeable_section(dst, count);
+        let dst_offset: usize = (dst - dst_section.start) as usize;
+
+        let count = count as usize;
+        dst_section.buffer[dst_offset..dst_offset + count].fill(data);
+    }
+
     /// Reads `count` bytes from memory starting at `addr` and appends them as u64 values to `data`.
     /// The data is read in 64-bit aligned chunks and pushed to the vector.
     pub fn push_from_mem(&mut self, data: &mut Vec<u64>, addr: u64, count: u64) {
@@ -948,16 +962,16 @@ impl Mem {
 
         // Compare byte by byte
         for i in 0..count_usize {
-            let byte_a = a_section.buffer[a_offset + i] as i8;
-            let byte_b = b_section.buffer[b_offset + i] as i8;
+            let byte_a = a_section.buffer[a_offset + i];
+            let byte_b = b_section.buffer[b_offset + i];
 
             if byte_a != byte_b {
                 // Sign extend the difference to 64 bits
                 let diff = (byte_a as i64) - (byte_b as i64);
-                return (diff as u64, i);
+                // return effective count, needs the last byte to compare.
+                return (diff as u64, i + 1);
             }
         }
-
         // All bytes are equal
         (0, count_usize)
     }

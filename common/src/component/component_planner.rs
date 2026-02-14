@@ -139,8 +139,8 @@ impl CollectCounter {
             initial_skipped: 0,
             collect_count,
             collected: 0,
-            initial_skipping: initial_skip > 0,
-            final_skip_phase: false,
+            initial_skipping: collect_count > 0 && initial_skip > 0,
+            final_skip_phase: collect_count == 0,
         }
     }
 
@@ -212,7 +212,6 @@ impl CollectCounter {
                 return None;
             }
         }
-
         if self.final_skip_phase {
             // Phase 3: Skip all remaining elements
             None

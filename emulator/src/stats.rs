@@ -919,7 +919,7 @@ impl Stats {
                     {
                         &self.rois[*index as usize].name
                     } else {
-                        &""
+                        ""
                     };
                 }
                 let instruction = rom.get_instruction(**pc);

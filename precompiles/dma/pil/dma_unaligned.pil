@@ -51,7 +51,7 @@ airtemplate DmaUnaligned(int N = 2**21,                // Rows of instance
     const int enable_memcmp = (enable & E_DMA_MEMCMP) ? 1 : 0; 
     assert((enable_memcmp + enable_memcpy) >= 1);
 
-    const int enable_full = enable_memcmp && enable_memcmp;
+    const int enable_full = enable_memcpy && enable_memcmp;
 
     // continuation control, used to create a new continuation subid to avoid collision
     // between DmaUnaligned continuations. If you instance diferent airs with same template
@@ -208,7 +208,7 @@ airtemplate DmaUnaligned(int N = 2**21,                // Rows of instance
         (1 - segment_previous_seq_end) * L1 * (segment_first_bytes[i] - read_bytes[i]) === 0;
 
         // force segment_next_bytes to zero, when it's finish of input
-        segment_last_seq_end * segment_next_bytes[i] == 0;
+        segment_last_seq_end * segment_next_bytes[i] === 0;
 
         // to force the "received" values from the bus are 0 when the last row of the previous segment
         // is final of input (seq_end).
@@ -263,7 +263,7 @@ airtemplate DmaUnaligned(int N = 2**21,                // Rows of instance
                      a: [dst64 * 8, 0], 
                      b: [src64 * 8, 0], 
                      main_step:, 
-                     extended_arg: count, 
+                     extended_arg: count * 8, 
                      extra_args: [offset], 
                      mul: previous_seq_end);
 
@@ -308,13 +308,13 @@ airtemplate DmaUnaligned(int N = 2**21,                // Rows of instance
     //   src64 = 'src64 + 1
     //   dst64 = 'dst64 + 1
 
-    continue_seq_on_l1 * (count - (segment_previous_count - 1)) == 0;
+    continue_seq_on_l1 * (count - (segment_previous_count - 1)) === 0;
     continue_seq_on_no_l1 * (count - ('count - 1)) === 0;
 
-    continue_seq_on_l1 * (src64 - (segment_previous_src64 + 1)) == 0;
+    continue_seq_on_l1 * (src64 - (segment_previous_src64 + 1)) === 0;
     continue_seq_on_no_l1 * (src64 - ('src64 + 1)) === 0;
 
-    continue_seq_on_l1 * (dst64 - (segment_previous_dst64 + 1)) == 0;
+    continue_seq_on_l1 * (dst64 - (segment_previous_dst64 + 1)) === 0;
     continue_seq_on_no_l1 * (dst64 - ('dst64 + 1)) === 0;    
 
     // LATCHS:
@@ -322,14 +322,14 @@ airtemplate DmaUnaligned(int N = 2**21,                // Rows of instance
     //   offset = 'offset
     //   is_memeq = 'is_memeq
     //   main_step = 'main_step
-    continue_seq_on_l1 * (offset - segment_previous_offset) == 0;
+    continue_seq_on_l1 * (offset - segment_previous_offset) === 0;
     continue_seq_on_no_l1 * (offset - 'offset) === 0;
 
     if (enable_full) {
-        continue_seq_on_l1 * (is_memeq - segment_previous_is_memeq) == 0;
+        continue_seq_on_l1 * (is_memeq - segment_previous_is_memeq) === 0;
         continue_seq_on_no_l1 * (is_memeq - 'is_memeq) === 0;    
     }
-    continue_seq_on_l1 * (main_step - segment_previous_main_step) == 0;
+    continue_seq_on_l1 * (main_step - segment_previous_main_step) === 0;
     continue_seq_on_no_l1 * (main_step - 'main_step) === 0;    
 
     // At end of sequence

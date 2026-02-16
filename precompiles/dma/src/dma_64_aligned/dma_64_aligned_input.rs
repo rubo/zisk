@@ -111,6 +111,49 @@ impl Dma64AlignedInput {
             fill_byte: DmaInfo::get_fill_byte(encoded),
         }
     }
+    pub fn from_memcmp(
+        data: &[u64],
+        data_ext: &[u64],
+        trace_offset: usize,
+        skip_rows: usize,
+        ops_x_rows: usize,
+        max_rows: usize,
+        is_last_instance_input: bool,
+    ) -> Self {
+        let dst = data[A] as u32;
+        let src = data[B] as u32;
+        let op = data[OP] as u8;
+        let encoded = data[DMA_ENCODED];
+        let pre_count = DmaInfo::get_pre_count(encoded) as u32;
+        let skip_count = skip_rows * ops_x_rows;
+        let data_offset = (pre_count as usize) + skip_count;
+        let count = DmaInfo::get_loop_count(encoded) - skip_count;
+        let total_rows = DmaInfo::get_loop_count(encoded).div_ceil(ops_x_rows);
+        let rows = std::cmp::min(total_rows - skip_rows, max_rows) as u32;
+        Self {
+            dst: dst + pre_count,
+            src: src + pre_count,
+            trace_offset: trace_offset as u32,
+            is_first_instance_input: trace_offset == 0,
+            is_last_instance_input,
+            step: data[STEP],
+            skip_rows: skip_rows as u32,
+            rows,
+            encoded,
+            src_values: data_ext[data_offset..data_offset + count].to_vec(),
+            op: match op {
+                ZiskOp::DMA_MEMCPY => {
+                    if DmaInfo::is_direct(encoded) {
+                        ZiskOp::DMA_MEMCPY
+                    } else {
+                        ZiskOp::DMA_XMEMCPY
+                    }
+                }
+                _ => op,
+            },
+            fill_byte: 0,
+        }
+    }
 
     #[cfg(feature = "save_dma_inputs")]
     /// Writes a list of Dma64AlignedInput instances to a text file with columns separated by |.

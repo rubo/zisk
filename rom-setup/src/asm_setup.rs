@@ -6,11 +6,57 @@ use std::{
 use anyhow::Result;
 use zisk_core::{is_elf_file, AsmGenerationMethod, Riscv2zisk};
 
-pub fn generate_assembly(
+use crate::get_elf_data_hash_from_path;
+
+/// Check if all assembly binary files exist for a given ELF and output path
+pub fn assembly_files_exist(elf: &Path, output_path: &Path, hints: bool) -> Result<bool> {
+    let elf_hash = get_elf_data_hash_from_path(elf)?;
+
+    let stem = elf.file_stem().unwrap().to_str().unwrap();
+    let stem = if hints { format!("{stem}-hints") } else { stem.to_string() };
+    let new_filename = format!("{stem}-{elf_hash}.tmp");
+    let base_path = output_path.join(new_filename);
+    let file_stem = base_path.file_stem().unwrap().to_str().unwrap();
+
+    let bin_mt_file = format!("{file_stem}-mt.bin");
+    let bin_mt_file = base_path.with_file_name(bin_mt_file);
+
+    let bin_rh_file = format!("{file_stem}-rh.bin");
+    let bin_rh_file = base_path.with_file_name(bin_rh_file);
+
+    let bin_mo_file = format!("{file_stem}-mo.bin");
+    let bin_mo_file = base_path.with_file_name(bin_mo_file);
+
+    Ok(bin_mt_file.exists() && bin_rh_file.exists() && bin_mo_file.exists())
+}
+
+pub fn gen_assembly(
+    _elf: &Path,
+    _zisk_path: &Option<PathBuf>,
+    _output_dir: &Option<PathBuf>,
+    _hints: bool,
+    _verbose: bool,
+) -> Result<(), anyhow::Error> {
+    // Assembly setup is not needed on macOS due to the lack of support for assembly generation.
+    #[cfg(not(target_os = "macos"))]
+    {
+        let output_path = crate::get_output_path(_output_dir)?;
+        let elf_hash = get_elf_data_hash_from_path(_elf)?;
+
+        tracing::info!("Computing assembly setup");
+        let zisk_path = crate::get_zisk_path(_zisk_path.as_ref());
+        _generate_assembly(_elf, &elf_hash, &zisk_path, output_path.as_path(), _hints, _verbose)?;
+        tracing::info!("Assembly setup generated at {}", output_path.display());
+    }
+    Ok(())
+}
+
+fn _generate_assembly(
     elf: &Path,
     elf_hash: &str,
     zisk_path: &Path,
     output_path: &Path,
+    hints: bool,
     verbose: bool,
 ) -> Result<(), anyhow::Error> {
     // Read the ELF file and check if it is a valid ELF file
@@ -22,6 +68,7 @@ pub fn generate_assembly(
     }
 
     let stem = elf.file_stem().unwrap().to_str().unwrap();
+    let stem = if hints { format!("{stem}-hints") } else { stem.to_string() };
     let new_filename = format!("{stem}-{elf_hash}.tmp");
     let base_path = output_path.join(new_filename);
     let file_stem = base_path.file_stem().unwrap().to_str().unwrap();
@@ -44,9 +91,9 @@ pub fn generate_assembly(
     .for_each(|(file, gen_method, trace_target)| {
         let asm_file = file.with_extension("asm");
         // Convert the ELF file to Zisk format and generates an assembly file
-        let rv2zk = Riscv2zisk::new(elf_file_path.to_str().unwrap().to_string());
+        let rv2zk = Riscv2zisk::new(&file_data);
         rv2zk
-            .runfile(asm_file.to_str().unwrap().to_string(), *gen_method, false, false)
+            .runfile(asm_file.to_str().unwrap().to_string(), *gen_method, false, false, hints)
             .expect("Error converting elf to assembly");
 
         let emulator_asm_path = zisk_path.join("emulator-asm");

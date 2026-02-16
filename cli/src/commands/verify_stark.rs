@@ -1,13 +1,11 @@
 use anyhow::Result;
 use clap::Parser;
 use colored::Colorize;
-use proofman_common::initialize_logger;
-use std::fs;
-use zisk_verifier::{verify_zisk_proof, verify_zisk_proof_compressed};
-
+use std::path::PathBuf;
 use zisk_build::ZISK_VERSION_MESSAGE;
-
-use super::get_default_verkey;
+use zisk_sdk::{
+    get_proving_key, setup_logger, verify_zisk_proof_with_proving_key, ZiskProofWithPublicValues,
+};
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, version = ZISK_VERSION_MESSAGE)]
@@ -21,15 +19,12 @@ pub struct ZiskVerify {
     pub verbose: u8, // Using u8 to hold the number of `-v`
 
     #[clap(short = 'k', long)]
-    pub vk: Option<String>,
-
-    #[clap(short = 'c', long, default_value_t = false)]
-    pub compressed: bool,
+    pub proving_key: Option<PathBuf>,
 }
 
 impl ZiskVerify {
     pub fn run(&self) -> Result<()> {
-        initialize_logger(self.verbose.into(), None);
+        setup_logger(self.verbose.into());
 
         tracing::info!(
             "{}",
@@ -39,15 +34,16 @@ impl ZiskVerify {
 
         let start = std::time::Instant::now();
 
-        let proof = fs::read(&self.proof)?;
+        let proof = ZiskProofWithPublicValues::load(&self.proof).map_err(|e| {
+            anyhow::anyhow!("Error loading VADCoP final proof from {}: {}", &self.proof, e)
+        })?;
 
-        let vk = &self.get_verkey();
-
-        let result = if self.compressed {
-            verify_zisk_proof_compressed(&proof, vk)
-        } else {
-            verify_zisk_proof(&proof, vk)
-        };
+        let result = verify_zisk_proof_with_proving_key(
+            proof.get_proof(),
+            proof.get_publics(),
+            proof.get_program_vk(),
+            get_proving_key(self.proving_key.as_ref()),
+        );
 
         let elapsed = start.elapsed();
 
@@ -62,13 +58,5 @@ impl ZiskVerify {
         tracing::info!("{}", "----------------------------".bright_green().bold());
 
         result
-    }
-
-    /// Gets the verification key
-    /// Uses the default one if not specified by user.
-    pub fn get_verkey(&self) -> Vec<u8> {
-        let vk_file =
-            if self.vk.is_none() { get_default_verkey() } else { self.vk.clone().unwrap() };
-        fs::read(&vk_file).unwrap()
     }
 }

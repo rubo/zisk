@@ -1,13 +1,13 @@
 //! The `WitnessLib` library defines the core witness computation framework,
 //! integrating the ZisK execution environment with state machines and witness components.
 //!
-//! This module leverages `WitnessLibrary` to orchestrate the setup of state machines,
 //! program conversion, and execution pipelines to generate required witnesses.
 
+use asm_runner::{HintsFile, HintsShmem};
 use executor::{
     EmulatorAsm, EmulatorKind, EmulatorRust, StateMachines, StaticSMBundle, ZiskExecutor,
 };
-use fields::{Goldilocks, PrimeField64};
+use fields::PrimeField64;
 use pil_std_lib::Std;
 use precomp_arith_eq::ArithEqManager;
 use precomp_arith_eq_384::ArithEq384Manager;
@@ -16,6 +16,7 @@ use precomp_dma::DmaManager;
 use precomp_keccakf::KeccakfManager;
 use precomp_poseidon2::Poseidon2Manager;
 use precomp_sha256f::Sha256fManager;
+use precompiles_hints::HintsProcessor;
 use proofman::register_std;
 use proofman_common::{PackedInfo, ProofmanResult};
 use sm_arith::ArithSM;
@@ -23,8 +24,12 @@ use sm_binary::BinarySM;
 use sm_mem::Mem;
 use sm_rom::RomSM;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use witness::{WitnessLibrary, WitnessManager};
-use zisk_common::{io::ZiskStdin, ExecutorStats, ZiskExecutionResult};
+use tracing::debug;
+use witness::WitnessManager;
+use zisk_common::{
+    io::{ZiskStdin, ZiskStream},
+    ExecutorStatsHandle, ZiskExecutionResult,
+};
 use zisk_core::{Riscv2zisk, CHUNK_SIZE};
 #[cfg(feature = "packed")]
 use zisk_pil::PACKED_INFO;
@@ -39,8 +44,9 @@ use zisk_pil::{
     POSEIDON_2_AIR_IDS, ROM_AIR_IDS, ROM_DATA_AIR_IDS, SHA_256_F_AIR_IDS, ZISK_AIRGROUP_ID,
 };
 
+use anyhow::Result;
+
 pub struct WitnessLib<F: PrimeField64> {
-    elf_path: PathBuf,
     asm_mt_path: Option<PathBuf>,
     asm_rh_path: Option<PathBuf>,
     executor: Option<Arc<ZiskExecutor<F>>>,
@@ -49,34 +55,50 @@ pub struct WitnessLib<F: PrimeField64> {
     unlock_mapped_memory: bool,
     shared_tables: bool,
     verbose_mode: proofman_common::VerboseMode,
+    with_hints: bool,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn init_zisk_lib<F: PrimeField64>(
-    verbose_mode: proofman_common::VerboseMode,
-    elf_path: PathBuf,
-    asm_mt_path: Option<PathBuf>,
-    asm_rh_path: Option<PathBuf>,
-    base_port: Option<u16>,
-    unlock_mapped_memory: bool,
-    shared_tables: bool,
-) -> WitnessLib<F> {
-    let chunk_size = CHUNK_SIZE;
-
-    WitnessLib {
-        elf_path,
-        asm_mt_path,
-        asm_rh_path,
-        executor: None,
-        chunk_size,
-        base_port,
-        unlock_mapped_memory,
-        shared_tables,
-        verbose_mode,
+pub fn get_packed_info() -> HashMap<(usize, usize), PackedInfo> {
+    let mut _packed_info = HashMap::new();
+    #[cfg(feature = "packed")]
+    {
+        for packed_info in PACKED_INFO.iter() {
+            _packed_info.insert(
+                (packed_info.0, packed_info.1),
+                PackedInfo::new(
+                    packed_info.2.is_packed,
+                    packed_info.2.num_packed_words,
+                    packed_info.2.unpack_info.to_vec(),
+                ),
+            );
+        }
     }
+    _packed_info
 }
 
-impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
+impl<F: PrimeField64> WitnessLib<F> {
+    pub fn new(
+        verbose_mode: proofman_common::VerboseMode,
+        asm_mt_path: Option<PathBuf>,
+        asm_rh_path: Option<PathBuf>,
+        base_port: Option<u16>,
+        unlock_mapped_memory: bool,
+        shared_tables: bool,
+        with_hints: bool,
+    ) -> Self {
+        Self {
+            asm_mt_path,
+            asm_rh_path,
+            executor: None,
+            chunk_size: CHUNK_SIZE,
+            base_port,
+            unlock_mapped_memory,
+            shared_tables,
+            verbose_mode,
+            with_hints,
+        }
+    }
+
     /// Registers the witness components and initializes the execution pipeline.
     ///
     /// # Arguments
@@ -90,16 +112,13 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
     ///
     /// # Panics
     /// Panics if the `Riscv2zisk` conversion fails or if required paths cannot be resolved.
-    fn register_witness(&mut self, wcm: &WitnessManager<F>) -> ProofmanResult<()> {
+    pub fn register_witness(&mut self, elf: &[u8], wcm: &WitnessManager<F>) -> ProofmanResult<()> {
         assert_eq!(self.asm_mt_path.is_some(), self.asm_rh_path.is_some());
 
-        let world_rank = wcm.get_world_rank();
-        let local_rank = wcm.get_local_rank();
-
-        proofman_common::initialize_logger(self.verbose_mode, Some(world_rank));
+        let rank_info = wcm.get_rank_info();
 
         // Step 1: Create an instance of the RISCV -> ZisK program converter
-        let rv2zk = Riscv2zisk::new(self.elf_path.display().to_string());
+        let rv2zk = Riscv2zisk::new(elf);
 
         // Step 2: Convert program to ROM
         let zisk_rom = rv2zk.run().unwrap_or_else(|e| panic!("Application error: {e}"));
@@ -194,22 +213,62 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
 
         let is_asm_emulator = self.asm_mt_path.is_some();
         let emulator = if is_asm_emulator {
+            debug!("Using ASM emulator");
             EmulatorKind::Asm(EmulatorAsm::new(
                 zisk_rom.clone(),
-                self.asm_mt_path.clone(),
-                world_rank,
-                local_rank,
+                rank_info.world_rank,
+                rank_info.local_rank,
                 self.base_port,
                 self.unlock_mapped_memory,
                 self.chunk_size,
                 Some(rom_sm.clone()),
             ))
         } else {
+            debug!("Using Rust emulator");
             EmulatorKind::Rust(EmulatorRust::new(zisk_rom.clone(), self.chunk_size))
         };
 
-        let executor =
-            Arc::new(ZiskExecutor::new(zisk_rom, std, sm_bundle, self.chunk_size, emulator));
+        // Create hints pipeline with null hints stream initially.
+        // Debug flag: true = HintsShmem (shared memory), false = HintsFile (file output)
+        let hints_stream = if self.with_hints {
+            const USE_SHARED_MEMORY_HINTS: bool = true;
+
+            let hints_processor = if USE_SHARED_MEMORY_HINTS {
+                let hints_shmem = HintsShmem::new(
+                    self.base_port,
+                    rank_info.local_rank,
+                    self.unlock_mapped_memory,
+                )
+                .expect("zisk_lib: Failed to create HintsShmem");
+
+                HintsProcessor::builder(hints_shmem)
+                    .enable_stats(self.verbose_mode != proofman_common::VerboseMode::Info)
+                    .build()
+                    .expect("zisk_lib: Failed to create PrecompileHintsProcessor")
+            } else {
+                let hints_file =
+                    HintsFile::new(format!("hints_results_{}.bin", rank_info.local_rank))
+                        .expect("zisk_lib: Failed to create HintsFile");
+
+                HintsProcessor::builder(hints_file)
+                    .enable_stats(self.verbose_mode != proofman_common::VerboseMode::Info)
+                    .build()
+                    .expect("zisk_lib: Failed to create PrecompileHintsProcessor")
+            };
+
+            Some(ZiskStream::new(hints_processor))
+        } else {
+            None
+        };
+
+        let executor = Arc::new(ZiskExecutor::new(
+            zisk_rom,
+            std,
+            sm_bundle,
+            self.chunk_size,
+            emulator,
+            hints_stream,
+        ));
 
         // Step 7: Register the executor as a component in the Witness Manager
         wcm.register_component(executor.clone());
@@ -221,29 +280,22 @@ impl<F: PrimeField64> WitnessLibrary<F> for WitnessLib<F> {
         Ok(())
     }
 
-    fn get_packed_info(&self) -> HashMap<(usize, usize), PackedInfo> {
-        let mut _packed_info = HashMap::new();
-        #[cfg(feature = "packed")]
-        {
-            for packed_info in PACKED_INFO.iter() {
-                _packed_info.insert(
-                    (packed_info.0, packed_info.1),
-                    PackedInfo::new(
-                        packed_info.2.is_packed,
-                        packed_info.2.num_packed_words,
-                        packed_info.2.unpack_info.to_vec(),
-                    ),
-                );
-            }
-        }
-        _packed_info
-    }
-}
-
-impl WitnessLib<Goldilocks> {
     pub fn set_stdin(&self, stdin: ZiskStdin) {
         if let Some(executor) = &self.executor {
             executor.set_stdin(stdin);
+        }
+    }
+
+    pub fn set_hints_stream(&self, hints_stream: zisk_common::io::StreamSource) -> Result<()> {
+        if !self.with_hints {
+            return Err(anyhow::anyhow!(
+                "Hints stream cannot be set when WitnessLib is initialized without hints"
+            ));
+        }
+        if let Some(executor) = &self.executor {
+            executor.set_hints_stream_src(hints_stream)
+        } else {
+            Err(anyhow::anyhow!("Executor not initialized"))
         }
     }
 
@@ -251,7 +303,7 @@ impl WitnessLib<Goldilocks> {
     ///
     /// # Returns
     /// * `u16` - The execution result code.
-    pub fn execution_result(&self) -> Option<(ZiskExecutionResult, ExecutorStats)> {
+    pub fn execution_result(&self) -> Option<(ZiskExecutionResult, ExecutorStatsHandle)> {
         self.executor.as_ref().map(|executor| executor.get_execution_result())
     }
 }

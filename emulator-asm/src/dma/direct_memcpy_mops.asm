@@ -2,7 +2,9 @@
 .code64
 
 ################################################################################
-# memcpy_mops - Optimized version with memory ops tracing and actual copy
+# memcpy_mops - Optimized version with memory ops tracing and actual copy. This
+#               is an variant of memcpy operation, xmemcpy operation, that it
+#               doesn't read the count from zisk memory.
 #
 # This function performs two main tasks:
 # 1. Records all addresses of memory operations (read and write addresses)
@@ -26,7 +28,9 @@
 ################################################################################
 
 .global direct_dma_memcpy_mops
+.global direct_dma_xmemcpy_mops
 .global dma_memcpy_mops
+.global dma_xmemcpy_mops
 .extern fast_dma_encode
 
 .include "dma_constants.inc"
@@ -41,6 +45,48 @@
 #    mov     rsi, rax                # rsi = src (rax)
 
 #   [r12 + r13*8] = trace_ptr (u64*)    - Pointer to memory trace buffer (input/output)
+
+# call function with standard ABI call 
+dma_xmemcpy_mops:
+
+    # save registers used
+    push    r12         # register used as mops base address
+    push    r13         # register used as mops index
+    push    rbx         #
+    
+    mov     r12, rcx
+    xor     r13, r13
+    call    direct_dma_xmemcpy_mops
+
+    mov     rax, r13
+    pop     rbx
+    pop     r13
+    pop     r12
+
+    ret
+
+# call directly from assembly without standard ABI call
+# more eficient
+
+direct_dma_xmemcpy_mops:
+
+    # updated registers: 
+    #       r9 = no save (value_reg)
+    #       rcx = no save (available from asm)
+    #       rdi = no save (available from asm)
+    #       rsi = no save (available from asm)
+    #       r13 = with new mops index (output)
+    #       rax = encoded 
+
+    # Call fast_dma_encode to calculate encoding
+    # Parameters already in correct registers: rdi=dst, rsi=src, rdx=count
+    # Result will be returned in rax (encoded value)
+
+    call    fast_dma_encode         # ~15-20 cycles - table lookup encoding
+
+    # jmp the part of write 
+    jmp     direct_dma_xmemcpy_common_entry_point
+
 
 # call function with standard ABI call 
 dma_memcpy_mops:
@@ -86,9 +132,11 @@ direct_dma_memcpy_mops:
     mov     [r12 + r13 * 8], r9
     inc     r13
 
+direct_dma_xmemcpy_common_entry_point:
+
     # check if count is zero
     test    rdx, rdx                   # compare count
-    jz      .L_done                      # jump if zero
+    jz      .L_done                    # jump if zero
 
 .L_pre_dst_to_mops:
     # If pre_count > 0, write aligned dst value to trace

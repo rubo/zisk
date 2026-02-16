@@ -87,7 +87,7 @@ impl DmaInfo {
         let table_count = if count >= 16 { count & 0x07 | 0x08 } else { count };
         (FAST_ENCODE_TABLE[(((dst & 0x07) << 7) + ((src & 0x07) << 4)) as usize
             + table_count
-            + FAST_ENCODE_TABLE_WO_NEQ_SIZE * (result & 0x80 != 0) as usize]
+            + FAST_ENCODE_TABLE_WO_NEQ_SIZE * (result != 0) as usize]
             + Self::DMA_REQUIRES_DMA_TEST_MASK 
             +((result & 0x1FF) << Self::DMA_FILL_BYTE_RS))
             .wrapping_add((count as u64) << Self::DMA_LPRE_COUNT_RS)

@@ -70,6 +70,10 @@ pub const OPERATION_BUS_BLS12_381_COMPLEX_SUB_DATA_SIZE: usize =
     OPERATION_PRECOMPILED_BUS_DATA_SIZE + 2 * INDIRECTION_SIZE + 2 * COMPLEX_OVER_384_BITS_SIZE;
 pub const OPERATION_BUS_BLS12_381_COMPLEX_MUL_DATA_SIZE: usize =
     OPERATION_PRECOMPILED_BUS_DATA_SIZE + 2 * INDIRECTION_SIZE + 2 * COMPLEX_OVER_384_BITS_SIZE;
+pub const OPERATION_BUS_SECP256R1_ADD_DATA_SIZE: usize =
+    OPERATION_PRECOMPILED_BUS_DATA_SIZE + 2 * INDIRECTION_SIZE + 2 * POINT_256_BITS_SIZE;
+pub const OPERATION_BUS_SECP256R1_DBL_DATA_SIZE: usize =
+    OPERATION_PRECOMPILED_BUS_DATA_SIZE + POINT_256_BITS_SIZE;
 
 // bus_data_size + 4 params (&a, &b, cin, &c, a, b)
 pub const OPERATION_BUS_ADD_256_DATA_SIZE: usize = OPERATION_PRECOMPILED_BUS_DATA_SIZE
@@ -137,6 +141,8 @@ pub type OperationDmaInputCpyData<D> = [D; OPERATION_BUS_DMA_INPUTCPY_DATA_SIZE]
 pub type OperationDmaXMemCpyData<D> = [D; OPERATION_BUS_DMA_XMEMCPY_DATA_SIZE];
 pub type OperationDmaXMemCmpData<D> = [D; OPERATION_BUS_DMA_XMEMCMP_DATA_SIZE];
 pub type OperationDmaXMemSetData<D> = [D; OPERATION_BUS_DMA_XMEMSET_DATA_SIZE];
+pub type OperationSecp256r1AddData<D> = [D; OPERATION_BUS_SECP256R1_ADD_DATA_SIZE];
+pub type OperationSecp256r1DblData<D> = [D; OPERATION_BUS_SECP256R1_DBL_DATA_SIZE];
 
 pub enum ExtOperationData<D> {
     OperationData(OperationData<D>),
@@ -165,6 +171,8 @@ pub enum ExtOperationData<D> {
     OperationDmaXMemSetData(OperationDmaXMemSetData<D>),
     OperationDmaXMemCpyData(OperationDmaXMemCpyData<D>),
     OperationDmaXMemCmpData(OperationDmaXMemCmpData<D>),
+    OperationSecp256r1AddData(OperationSecp256r1AddData<D>),
+    OperationSecp256r1DblData(OperationSecp256r1DblData<D>),
 }
 
 // impl<D: Copy + Into<u8>> TryFrom<&[D]> for ExtOperationData<D> {
@@ -301,6 +309,16 @@ impl<D: Copy + Into<u64>> TryFrom<&[D]> for ExtOperationData<D> {
                 let array: OperationDmaXMemCmpData<D> =
                     data.try_into().map_err(|_| "Invalid OperationDmaXMemCmpData size")?;
                 Ok(ExtOperationData::OperationDmaXMemCmpData(array))
+            }
+            ZiskOp::SECP256R1_ADD => {
+                let array: OperationSecp256r1AddData<D> =
+                    data.try_into().map_err(|_| "Invalid OperationSecp256r1AddData size")?;
+                Ok(ExtOperationData::OperationSecp256r1AddData(array))
+            }
+            ZiskOp::SECP256R1_DBL => {
+                let array: OperationSecp256r1DblData<D> =
+                    data.try_into().map_err(|_| "Invalid OperationSecp256r1DblData size")?;
+                Ok(ExtOperationData::OperationSecp256r1DblData(array))
             }
             _ => {
                 let array: OperationData<D> =
@@ -475,6 +493,26 @@ impl OperationBusData<u64> {
                     data[OPERATION_PRECOMPILED_BUS_DATA_SIZE..]
                         .copy_from_slice(&ctx.precompiled.input_data);
                     ExtOperationData::OperationBn254ComplexMulData(data)
+                }
+                ZiskOp::SECP256R1_ADD => {
+                    let mut data = unsafe {
+                        uninit_array::<OPERATION_BUS_SECP256R1_ADD_DATA_SIZE>().assume_init()
+                    };
+                    data[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    data[OPERATION_PRECOMPILED_BUS_DATA_SIZE..]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    ExtOperationData::OperationSecp256r1AddData(data)
+                }
+                ZiskOp::SECP256R1_DBL => {
+                    let mut data = unsafe {
+                        uninit_array::<OPERATION_BUS_SECP256R1_DBL_DATA_SIZE>().assume_init()
+                    };
+                    data[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    data[OPERATION_PRECOMPILED_BUS_DATA_SIZE..]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    ExtOperationData::OperationSecp256r1DblData(data)
                 }
                 _ => ExtOperationData::OperationData([op, op_type, a, b]),
             },
@@ -747,6 +785,24 @@ impl OperationBusData<u64> {
                         .copy_from_slice(&ctx.precompiled.input_data);
                     &buffer[..len]
                 }
+                ZiskOp::SECP256R1_ADD => {
+                    let len =
+                        OPERATION_PRECOMPILED_BUS_DATA_SIZE + ctx.precompiled.input_data.len();
+                    buffer[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    buffer[OPERATION_PRECOMPILED_BUS_DATA_SIZE..len]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    &buffer[..len]
+                }
+                ZiskOp::SECP256R1_DBL => {
+                    let len =
+                        OPERATION_PRECOMPILED_BUS_DATA_SIZE + ctx.precompiled.input_data.len();
+                    buffer[0..OPERATION_PRECOMPILED_BUS_DATA_SIZE]
+                        .copy_from_slice(&[op, op_type, a, b, step]);
+                    buffer[OPERATION_PRECOMPILED_BUS_DATA_SIZE..len]
+                        .copy_from_slice(&ctx.precompiled.input_data);
+                    &buffer[..len]
+                }
                 _ => {
                     buffer[0..OPERATION_BUS_DATA_SIZE].copy_from_slice(&[op, op_type, a, b]);
                     &buffer[..OPERATION_BUS_DATA_SIZE]
@@ -892,6 +948,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationDmaXMemSetData(d) => d[OP] as u8,
             ExtOperationData::OperationDmaXMemCpyData(d) => d[OP] as u8,
             ExtOperationData::OperationDmaXMemCmpData(d) => d[OP] as u8,
+            ExtOperationData::OperationSecp256r1AddData(d) => d[OP] as u8,
+            ExtOperationData::OperationSecp256r1DblData(d) => d[OP] as u8,
         }
     }
 
@@ -931,6 +989,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationDmaXMemSetData(d) => d[OP_TYPE],
             ExtOperationData::OperationDmaXMemCpyData(d) => d[OP_TYPE],
             ExtOperationData::OperationDmaXMemCmpData(d) => d[OP_TYPE],
+            ExtOperationData::OperationSecp256r1AddData(d) => d[OP_TYPE],
+            ExtOperationData::OperationSecp256r1DblData(d) => d[OP_TYPE],
         }
     }
 
@@ -970,6 +1030,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationDmaXMemSetData(d) => d[A],
             ExtOperationData::OperationDmaXMemCpyData(d) => d[A],
             ExtOperationData::OperationDmaXMemCmpData(d) => d[A],
+            ExtOperationData::OperationSecp256r1AddData(d) => d[A],
+            ExtOperationData::OperationSecp256r1DblData(d) => d[A],
         }
     }
 
@@ -1009,6 +1071,8 @@ impl OperationBusData<u64> {
             ExtOperationData::OperationDmaXMemSetData(d) => d[B],
             ExtOperationData::OperationDmaXMemCpyData(d) => d[B],
             ExtOperationData::OperationDmaXMemCmpData(d) => d[B],
+            ExtOperationData::OperationSecp256r1AddData(d) => d[B],
+            ExtOperationData::OperationSecp256r1DblData(d) => d[B],
         }
     }
 }

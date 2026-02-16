@@ -16,8 +16,9 @@ macro_rules! ziskos_inputcpy {
     ($dest:expr, $size:literal) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x815, {ptr}",
+                "csrs {port}, {ptr}",
                 "addi x0, {ptr}, {size}",
+                port = const zisk_definitions::SYSCALL_DMA_INPUTCPY_ID,
                 size = const $size,
                 ptr = in(reg) $dest.as_mut_ptr(),
                 options(nostack, preserves_flags),
@@ -27,8 +28,9 @@ macro_rules! ziskos_inputcpy {
     ($dest:expr, $size:expr) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x815, {ptr}",
+                "csrs {port}, {ptr}",
                 "add x0, {ptr}, {size}",
+                port = const zisk_definitions::SYSCALL_DMA_INPUTCPY_ID,
                 size = in(reg) $size,
                 ptr = in(reg) $dest.as_mut_ptr(),
                 options(nostack, preserves_flags),
@@ -57,8 +59,9 @@ macro_rules! ziskos_memcpy {
     ($dst:expr, $src: expr, $size:literal) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x813, {src}",
+                "csrs {port}, {src}",
                 "addi x0, {dst}, {size}",
+                port = const zisk_definitions::SYSCALL_DMA_MEMCPY_ID,
                 size = const $size,
                 dst = in(reg) $dst.as_mut_ptr(),
                 src = in(reg) $src.as_ptr(),
@@ -69,8 +72,9 @@ macro_rules! ziskos_memcpy {
     ($dst:expr, $src: expr, $size:expr) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x813, {src}",
+                "csrs {port}, {src}",
                 "add x0, {dst}, {size}",
+                port = const zisk_definitions::SYSCALL_DMA_MEMCPY_ID,
                 size = in(reg) $size,
                 dst = in(reg) $dst.as_mut_ptr(),
                 src = in(reg) $src.as_ptr(),
@@ -99,8 +103,9 @@ macro_rules! ziskos_memcmp {
     ($dst:expr, $src: expr, $size:literal) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x814, {src}",
+                "csrs {port}, {src}",
                 "addi x0, {dst}, {size}",
+                port = const zisk_definitions::SYSCALL_DMA_MEMCMP_ID,
                 size = const $size,
                 dst = in(reg) $dst.as_mut_ptr(),
                 src = in(reg) $src.as_ptr(),
@@ -111,8 +116,9 @@ macro_rules! ziskos_memcmp {
     ($dst:expr, $src: expr, $size:expr) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x814, {src}",
+                "csrs {port}, {src}",
                 "add x0, {dst}, {size}",
+                port = const zisk_definitions::SYSCALL_DMA_MEMCMP_ID,
                 size = in(reg) $size,
                 dst = in(reg) $dst.as_mut_ptr(),
                 src = in(reg) $src.as_ptr(),
@@ -141,9 +147,10 @@ macro_rules! ziskos_memset {
     ($dst:expr, $value: literal, $size:literal) => {{
         unsafe {
             core::arch::asm!(
-                "csrsi 0x816, 2",
+                "csrsi {port}, 2",
                 "addi x0, {dst}, {size}",
                 "addi x0, {dst}, {value}",
+                port = const zisk_definitions::SYSCALL_DMA_MEMSET_ID,
                 size = const $size,
                 value = const $value,
                 dst = in(reg) $dst.as_mut_ptr(),
@@ -154,8 +161,9 @@ macro_rules! ziskos_memset {
     ($dst:expr, $value: literal, $size:expr) => {{
         unsafe {
             core::arch::asm!(
-                "csrs 0x816, {dst}",
+                "csrs {port}, {dst}",
                 "addi x0, {size}, {value}",
+                port = const zisk_definitions::SYSCALL_DMA_MEMSET_ID,
                 size = in(reg) $size,
                 value = const $value,
                 dst = in(reg) $dst.as_mut_ptr(),

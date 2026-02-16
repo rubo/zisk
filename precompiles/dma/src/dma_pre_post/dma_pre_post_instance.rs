@@ -10,10 +10,11 @@ use crate::{DmaCheckPoint, DmaPrePostCollector, DmaPrePostModule};
 use fields::PrimeField64;
 use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
 use std::sync::Arc;
-use zisk_common::ChunkId;
 #[cfg(feature = "save_dma_inputs")]
 use zisk_common::SegmentId;
-use zisk_common::{BusDevice, CheckPoint, Instance, InstanceCtx, InstanceType, PayloadType};
+use zisk_common::{
+    BusDevice, CheckPoint, ChunkId, Instance, InstanceCtx, InstanceType, PayloadType, StatsType,
+};
 use zisk_pil::{DmaPrePostInputCpyTrace, DmaPrePostMemCpyTrace, DmaPrePostTrace};
 
 /// The `DmaPrePostInstance` struct represents an instance for the DmaPrePost State Machine.
@@ -129,6 +130,10 @@ impl<F: PrimeField64> Instance<F> for DmaPrePostInstance<F> {
     /// An `InstanceType` representing the type of this instance (`InstanceType::Instance`).
     fn instance_type(&self) -> InstanceType {
         InstanceType::Instance
+    }
+
+    fn stats_type(&self) -> StatsType {
+        StatsType::Precompiled
     }
 
     fn build_inputs_collector(&self, chunk_id: ChunkId) -> Option<Box<dyn BusDevice<PayloadType>>> {

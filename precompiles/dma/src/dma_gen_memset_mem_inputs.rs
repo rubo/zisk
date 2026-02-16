@@ -63,10 +63,6 @@ pub fn generate_dma_memset_mem_inputs<P: MemProcessor>(
         println!("[dma_memset] INPUT PRE WRITE DST:0x{dst64:08X} S:{step}");
         let mask = (0xFFFF_FFFF_FFFF_FFFFu64 >> (64 - pre_count * 8)) << (dst_offset * 8);
         let write_value = (fill_word & mask) | (data_ext[0] & !mask);
-        println!(
-            "WRITE_VALUE S:{step} F:{fill_word:016X} M:{mask:016X} D:{:016X} W:{write_value:016X}",
-            data_ext[0]
-        );
         MemBusHelpers::mem_aligned_write(dst64, step, write_value, mem_processors);
     }
 

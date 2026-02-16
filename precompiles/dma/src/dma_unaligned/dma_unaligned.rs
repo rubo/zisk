@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use fields::PrimeField64;
 
-use crate::DmaUnalignedInput;
+use crate::{dma_trace, DmaUnalignedInput};
 use pil_std_lib::Std;
 use precompiles_helpers::DmaInfo;
 use proofman_common::{AirInstance, FromTrace, ProofmanResult};
@@ -237,10 +237,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         assert!(total_inputs <= num_rows);
         assert!(total_inputs > 0);
 
-        tracing::debug!(
-            "··· Creating DmaUnaligned instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("DmaUnaligned", total_inputs, num_rows);
 
         timer_start_trace!(DMA_UNALIGNED_TRACE);
 

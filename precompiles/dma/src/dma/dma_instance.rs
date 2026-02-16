@@ -14,7 +14,7 @@ use fields::PrimeField64;
 use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
 use std::sync::Arc;
 use zisk_common::{
-    BusDevice, CheckPoint, ChunkId, Instance, InstanceCtx, InstanceType, PayloadType,
+    BusDevice, CheckPoint, ChunkId, Instance, InstanceCtx, InstanceType, PayloadType, StatsType,
 };
 use zisk_pil::{DmaInputCpyTrace, DmaMemCpyTrace, DmaTrace};
 
@@ -125,6 +125,10 @@ impl<F: PrimeField64> Instance<F> for DmaInstance<F> {
     /// An `InstanceType` representing the type of this instance (`InstanceType::Instance`).
     fn instance_type(&self) -> InstanceType {
         InstanceType::Instance
+    }
+
+    fn stats_type(&self) -> StatsType {
+        StatsType::Precompiled
     }
 
     fn build_inputs_collector(&self, chunk_id: ChunkId) -> Option<Box<dyn BusDevice<PayloadType>>> {

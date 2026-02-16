@@ -1,25 +1,29 @@
 use anyhow::Result;
+use asm_runner::HintsShmem;
 use cargo_zisk::commands::get_proving_key;
+use precompiles_hints::HintsProcessor;
 use proofman::{AggProofs, ContributionsInfo};
-use rom_setup::{
-    gen_elf_hash, get_elf_bin_file_path, get_elf_data_hash, get_rom_blowup_factor_and_arity,
-    DEFAULT_CACHE_PATH,
-};
+use rom_setup::{get_elf_data_hash, DEFAULT_CACHE_PATH};
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
-use zisk_common::io::ZiskStdin;
+use zisk_common::io::{StreamProcessor, StreamSource, ZiskStdin};
+use zisk_common::reinterpret_vec;
+use zisk_common::ElfBinaryFromFile;
 use zisk_distributed_common::{AggregationParams, DataCtx, InputSourceDto, JobPhase, WorkerState};
 use zisk_distributed_common::{ComputeCapacity, JobId, WorkerId};
+use zisk_distributed_common::{HintsSourceDto, StreamDataDto, StreamMessageKind, StreamPayloadDto};
 use zisk_sdk::{Asm, Emu, ProverClient, ZiskBackend, ZiskProver};
 
+use proofman::ExecutionInfo;
 use proofman::ProofInfo;
 use proofman::ProvePhaseInputs;
 use proofman_common::ParamsGPU;
 use proofman_common::ProofOptions;
 use proofman_common::{json_to_debug_instances_map, DebugInfo};
-use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{error, info};
 
@@ -31,7 +35,7 @@ pub enum ComputationResult {
     Challenge {
         job_id: JobId,
         success: bool,
-        result: Result<Vec<ContributionsInfo>>,
+        result: Result<(ExecutionInfo, Vec<ContributionsInfo>)>,
     },
     Proofs {
         job_id: JobId,
@@ -55,9 +59,6 @@ pub struct ProverConfig {
 
     /// Path to the ASM ROM file (optional)
     pub asm_rom: Option<PathBuf>,
-
-    /// Map of custom commits
-    pub custom_commits_map: HashMap<String, PathBuf>,
 
     /// Flag indicating whether to use the prebuilt emulator
     pub emulator: bool,
@@ -87,7 +88,7 @@ pub struct ProverConfig {
     pub aggregation: bool,
 
     /// Preallocate resources
-    pub gpu_params: ParamsGPU,
+    pub gpu_params: Option<ParamsGPU>,
 
     /// Whether to use shared tables in the witness library
     pub shared_tables: bool,
@@ -97,6 +98,9 @@ pub struct ProverConfig {
 
     /// Whether to use minimal memory mode
     pub minimal_memory: bool,
+
+    /// Whether to include precompile hints in the assembly generation
+    pub hints: bool,
 }
 
 impl ProverConfig {
@@ -153,9 +157,16 @@ impl ProverConfig {
                         prover_service_config.elf.display()
                     )
                 })?;
+            let elf =
+                ElfBinaryFromFile::new(&prover_service_config.elf, prover_service_config.hints)?;
 
-            let hash = get_elf_data_hash(&prover_service_config.elf)
+            let hash = get_elf_data_hash(&elf)
                 .map_err(|e| anyhow::anyhow!("Error computing ELF hash: {}", e))?;
+            let stem = if prover_service_config.hints {
+                format!("{stem}-hints")
+            } else {
+                stem.to_string()
+            };
             let new_filename = format!("{stem}-{hash}-mt.bin");
             let asm_rom_filename = format!("{stem}-{hash}-rh.bin");
             asm_rom = Some(default_cache_path.join(asm_rom_filename));
@@ -172,41 +183,29 @@ impl ProverConfig {
                 return Err(anyhow::anyhow!("ASM file not found at {:?}", asm_rom.display()));
             }
         }
-        let (blowup_factor, merkle_tree_arity) = get_rom_blowup_factor_and_arity(&proving_key);
-        let rom_bin_path = get_elf_bin_file_path(
-            &prover_service_config.elf.to_path_buf(),
-            &default_cache_path,
-            blowup_factor,
-            merkle_tree_arity,
-        )?;
-        if !rom_bin_path.exists() {
-            let _ = gen_elf_hash(
-                &prover_service_config.elf.clone(),
-                rom_bin_path.as_path(),
-                blowup_factor,
-                merkle_tree_arity,
-                false,
-            )
-            .map_err(|e| anyhow::anyhow!("Error generating elf hash: {}", e));
-        }
-        let mut custom_commits_map: HashMap<String, PathBuf> = HashMap::new();
-        custom_commits_map.insert("rom".to_string(), rom_bin_path);
-        let mut gpu_params = ParamsGPU::new(prover_service_config.preallocate);
-        if let Some(max_streams) = prover_service_config.max_streams {
-            gpu_params.with_max_number_streams(max_streams);
-        }
-        if let Some(number_threads_witness) = prover_service_config.number_threads_witness {
-            gpu_params.with_number_threads_pools_witness(number_threads_witness);
-        }
-        if let Some(max_witness_stored) = prover_service_config.max_witness_stored {
-            gpu_params.with_max_witness_stored(max_witness_stored);
+        let mut gpu_params = None;
+        if prover_service_config.preallocate
+            || prover_service_config.max_streams.is_some()
+            || prover_service_config.number_threads_witness.is_some()
+            || prover_service_config.max_witness_stored.is_some()
+        {
+            let mut gpu_params_new = ParamsGPU::new(prover_service_config.preallocate);
+            if let Some(max_streams) = prover_service_config.max_streams {
+                gpu_params_new.with_max_number_streams(max_streams);
+            }
+            if let Some(number_threads_witness) = prover_service_config.number_threads_witness {
+                gpu_params_new.with_number_threads_pools_witness(number_threads_witness);
+            }
+            if let Some(max_witness_stored) = prover_service_config.max_witness_stored {
+                gpu_params_new.with_max_witness_stored(max_witness_stored);
+            }
+            gpu_params = Some(gpu_params_new);
         }
 
         Ok(ProverConfig {
             elf: prover_service_config.elf.clone(),
             asm: prover_service_config.asm.clone(),
             asm_rom,
-            custom_commits_map,
             emulator,
             proving_key,
             verbose: prover_service_config.verbose,
@@ -219,6 +218,7 @@ impl ProverConfig {
             shared_tables: prover_service_config.shared_tables,
             rma: prover_service_config.rma,
             minimal_memory: prover_service_config.minimal_memory,
+            hints: prover_service_config.hints,
         })
     }
 }
@@ -245,6 +245,9 @@ pub struct Worker<T: ZiskBackend + 'static> {
 
     prover: Arc<ZiskProver<T>>,
     prover_config: ProverConfig,
+
+    stream_buffers: HashMap<JobId, (u32, HashMap<u32, Vec<u8>>)>, // (job_id, (next_seq, (seq_number, data)))
+    hints_processor: Option<HintsProcessor>,
 }
 
 impl<T: ZiskBackend + 'static> Worker<T> {
@@ -258,15 +261,15 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                 .emu()
                 .prove()
                 .aggregation(true)
-                .rma(true)
                 .proving_key_path(prover_config.proving_key.clone())
-                .elf_path(prover_config.elf.clone())
                 .verbose(prover_config.verbose)
                 .shared_tables(prover_config.shared_tables)
                 .gpu(prover_config.gpu_params.clone())
-                .print_command_info()
                 .build()?,
         );
+
+        let elf = ElfBinaryFromFile::new(&prover_config.elf, prover_config.hints)?;
+        prover.setup(&elf)?;
 
         Ok(Worker::<Emu> {
             _worker_id: worker_id,
@@ -276,6 +279,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             current_computation: None,
             prover,
             prover_config,
+            stream_buffers: HashMap::new(),
+            hints_processor: None,
         })
     }
 
@@ -289,18 +294,18 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                 .asm()
                 .prove()
                 .aggregation(true)
-                .rma(true)
                 .proving_key_path(prover_config.proving_key.clone())
-                .elf_path(prover_config.elf.clone())
                 .verbose(prover_config.verbose)
                 .shared_tables(prover_config.shared_tables)
                 .asm_path_opt(prover_config.asm.clone())
                 .base_port_opt(prover_config.asm_port)
                 .unlock_mapped_memory(prover_config.unlock_mapped_memory)
                 .gpu(prover_config.gpu_params.clone())
-                .print_command_info()
                 .build()?,
         );
+
+        let elf = ElfBinaryFromFile::new(&prover_config.elf, prover_config.hints)?;
+        prover.setup(&elf)?;
 
         Ok(Worker::<Asm> {
             _worker_id: worker_id,
@@ -310,6 +315,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             current_computation: None,
             prover,
             prover_config,
+            stream_buffers: HashMap::new(),
+            hints_processor: None,
         })
     }
 
@@ -389,12 +396,12 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         &self,
         job: Arc<Mutex<JobContext>>,
         tx: mpsc::UnboundedSender<ComputationResult>,
-    ) -> JoinHandle<()> {
-        self.partial_contribution_mpi_broadcast(&job).await;
-        self.partial_contribution(job, tx).await
+    ) -> Result<JoinHandle<()>> {
+        self.partial_contribution_mpi_broadcast(&job).await?;
+        Ok(self.partial_contribution(job, tx).await)
     }
 
-    pub async fn partial_contribution_mpi_broadcast(&self, job: &Mutex<JobContext>) {
+    pub async fn partial_contribution_mpi_broadcast(&self, job: &Mutex<JobContext>) -> Result<()> {
         let job = job.lock().await;
         let job_id = job.job_id.clone();
 
@@ -417,7 +424,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         ))
         .unwrap();
 
-        self.prover.mpi_broadcast(&mut serialized);
+        self.prover.mpi_broadcast(&mut serialized)?;
+        Ok(())
     }
 
     pub async fn handle_prove(
@@ -425,16 +433,16 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         job: Arc<Mutex<JobContext>>,
         challenges: Vec<ContributionsInfo>,
         tx: mpsc::UnboundedSender<ComputationResult>,
-    ) -> JoinHandle<()> {
-        self.prove_mpi_broadcast(&job, challenges.clone()).await;
-        self.prove(job, challenges, tx).await
+    ) -> Result<JoinHandle<()>> {
+        self.prove_mpi_broadcast(&job, challenges.clone()).await?;
+        Ok(self.prove(job, challenges, tx).await)
     }
 
     pub async fn prove_mpi_broadcast(
         &self,
         job: &Mutex<JobContext>,
         challenges: Vec<ContributionsInfo>,
-    ) {
+    ) -> Result<()> {
         let job = job.lock().await;
         let job_id = job.job_id.clone();
 
@@ -445,7 +453,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         let mut serialized =
             borsh::to_vec(&(JobPhase::Prove, job_id, phase_inputs, options)).unwrap();
 
-        self.prover.mpi_broadcast(&mut serialized);
+        self.prover.mpi_broadcast(&mut serialized)?;
+        Ok(())
     }
 
     pub async fn handle_aggregate(
@@ -467,36 +476,48 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         let options = self.get_proof_options(false);
 
         tokio::spawn(async move {
-            let mut job = job.lock().await;
-            let job_id = job.job_id.clone();
+            let guard = job.lock().await;
+            let job_id = guard.job_id.clone();
 
             info!("Computing Contribution for {job_id}");
 
             let proof_info = ProofInfo::new(
                 None,
-                job.total_compute_units as usize,
-                job.allocation.clone(),
-                job.rank_id as usize,
+                guard.total_compute_units as usize,
+                guard.allocation.clone(),
+                guard.rank_id as usize,
             );
+
             let phase_inputs = proofman::ProvePhaseInputs::Contributions(proof_info);
+
+            let inputs_source = guard.data_ctx.input_source.clone();
+            let hints_source = guard.data_ctx.hints_source.clone();
+
+            drop(guard);
 
             let result = Self::execute_contribution_task(
                 job_id.clone(),
                 prover.as_ref(),
                 phase_inputs,
-                job.data_ctx.input_source.clone(),
+                inputs_source,
+                hints_source,
                 options,
             )
             .await;
 
-            job.executed_steps = prover.executed_steps();
+            let mut guard = job.lock().await;
+
+            guard.executed_steps = prover.executed_steps();
+
+            let execution_info =
+                prover.get_execution_info().unwrap_or_else(|_| ExecutionInfo::default());
 
             match result {
                 Ok(data) => {
                     let _ = tx.send(ComputationResult::Challenge {
                         job_id,
                         success: true,
-                        result: Ok(data),
+                        result: Ok((execution_info, data)),
                     });
                 }
                 Err(error) => {
@@ -516,22 +537,39 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         prover: &ZiskProver<T>,
         phase_inputs: ProvePhaseInputs,
         input_source: InputSourceDto,
+        hints_source: HintsSourceDto,
         options: ProofOptions,
     ) -> Result<Vec<ContributionsInfo>> {
         let phase = proofman::ProvePhase::Contributions;
 
         match input_source {
-            InputSourceDto::InputPath(input_path) => {
-                let stdin = ZiskStdin::from_file(input_path)?;
-                prover.set_stdin(stdin);
+            InputSourceDto::InputPath(inputs_uri) => {
+                let stdin = ZiskStdin::from_file(inputs_uri)?;
+
+                prover.set_stdin(stdin)?;
             }
             InputSourceDto::InputData(input_data) => {
                 let stdin = ZiskStdin::from_vec(input_data);
-                prover.set_stdin(stdin);
+                prover.set_stdin(stdin)?;
             }
             InputSourceDto::InputNull => {
                 let stdin = ZiskStdin::null();
-                prover.set_stdin(stdin);
+                prover.set_stdin(stdin)?;
+            }
+        }
+
+        match hints_source {
+            HintsSourceDto::HintsPath(hints_uri) => {
+                let hints_stream = StreamSource::from_uri(hints_uri)?;
+                prover.set_hints_stream(hints_stream)?;
+            }
+            HintsSourceDto::HintsStream(_hints_uri) => {
+                // For HintsStream, the worker will receive hint data via stream_data messages
+                // The hints will be processed by the hints_processor in process_stream_data
+                // No need to set hints_stream on prover for this case
+            }
+            HintsSourceDto::HintsNull => {
+                // No hints to set
             }
         }
 
@@ -553,6 +591,128 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         };
 
         Ok(challenge)
+    }
+
+    pub async fn process_stream_data(&mut self, stream_data: StreamDataDto) -> Result<()> {
+        let job_id = stream_data.job_id;
+        let stream_type = stream_data.stream_type;
+
+        if self.hints_processor.is_none() {
+            let base_port = self.prover_config.asm_port;
+            let local_rank = self.prover.local_rank();
+            let unlock_mapped_memory = self.prover_config.unlock_mapped_memory;
+            let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)?;
+            let processor = HintsProcessor::builder(hints_shmem)
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to initialize hints processor: {}", e))?;
+
+            let worker_idx = self
+                .current_job
+                .as_ref()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Received stream data for job {}, but no current job is set",
+                        job_id
+                    )
+                })?
+                .lock()
+                .await
+                .rank_id as usize;
+
+            processor.set_has_rom_sm(worker_idx == 0);
+            self.hints_processor = Some(processor);
+        }
+
+        // Check the existence of stream buffer based on stream type
+        if stream_type == StreamMessageKind::Start {
+            // Check if buffer already exists
+            match self.stream_buffers.entry(job_id.clone()) {
+                Entry::Occupied(_) => {
+                    return Err(anyhow::anyhow!("Received duplicate START for job {}", job_id));
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert((1, HashMap::new()));
+                }
+            }
+
+            // Reset hints processor state for the new stream/job
+            // This is crucial for consecutive proofs to work correctly
+            if let Some(ref mut hints_processor) = self.hints_processor {
+                hints_processor.reset();
+            }
+
+            println!(
+                "Stream START received for job {}, initialized buffer and reset hints processor",
+                job_id
+            );
+            return Ok(());
+        } else if stream_type == StreamMessageKind::End {
+            // Ensure buffer exists
+            if !self.stream_buffers.contains_key(&job_id) {
+                return Err(anyhow::anyhow!(
+                    "Received {:?} without START for job {}",
+                    stream_type,
+                    job_id,
+                ));
+            }
+
+            // Clean up the stream buffer for this job
+            self.stream_buffers.remove(&job_id);
+
+            println!("Stream END received for job {}, cleaned up buffer", job_id);
+            return Ok(());
+        }
+        println!(
+            "Received stream data for job {}, stream type {:?}, processing...",
+            job_id, stream_type
+        );
+        let element = self.stream_buffers.get_mut(&job_id).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Received stream data without START for job {} stream type {:?}",
+                job_id,
+                stream_type
+            )
+        })?;
+
+        let next_seq = &mut element.0;
+        let stream_buffer = &mut element.1;
+
+        let StreamPayloadDto { sequence_number: current_seq, mut payload } =
+            stream_data.stream_payload.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Missing stream payload for job {} stream type {:?}",
+                    job_id,
+                    stream_type
+                )
+            })?;
+
+        // Check if this is the expected sequence number
+        // If not, buffer it for later processing
+        if current_seq != *next_seq {
+            println!(
+                "Received out-of-order stream data for job {}, expected seq {}, got seq {}, buffering",
+                job_id, *next_seq, current_seq
+            );
+            stream_buffer.insert(current_seq, payload);
+            return Ok(());
+        }
+
+        // Process the current payload (which has the expected sequence number)
+        // and increment next_seq to expect the following sequence
+        *next_seq += 1;
+
+        // Check if we have any buffered subsequent payloads waiting
+        // If so, append them to the current payload in order
+        while let Some(buffered_data) = stream_buffer.remove(next_seq) {
+            payload.extend(buffered_data);
+            *next_seq += 1;
+        }
+
+        // Process the hints
+        let payload = reinterpret_vec(payload)?;
+        self.hints_processor.as_mut().unwrap().process_hints(&payload, current_seq == 1)?;
+
+        Ok(())
     }
 
     pub async fn prove(
@@ -690,7 +850,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             verify_proofs: false,
             save_proofs: false,
             test_mode: false,
-            output_dir_path: PathBuf::from("."),
+            output_dir_path: None,
             rma: self.prover_config.rma,
             minimal_memory: self.prover_config.minimal_memory,
             compressed,
@@ -704,18 +864,19 @@ impl<T: ZiskBackend + 'static> Worker<T> {
     pub async fn handle_mpi_broadcast_request(&self) -> Result<()> {
         let mut bytes: Vec<u8> = Vec::new();
 
-        self.prover.mpi_broadcast(&mut bytes);
+        self.prover.mpi_broadcast(&mut bytes)?;
 
         // extract byte 0 to decide the option
         let phase = borsh::from_slice(&bytes[0..1]).unwrap();
 
         match phase {
             JobPhase::Contributions => {
-                let (job_id, phase_inputs, options, input_source_dto): (
+                let (job_id, phase_inputs, options, input_source_dto, hints_source_dto): (
                     JobId,
                     ProvePhaseInputs,
                     ProofOptions,
                     InputSourceDto,
+                    HintsSourceDto,
                 ) = borsh::from_slice(&bytes[1..]).unwrap();
 
                 let result = Self::execute_contribution_task(
@@ -723,6 +884,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                     self.prover.as_ref(),
                     phase_inputs,
                     input_source_dto,
+                    hints_source_dto,
                     options,
                 )
                 .await;

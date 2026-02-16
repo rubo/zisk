@@ -20,7 +20,7 @@ pub use zisk_pil::{
 #[cfg(not(feature = "packed"))]
 pub use zisk_pil::{DmaPrePostMemCpyTrace, DmaPrePostMemCpyTraceRow};
 
-use crate::{DmaPrePostInput, DmaPrePostModule, DmaPrePostRom};
+use crate::{dma_trace, DmaPrePostInput, DmaPrePostModule, DmaPrePostRom};
 use precompiles_helpers::DmaInfo;
 
 /// The `DmaPrePostMemCpySM` struct encapsulates the logic of the DmaPrePost State Machine.
@@ -239,10 +239,7 @@ impl<F: PrimeField64> DmaPrePostModule<F> for DmaPrePostMemCpySM<F> {
         assert!(total_inputs <= num_rows);
         assert!(total_inputs > 0);
 
-        tracing::debug!(
-            "··· Creating DmaPrePostMemCpy instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("DmaPrePostMemCpy", total_inputs, num_rows);
 
         timer_start_trace!(DMA_PRE_POST_TRACE);
 

@@ -9,7 +9,7 @@ use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
 use zisk_core::zisk_ops::ZiskOp;
 use zisk_pil::{DMA_ROM_ID, DUAL_RANGE_7_BITS_ID};
 
-use crate::{dma::dma_rom::DmaRom, DmaInput, DmaModule, DMA_ROM_WITHOUT_MEMCMP_SIZE};
+use crate::{dma::dma_rom::DmaRom, dma_trace, DmaInput, DmaModule, DMA_ROM_WITHOUT_MEMCMP_SIZE};
 use precompiles_helpers::DmaInfo;
 
 #[cfg(feature = "packed")]
@@ -174,10 +174,7 @@ impl<F: PrimeField64> DmaModule<F> for DmaMemCpySM<F> {
         let total_inputs: usize = inputs.iter().map(|c| c.len()).sum();
         assert!(total_inputs <= num_rows);
 
-        tracing::info!(
-            "··· Creating DmaMemCpy instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("DmaMemCpy", total_inputs, num_rows);
 
         timer_start_trace!(DMA_TRACE);
 

@@ -969,6 +969,13 @@ impl Mem {
                 // Sign extend the difference to 64 bits
                 let diff = (byte_a as i64) - (byte_b as i64);
                 // return effective count, needs the last byte to compare.
+                // println!("BYTE_DIFF[{i:>4}] = {diff} BYTE_A[0x{a:08X} + {i:>4}](0x{byte_a:02X}) ? BYTE_B[0x{b:08X} + {i:>4}](0x{byte_b:02X}) S:{step}");
+                // if i > 0 {
+                //     println!("PREV BYTE_A[0x{a:08X} + {:>4}](0x{:02X}) ? BYTE_B[0x{b:08X} + {:>4}](0x{:02X}) S:{step}",
+                //     i - 1, a_section.buffer[a_offset + i - 1], i - 1, b_section.buffer[b_offset + i - 1]);
+                // }
+                // println!("POST BYTE_A[0x{a:08X} + {:>4}](0x{:02X}) ? BYTE_B[0x{b:08X} + {:>4}](0x{:02X}) S:{step}",
+                // i + 1, a_section.buffer[a_offset + i + 1], i + 1, b_section.buffer[b_offset + i + 1]);
                 return (diff as u64, i + 1);
             }
         }

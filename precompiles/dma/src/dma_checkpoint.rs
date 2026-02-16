@@ -12,7 +12,7 @@ pub struct DmaCheckPoint {
 }
 
 impl DmaCheckPoint {
-    #[cfg(feature = "save_dma_collectors")]
+    #[cfg(any(feature = "save_dma_collectors", feature = "save_dma_plans"))]
     pub fn get_debug_info(&self, title: &str, segment_id: u64) -> String {
         self.chunks
             .iter()

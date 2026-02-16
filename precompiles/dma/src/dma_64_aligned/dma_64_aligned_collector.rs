@@ -105,26 +105,39 @@ impl Dma64AlignedCollector {
             self.collect_counters.should_collect(rows as u64, op)
         {
             self.rlog.log_collect(rows, data);
-            self.inputs.push(if op == ZiskOp::DMA_XMEMSET {
-                Dma64AlignedInput::from_memset(
+            let is_last_input = self.last_segment_collector && is_final_skip;
+            self.inputs.push(match op {
+                ZiskOp::DMA_XMEMSET => Dma64AlignedInput::from_memset(
                     data,
                     self.trace_offset,
                     skip as usize,
                     self.ops_by_row,
                     max_count as usize,
-                    self.last_segment_collector && is_final_skip,
-                )
-            } else {
-                Dma64AlignedInput::from(
+                    is_last_input,
+                ),
+                ZiskOp::DMA_MEMCMP | ZiskOp::DMA_XMEMCMP => Dma64AlignedInput::from(
                     data,
                     data_ext,
                     self.trace_offset,
                     skip as usize,
                     self.ops_by_row,
                     max_count as usize,
-                    self.last_segment_collector && is_final_skip,
-                )
+                    is_last_input,
+                ),
+                ZiskOp::DMA_INPUTCPY | ZiskOp::DMA_MEMCPY | ZiskOp::DMA_XMEMCPY => {
+                    Dma64AlignedInput::from(
+                        data,
+                        data_ext,
+                        self.trace_offset,
+                        skip as usize,
+                        self.ops_by_row,
+                        max_count as usize,
+                        is_last_input,
+                    )
+                }
+                _ => panic!("Invalid operation 0x{op:02X}"),
             });
+
             self.trace_offset += max_count as usize;
         } else {
             self.rlog.log_discard(10, data);

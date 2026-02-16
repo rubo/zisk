@@ -262,6 +262,7 @@ airtemplate DmaUnaligned(int N = 2**21,                // Rows of instance
     proves_operation(op:, 
                      a: [dst64 * 8, 0], 
                      b: [src64 * 8, 0], 
+                     c: [dst64 * 8, 0], 
                      main_step:, 
                      extended_arg: count * 8, 
                      extra_args: [offset], 

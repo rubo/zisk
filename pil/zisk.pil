@@ -79,21 +79,21 @@ airgroup Zisk {
     virtual DualRange(id: DUAL_RANGE_7_BITS_ID, min1: 0, max1: P2_7-1, min2: 0, max2: P2_7-1) alias DualRange7Bits;
     virtual DualRange(id: DUAL_RANGE_BYTE_ID, min1: 0, max1: P2_8-1, min2: 0, max2: P2_8-1) alias DualByte;
 
-    Dma(N: 2**14);
-    Dma(N: 2**14, enable: E_DMA_MEMCPY) alias DmaMemCpy;
-    Dma(N: 2**14, enable: E_DMA_INPUTCPY) alias DmaInputCpy;
+    Dma();
+    Dma(enable: E_DMA_MEMCPY) alias DmaMemCpy;
+    Dma(enable: E_DMA_INPUTCPY) alias DmaInputCpy;
 
-    Dma64Aligned(N: 2**14, enable_flag: enable_dma_64_aligned);
-    Dma64Aligned(N: 2**14, enable: E_DMA_INPUTCPY, enable_flag: enable_dma_64_aligned_inputcpy) alias Dma64AlignedInputCpy;
-    Dma64Aligned(N: 2**14, enable: E_DMA_MEMSET, enable_flag: enable_dma_64_aligned_memset, op_x_row: 8) alias Dma64AlignedMemSet;
-    Dma64Aligned(N: 2**14, enable: E_DMA_MEMCPY|E_DMA_MEMCMP|E_DMA_MEMSET, enable_flag: enable_dma_64_aligned_mem) alias Dma64AlignedMem;
-    Dma64Aligned(N: 2**14, enable: E_DMA_MEMCPY, enable_flag: enable_dma_64_aligned_memcpy, op_x_row: 8) alias Dma64AlignedMemCpy;
+    Dma64Aligned(enable_flag: enable_dma_64_aligned);
+    Dma64Aligned(enable: E_DMA_INPUTCPY, enable_flag: enable_dma_64_aligned_inputcpy) alias Dma64AlignedInputCpy;
+    Dma64Aligned(enable: E_DMA_MEMSET, enable_flag: enable_dma_64_aligned_memset, op_x_row: 8) alias Dma64AlignedMemSet;
+    Dma64Aligned(enable: E_DMA_MEMCPY|E_DMA_MEMCMP|E_DMA_MEMSET, enable_flag: enable_dma_64_aligned_mem) alias Dma64AlignedMem;
+    Dma64Aligned(enable: E_DMA_MEMCPY, enable_flag: enable_dma_64_aligned_memcpy, op_x_row: 8) alias Dma64AlignedMemCpy;
 
-    DmaUnaligned(N: 2**14, enable_flag: enable_dma_unaligned);
+    DmaUnaligned(enable_flag: enable_dma_unaligned);
 
-    DmaPrePost(N: 2**14);
-    DmaPrePost(N: 2**14, enable: E_DMA_MEMCPY) alias DmaPrePostMemCpy;
-    DmaPrePost(N: 2**14, enable: E_DMA_INPUTCPY) alias DmaPrePostInputCpy;
+    DmaPrePost();
+    DmaPrePost(enable: E_DMA_MEMCPY) alias DmaPrePostMemCpy;
+    DmaPrePost(enable: E_DMA_INPUTCPY) alias DmaPrePostInputCpy;
 
     virtual DmaByteCmpTable();
     virtual DmaRom();

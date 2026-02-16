@@ -4,7 +4,7 @@ use std::{
     thread::JoinHandle,
 };
 
-use asm_runner::{AsmRunnerMO, MinimalTraces};
+use asm_runner::AsmRunnerMO;
 use data_bus::DataBusTrait;
 use fields::PrimeField64;
 use proofman_common::ProofCtx;
@@ -12,13 +12,13 @@ use proofman_util::{timer_start_info, timer_stop_and_log_info};
 use rayon::prelude::*;
 use zisk_common::{
     io::{ZiskIO, ZiskStdin},
-    ChunkId, ExecutorStatsHandle, ZiskExecutionResult,
+    ChunkId, EmuTrace, ExecutorStatsHandle,
 };
 use zisk_core::ZiskRom;
 use ziskemu::{EmuOptions, ZiskEmulator};
 
 use crate::{
-    DeviceMetricsList, DummyCounter, NestedDeviceMetricsList, StaticSMBundle, ZiskExecutor,
+    DeviceMetricsList, DummyCounter, NestedDeviceMetricsList, StaticSMBundle, MAX_NUM_STEPS,
 };
 
 pub struct EmulatorRust {
@@ -44,71 +44,51 @@ impl EmulatorRust {
     /// * `_pctx` - Proof context carrying field-parameterized configuration for execution.
     /// * `sm_bundle` - Static state machine bundle used for counting device metrics.
     /// * `_stats` - Handle to executor statistics collection.
-    /// * `_caller_stats_id` - Identifier used to associate collected statistics with the caller.
+    /// * `_caller_stats_scope` - Stats scope used to associate collected statistics with the caller.
     ///
     /// # Returns
     /// A tuple containing:
-    /// * `MinimalTraces` - The minimal traces produced by the emulator.
+    /// * `Vec<EmuTrace>` - The minimal traces produced by the emulator.
     /// * `DeviceMetricsList` - Metrics for primary devices.
     /// * `NestedDeviceMetricsList` - Metrics for secondary/nested devices.
     /// * `None`.
-    /// * `ZiskExecutionResult` - Summary of the emulator execution, including the total number of steps.
+    /// * `u64` - Total number of steps.
     pub fn execute<F: PrimeField64>(
         &self,
         stdin: &Mutex<ZiskStdin>,
-        _pctx: &ProofCtx<F>,
         sm_bundle: &StaticSMBundle<F>,
-        _stats: &ExecutorStatsHandle,
-        _caller_stats_id: u64,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
-        ZiskExecutionResult,
+        u64,
     ) {
-        let min_traces = self.run_emulator::<F>(Self::NUM_THREADS, &mut stdin.lock().unwrap());
+        let min_traces = self.run_emulator(Self::NUM_THREADS, &mut stdin.lock().unwrap());
 
         // Store execute steps
-        let steps = if let MinimalTraces::EmuTrace(min_traces) = &min_traces {
-            min_traces.iter().map(|trace| trace.steps).sum::<u64>()
-        } else {
-            panic!("Expected EmuTrace, got something else");
-        };
-
-        let execution_result = ZiskExecutionResult::new(steps);
+        let steps = min_traces.iter().map(|trace| trace.steps).sum::<u64>();
 
         timer_start_info!(COUNT);
         let (main_count, secn_count) = self.count(&min_traces, sm_bundle);
         timer_stop_and_log_info!(COUNT);
 
-        (min_traces, main_count, secn_count, None, execution_result)
+        (min_traces, main_count, secn_count, None, steps)
     }
 
-    fn run_emulator<F: PrimeField64>(
-        &self,
-        num_threads: usize,
-        stdin: &mut ZiskStdin,
-    ) -> MinimalTraces {
+    fn run_emulator(&self, num_threads: usize, stdin: &mut ZiskStdin) -> Vec<EmuTrace> {
         // Call emulate with these options
-        let input_data = stdin.read();
+        let input_data = stdin.read_bytes();
 
         // Settings for the emulator
         let emu_options = EmuOptions {
             chunk_size: Some(self.chunk_size),
-            max_steps: ZiskExecutor::<F>::MAX_NUM_STEPS,
+            max_steps: MAX_NUM_STEPS,
             ..EmuOptions::default()
         };
 
-        let min_traces = ZiskEmulator::compute_minimal_traces(
-            &self.zisk_rom,
-            &input_data,
-            &emu_options,
-            num_threads,
-        )
-        .expect("Error during emulator execution");
-
-        MinimalTraces::EmuTrace(min_traces)
+        ZiskEmulator::compute_minimal_traces(&self.zisk_rom, &input_data, &emu_options, num_threads)
+            .expect("Error during emulator execution")
     }
 
     /// Counts metrics for secondary state machines based on minimal traces.
@@ -124,15 +104,9 @@ impl EmulatorRust {
     ///   containing the metrics for each chunk.
     fn count<F: PrimeField64>(
         &self,
-        min_traces: &MinimalTraces,
+        min_traces: &[EmuTrace],
         sm_bundle: &StaticSMBundle<F>,
     ) -> (DeviceMetricsList, NestedDeviceMetricsList) {
-        let min_traces = match min_traces {
-            MinimalTraces::EmuTrace(min_traces) => min_traces,
-            MinimalTraces::AsmEmuTrace(asm_min_traces) => &asm_min_traces.vec_chunks,
-            _ => unreachable!(),
-        };
-
         let metrics_slices: Vec<_> = min_traces
             .par_iter()
             .map(|minimal_trace| {
@@ -186,17 +160,17 @@ impl<F: PrimeField64> crate::Emulator<F> for EmulatorRust {
     fn execute(
         &self,
         stdin: &Mutex<ZiskStdin>,
-        pctx: &ProofCtx<F>,
+        _pctx: &ProofCtx<F>,
         sm_bundle: &StaticSMBundle<F>,
-        stats: &ExecutorStatsHandle,
-        caller_stats_id: u64,
+        _stats: &ExecutorStatsHandle,
+        _caller_stats_scope: &zisk_common::StatsScope,
     ) -> (
-        MinimalTraces,
+        Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
-        ZiskExecutionResult,
+        u64,
     ) {
-        self.execute(stdin, pctx, sm_bundle, stats, caller_stats_id)
+        self.execute(stdin, sm_bundle)
     }
 }

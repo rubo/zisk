@@ -57,7 +57,7 @@
 
 .extern fast_dma_encode
 .extern trace_address_threshold
-.extern trace_resize_request
+# .extern trace_resize_request
 
 .ifdef DEBUG
 .section .data
@@ -139,7 +139,7 @@ dma_memcpy_mtrace:
     mov     [dma_check_threshold], R_AUX
 .endif
 
-    mov     qword ptr [trace_resize_request], R_COUNT
+    # mov     qword ptr [trace_resize_request], R_COUNT
 
     push    R_COUNT                 # ~3 cycles - save general purpose registers
     push    r8                      # ~3 cycles

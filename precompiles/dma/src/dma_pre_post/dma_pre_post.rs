@@ -22,7 +22,7 @@ pub use zisk_pil::{
 #[cfg(not(feature = "packed"))]
 pub use zisk_pil::{DmaPrePostTrace, DmaPrePostTraceRow};
 
-use crate::{DmaPrePostInput, DmaPrePostModule, DmaPrePostRom};
+use crate::{dma_trace, DmaPrePostInput, DmaPrePostModule, DmaPrePostRom};
 use precompiles_helpers::DmaInfo;
 
 // Type aliases to simplify complex types
@@ -191,8 +191,15 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
         let read_value_01 = (input.src_values[0] >> (selr_value * 8))
             | if selr_value > 0 { input.src_values[1] << (64 - selr_value * 8) } else { 0 };
 
-        let _mask = 0xFFFF_FFFF_FFFF_FFFFu64 << (dst_offset * 8);
-        let mask = _mask ^ (_mask << (count * 8));
+        // NOTE: special case of count = 8 for memcmp, the mask must be all 0s, for this reason
+        // apply mask to count before left shift.
+        let mask = if count == 8 {
+            assert!(dst_offset == 0);
+            0xFFFF_FFFF_FFFF_FFFFu64
+        } else {
+            let _mask = 0xFFFF_FFFF_FFFF_FFFFu64 << (dst_offset * 8);
+            _mask ^ (_mask << (count * 8))
+        };
 
         let write_value_01 = (read_value_01 & mask) | (input.dst_pre_value & !mask);
         let write_value_23 = (read_value_23 & mask) | (input.dst_pre_value & !mask);
@@ -229,7 +236,12 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
         trace.set_selr(6, selr_value == 6);
 
         let table_row = if is_memcmp {
-            let result = DmaInfo::get_memcmp_res_as_u64(input.encoded);
+            let post_count = DmaInfo::get_post_count(input.encoded);
+            let result = if !is_pre || post_count == 0 {
+                DmaInfo::get_memcmp_res_as_u64(input.encoded)
+            } else {
+                0
+            };
             let is_negative = DmaInfo::is_memcmp_negative(input.encoded);
             let is_nz = result != 0;
             trace.set_memcmp_result_is_negative(is_negative);
@@ -238,12 +250,14 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
             assert!(abs_diff_dst_src <= 0xFF);
             let abs_diff_dst_src = abs_diff_dst_src as u8;
             trace.set_abs_diff_dst_src(abs_diff_dst_src);
+            trace.set_bus_write_value(0, input.dst_pre_value as u32);
+            trace.set_bus_write_value(1, (input.dst_pre_value >> 32) as u32);
 
             // the index of different byte determines the factor
             let dst_index = dst_offset as usize + count - 1;
             if is_negative {
                 // implies that count > 0
-                if count < 5 {
+                if dst_index < 4 {
                     trace.set_diff_factor(0, F::ORDER_U64 - (1 << (8 * dst_index)));
                     trace.set_diff_factor(1, 0);
                 } else {
@@ -251,7 +265,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
                     trace.set_diff_factor(1, F::ORDER_U64 - (1 << (8 * (dst_index - 4))));
                 }
             } else if is_nz {
-                if count < 5 {
+                if dst_index < 4 {
                     trace.set_diff_factor(0, 1 << (8 * dst_index));
                     trace.set_diff_factor(1, 0);
                 } else {
@@ -265,14 +279,18 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
                 let last_dst_byte = pb[dst_index];
                 let row_byte_cmp_table = if is_negative {
                     assert!(
-                        abs_diff_dst_src >= last_dst_byte,
-                        "abs_diff_dst_src: {abs_diff_dst_src} last_dst_byte: 0x{last_dst_byte:02X} result: 0x{result:016X} S:{step}",
+                        abs_diff_dst_src <= (255 - last_dst_byte) && abs_diff_dst_src > 0,
+                        "abs_diff_dst_src: {abs_diff_dst_src} last_dst_byte: 0x{last_dst_byte:02X} result: 0x{result:016X} S:{step} \
+                        index:{dst_index} DST64:0x{:08X} SRC64:0x{:08X} DST_O:{dst_offset} SRC_O:{src_offset} VALUE:0x{value:016X} \
+                        is_pre:{is_pre} dst_offset:{dst_offset} count:{count}", dst64 * 8, src64 * 8,
                     );
                     last_dst_byte as usize * 255 + (abs_diff_dst_src + last_dst_byte) as usize - 1
                 } else {
                     assert!(
-                        abs_diff_dst_src <= last_dst_byte,
-                        "abs_diff_dst_src: {abs_diff_dst_src} last_dst_byte: 0x{last_dst_byte:02X} result: 0x{result:016X} S:{step}",
+                        abs_diff_dst_src <= last_dst_byte && abs_diff_dst_src > 0,
+                        "abs_diff_dst_src: {abs_diff_dst_src} last_dst_byte: 0x{last_dst_byte:02X} result: 0x{result:016X} S:{step} index:{dst_index} DST:0x{dst64:08X} SRC:0x{src64:08X} \
+                        index:{dst_index} DST64:0x{:08X} SRC64:0x{:08X} DST_O:{dst_offset} SRC_O:{src_offset} VALUE:0x{value:016X} \
+                        is_pre:{is_pre} dst_offset:{dst_offset} count:{count}", dst64 * 8, src64 * 8
                     );
                     last_dst_byte as usize * 255 + (last_dst_byte - abs_diff_dst_src) as usize
                 };
@@ -328,10 +346,7 @@ impl<F: PrimeField64> DmaPrePostModule<F> for DmaPrePostSM<F> {
         assert!(total_inputs <= num_rows);
         assert!(total_inputs > 0);
 
-        tracing::debug!(
-            "··· Creating DmaPrePost instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("DmaPrePost", total_inputs, num_rows);
 
         timer_start_trace!(DMA_PRE_POST_TRACE);
 
@@ -382,6 +397,82 @@ impl<F: PrimeField64> DmaPrePostModule<F> for DmaPrePostSM<F> {
         for dual_range_byte_mul in global_dual_range_byte_mul.iter() {
             self.std.inc_virtual_rows_ranged(self.dual_range_byte_id, dual_range_byte_mul);
         }
+        // for i in [
+        //     4538, 4541, 4542, 4544, 4545, 4546, 4549, 4550, 4551, 4739, 147059, 147215, 147258,
+        //     147261, 162643, 171955, 172130, 172133, 172136, 172137, 70114, 104010, 104123, 104124,
+        //     104125, 130422, 131634, 131635, 131636, 131789,
+        // ] {
+        //     let p_values: [u64; 2] = [
+        //         trace[i].get_pb(0) as u64
+        //             + 256 * trace[i].get_pb(1) as u64
+        //             + 65536 * trace[i].get_pb(2) as u64
+        //             + 16777216 * trace[i].get_pb(3) as u64,
+        //         trace[i].get_pb(4) as u64
+        //             + 256 * trace[i].get_pb(5) as u64
+        //             + 65536 * trace[i].get_pb(6) as u64
+        //             + 16777216 * trace[i].get_pb(7) as u64,
+        //     ];
+        //     let bus_write_values: [u64; 2] = if trace[i].get_dst_offset_gt_src_offset() {
+        //         [trace[i].get_write_value(2) as u64, trace[i].get_write_value(3) as u64]
+        //     } else {
+        //         [trace[i].get_write_value(0) as u64, trace[i].get_write_value(1) as u64]
+        //     };
+        //     if trace[i].get_diff_factor(0) >= 0xFFFF_FFFF_8000_0000 {
+        //         println!(
+        //             "get_diff_factor[0]=\x1B[1;31m-0x{:08X}\x1B[0m",
+        //             0xFFFF_FFFF_0000_0001 - trace[i].get_diff_factor(0)
+        //         );
+        //     } else {
+        //         println!("get_diff_factor[0]=0x{:08X}", trace[i].get_diff_factor(0));
+        //     }
+        //     if trace[i].get_diff_factor(1) as u64 >= 0xFFFF_FFFF_8000_0000 {
+        //         println!(
+        //             "get_diff_factor[1]=\x1B[1;31m-0x{:08X}\x1B[0m",
+        //             0xFFFF_FFFF_0000_0001 - trace[i].get_diff_factor(1) as u64
+        //         );
+        //     } else {
+        //         println!("get_diff_factor[1]=0x{:08X}", trace[i].get_diff_factor(1));
+        //     }
+        //     if p_values[0] >= bus_write_values[0] {
+        //         println!(
+        //             "p_value[0]=0x{:08X} - bus_write_value[0]=0x{:08X} = 0x{:08X}",
+        //             p_values[0],
+        //             bus_write_values[0],
+        //             p_values[0] - bus_write_values[0]
+        //         );
+        //     } else {
+        //         println!(
+        //             "p_value[0]=0x{:08X} - bus_write_value[0]=0x{:08X} = \x1B[1;31m-0x{:08X}\x1B[0m",
+        //             p_values[0],
+        //             bus_write_values[0],
+        //             bus_write_values[0] - p_values[0]
+        //         );
+        //     }
+        //     if trace[i].get_memcmp_result_is_negative() {
+        //         println!("\x1B[1;31mis negative\x1B[0m");
+        //     }
+        //     if p_values[1] >= bus_write_values[1] {
+        //         println!(
+        //             "p_value[1]=0x{:08X} - bus_write_value[1]=0x{:08X} = 0x{:08X}",
+        //             p_values[1],
+        //             bus_write_values[1],
+        //             p_values[1] - bus_write_values[1]
+        //         );
+        //     } else {
+        //         println!(
+        //             "p_value[1]=0x{:08X} - bus_write_value[1]=0x{:08X} = \x1B[1;31m-0x{:08X}\x1B[0m",
+        //             p_values[1],
+        //             bus_write_values[1],
+        //             bus_write_values[1] - p_values[1]
+        //         );
+        //     }
+        // bus_write_value[0] <== dst_offset_gt_src_offset * (write_value[2] - write_value[0]) + write_value[0];
+        // bus_write_value[1] <== dst_offset_gt_src_offset * (write_value[3] - write_value[1]) + write_value[1];
+        // sel_memcmp * (p_values[0] - bus_write_value[0] + diff_dst_src[0]) === 0;
+        // sel_memcmp * (p_values[1] - bus_write_value[1] + diff_dst_src[1]) === 0;
+        // for i in [70114, 104010, 104123, 104124, 104125, 130422, 131634, 131635, 131636, 131789] {
+        //     println!("TRACE[{i}]={:?}", trace[i]);
+        // }
         let from_trace = FromTrace::new(&mut trace);
         timer_stop_and_log_trace!(DMA_PRE_POST_TRACE);
         Ok(AirInstance::new_from_trace(from_trace))

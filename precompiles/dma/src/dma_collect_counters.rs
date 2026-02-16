@@ -66,7 +66,7 @@ impl DmaCollectCounters {
             self.memcmp.collect_count,
         )
     }
-    #[cfg(feature = "save_dma_collectors")]
+    #[cfg(any(feature = "save_dma_collectors", feature = "save_dma_plans"))]
     pub fn get_debug_info(&self) -> String {
         (if self.memcpy.initial_skip == 0 {
             format!("CY:{}|", self.memcpy.collect_count)

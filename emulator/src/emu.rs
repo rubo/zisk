@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::mem;
 
 use crate::{
@@ -19,6 +20,8 @@ use zisk_core::{
     FREG_RA, FREG_X0, OUTPUT_ADDR, ROM_ENTRY, SRC_C, SRC_IMM, SRC_IND, SRC_MEM, SRC_REG, SRC_STEP,
     STORE_IND, STORE_MEM, STORE_NONE, STORE_REG,
 };
+
+pub const ZISK_PUBLICS: usize = 64;
 
 /// ZisK emulator structure, containing the ZisK rom, the list of ZisK operations, and the
 /// execution context
@@ -1643,7 +1646,7 @@ impl<'a> Emu<'a> {
             }
 
             // Reserve enough entries for all the requested steps between callbacks
-            self.ctx.trace.mem_reads.reserve(self.ctx.callback_steps as usize);
+            self.ctx.trace.mem_reads.to_mut().reserve(self.ctx.callback_steps as usize);
 
             // Init pc to the rom entry address
             self.ctx.trace.start_state.pc = ROM_ENTRY;
@@ -1841,7 +1844,7 @@ impl<'a> Emu<'a> {
                         },
                         last_c: 0,
                         steps: 0,
-                        mem_reads: Vec::with_capacity(par_options.num_steps),
+                        mem_reads: Cow::Owned(Vec::with_capacity(par_options.num_steps)),
                         end: false,
                     });
                 }
@@ -1895,7 +1898,7 @@ impl<'a> Emu<'a> {
                     },
                     last_c: 0,
                     steps: 0,
-                    mem_reads: Vec::with_capacity(par_options.num_steps),
+                    mem_reads: Cow::Owned(Vec::with_capacity(par_options.num_steps)),
                     end: false,
                 });
             }
@@ -1929,6 +1932,8 @@ impl<'a> Emu<'a> {
         // Call the operation
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
         (instruction.func)(&mut self.ctx.inst_ctx);
 
@@ -1954,6 +1959,11 @@ impl<'a> Emu<'a> {
         // Set SP, if specified by the current instruction
         // #[cfg(feature = "sp")]
         // self.set_sp(instruction);
+
+        // println!(
+        //     "s={} pc={:x} c={:x}",
+        //     self.ctx.inst_ctx.step, self.ctx.inst_ctx.pc, self.ctx.inst_ctx.c
+        // );
 
         // Set PC, based on current PC, current flag and current instruction
         self.set_pc(instruction);
@@ -2005,7 +2015,7 @@ impl<'a> Emu<'a> {
 
                 // Swap the emulator trace to avoid memory copies
                 let mut trace = EmuTrace::default();
-                trace.mem_reads.reserve(self.ctx.callback_steps as usize);
+                trace.mem_reads.to_mut().reserve(self.ctx.callback_steps as usize);
                 mem::swap(&mut self.ctx.trace, &mut trace);
                 (callback)(trace);
 
@@ -2030,24 +2040,29 @@ impl<'a> Emu<'a> {
     pub fn par_step_my_block(&mut self, emu_full_trace_vec: &mut EmuTrace) {
         let instruction = self.rom.get_instruction(self.ctx.inst_ctx.pc);
 
+        // Extract the Vec once for all mem_reads operations
+        let mem_reads = emu_full_trace_vec.mem_reads.to_mut();
+
         #[cfg(feature = "minimal_trace_index_debug")]
         println!(
             "MINIMAL_TRACE par_step_my_block            {} {}",
             self.ctx.inst_ctx.step,
-            emu_full_trace_vec.mem_reads.len()
+            mem_reads.len()
         );
 
         // Build the 'a' register value  based on the source specified by the current instruction
-        self.source_a_mem_reads_generate(instruction, &mut emu_full_trace_vec.mem_reads);
+        self.source_a_mem_reads_generate(instruction, mem_reads);
 
         // Build the 'b' register value  based on the source specified by the current instruction
-        self.source_b_mem_reads_generate(instruction, &mut emu_full_trace_vec.mem_reads);
+        self.source_b_mem_reads_generate(instruction, mem_reads);
 
         // If this is a precompiled, get the required input data to copy it to mem_reads
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
             self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         // Call the operation
@@ -2065,16 +2080,16 @@ impl<'a> Emu<'a> {
                         input_data_bytes - instruction.input_size as usize,
                         input_data_bytes,
                         instruction.input_size,
-                        emu_full_trace_vec.mem_reads.len(),
-                        emu_full_trace_vec.mem_reads.len() + (input_data_bytes >> 3)
+                        mem_reads.len(),
+                        mem_reads.len() + (input_data_bytes >> 3)
                     );
                 }
             }
-            emu_full_trace_vec.mem_reads.append(&mut self.ctx.inst_ctx.precompiled.input_data);
+            mem_reads.append(&mut self.ctx.inst_ctx.precompiled.input_data);
         }
 
         // Store the 'c' register value based on the storage specified by the current instruction
-        self.store_c_mem_reads_generate(instruction, &mut emu_full_trace_vec.mem_reads);
+        self.store_c_mem_reads_generate(instruction, mem_reads);
 
         // Set SP, if specified by the current instruction
         // #[cfg(feature = "sp")]
@@ -2104,6 +2119,13 @@ impl<'a> Emu<'a> {
 
         // Build the 'b' register value  based on the source specified by the current instruction
         self.source_b(instruction);
+
+        // If this is a precompiled, prepare extended argument
+        if instruction.input_size > 0 {
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
+        }
 
         // Call the operation
         (instruction.func)(&mut self.ctx.inst_ctx);
@@ -2154,6 +2176,8 @@ impl<'a> Emu<'a> {
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2229,6 +2253,8 @@ impl<'a> Emu<'a> {
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2368,6 +2394,8 @@ impl<'a> Emu<'a> {
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2460,6 +2488,8 @@ impl<'a> Emu<'a> {
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2618,21 +2648,21 @@ impl<'a> Emu<'a> {
         self.ctx.inst_ctx.step
     }
 
-    /// Get the output as a vector of u64
-    pub fn get_output(&self) -> Vec<u64> {
-        let n = self.ctx.inst_ctx.mem.read(OUTPUT_ADDR, 8);
-        let mut addr = OUTPUT_ADDR + 8;
-
-        let mut output: Vec<u64> = Vec::with_capacity(n as usize);
+    /// Get the output as a vector of u32
+    pub fn get_output_32(&self) -> Vec<u32> {
+        let n = ZISK_PUBLICS;
+        let mut addr = OUTPUT_ADDR;
+        let mut output: Vec<u32> = Vec::with_capacity(n);
         for _i in 0..n {
-            output.push(self.ctx.inst_ctx.mem.read(addr, 8));
-            addr += 8;
+            output.push(self.ctx.inst_ctx.mem.read(addr, 4) as u32);
+            addr += 4;
         }
+
         output
     }
 
     /// Get the output as a vector of u32
-    pub fn get_output_32(&self) -> Vec<u32> {
+    pub fn get_output_riscof_32(&self) -> Vec<u32> {
         let n = self.ctx.inst_ctx.mem.read(OUTPUT_ADDR, 4);
         let mut addr = OUTPUT_ADDR + 4;
         let mut output: Vec<u32> = Vec::with_capacity(n as usize);
@@ -2641,22 +2671,15 @@ impl<'a> Emu<'a> {
             addr += 4;
         }
 
-        // let mut addr = OUTPUT_ADDR;
-        // let mut output: Vec<u32> = Vec::with_capacity(32);
-        // for _i in 0..32 {
-        //     output.push(self.ctx.inst_ctx.mem.read(addr, 4) as u32);
-        //     addr += 4;
-        // }
-
         output
     }
 
     /// Get the output as a vector of u8
     pub fn get_output_8(&self) -> Vec<u8> {
-        let n = self.ctx.inst_ctx.mem.read(OUTPUT_ADDR, 4);
-        let mut addr = OUTPUT_ADDR + 4;
+        let n = ZISK_PUBLICS;
+        let mut addr = OUTPUT_ADDR;
 
-        let mut output: Vec<u8> = Vec::with_capacity(n as usize);
+        let mut output: Vec<u8> = Vec::with_capacity(n);
         for _i in 0..n {
             output.push(self.ctx.inst_ctx.mem.read(addr, 1) as u8);
             output.push(self.ctx.inst_ctx.mem.read(addr + 1, 1) as u8);

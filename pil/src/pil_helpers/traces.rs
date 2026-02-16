@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "daf224a3536c4d7cba36710275c8d7535ccd3ebf274810d5acc48dd458c4702e";
+pub const PILOUT_HASH: &str = "429daba0c5b58e7292d8075342aad48f1ae77ea0948f845a47702e8ca3b60a57";
 
 pub const MERKLE_TREE_ARITY: u64 = 4;
 
@@ -139,169 +139,169 @@ values!(ZiskProofValues<F> {
 trace_row!(DmaFixedRow<F> {
  __L1__: F,
 });
-pub type DmaFixed<F> = GenericTrace<DmaFixedRow<F>, 16384, 0, 0>;
+pub type DmaFixed<F> = GenericTrace<DmaFixedRow<F>, 2097152, 0, 0>;
 
 trace_row!(DmaTraceRow<F> {
- sel_memcpy:bit, sel_memcmp:bit, sel_memset:bit, fill_byte:u8, sel_extended:bit, sel_inputcpy:bit, h_count:ubit(24), count_lt_256:bit, l_count:ubit(9), count_diff_chunks:[u16; 2], h_dst64:ubit(22), l_dst64:ubit(7), dst_offset:ubit(3), main_step:ubit(36), h_src64:ubit(22), l_src64:ubit(7), src_offset:ubit(3), src_offset_after_pre:ubit(3), src64_inc_by_pre:bit, use_pre:bit, use_loop:bit, use_post:bit, pre_count:ubit(3), l_count64:ubit(9), pre_result_nz:bit, post_result_nz:bit, bus_pre_result:[u32; 2], bus_post_result:[u32; 2], loop_b0:u32, loop_extended_arg:u32, static_count:u32, b0:u32, extended_arg:u32,
+ sel_memcpy:bit, sel_memcmp:bit, sel_memset:bit, fill_byte:u8, sel_extended:bit, sel_inputcpy:bit, h_count:ubit(24), count_lt_256:bit, l_count:ubit(9), count_diff_chunks:[u16; 2], h_dst64:ubit(22), l_dst64:ubit(7), dst_offset:ubit(3), main_step:ubit(36), h_src64:ubit(22), l_src64:ubit(7), src_offset:ubit(3), src_offset_after_pre:ubit(3), src64_inc_by_pre:bit, use_pre:bit, use_loop:bit, use_post:bit, pre_count:ubit(3), l_count64:ubit(9), pre_result_nz:bit, post_result_nz:bit, bus_pre_result:[u32; 2], bus_post_result:[u32; 2], loop_b0:u32, loop_extended_arg:u32, static_count:u32,
 });
-pub type DmaTrace<F> = GenericTrace<DmaTraceRow<F>, 16384, 0, 0>;
+pub type DmaTrace<F> = GenericTrace<DmaTraceRow<F>, 2097152, 0, 0>;
 
 
-pub type DmaTracePacked<F> = GenericTrace<DmaTraceRowPacked<F>, 16384, 0, 0>;
+pub type DmaTracePacked<F> = GenericTrace<DmaTraceRowPacked<F>, 2097152, 0, 0>;
 
 
 trace_row!(DmaMemCpyFixedRow<F> {
  __L1__: F,
 });
-pub type DmaMemCpyFixed<F> = GenericTrace<DmaMemCpyFixedRow<F>, 16384, 0, 1>;
+pub type DmaMemCpyFixed<F> = GenericTrace<DmaMemCpyFixedRow<F>, 2097152, 0, 1>;
 
 trace_row!(DmaMemCpyTraceRow<F> {
- sel_memcpy:bit, sel_extended:bit, h_count:ubit(24), count_lt_256:bit, l_count:ubit(9), h_dst64:ubit(22), l_dst64:ubit(7), dst_offset:ubit(3), main_step:ubit(36), h_src64:ubit(22), l_src64:ubit(7), src_offset:ubit(3), src_offset_after_pre:ubit(3), src64_inc_by_pre:bit, use_pre:bit, use_loop:bit, use_post:bit, pre_count:ubit(3), l_count64:ubit(9), loop_b0:u32, loop_extended_arg:u32, static_count:u32, b0:u32, extended_arg:u32,
+ sel_memcpy:bit, sel_extended:bit, h_count:ubit(24), count_lt_256:bit, l_count:ubit(9), h_dst64:ubit(22), l_dst64:ubit(7), dst_offset:ubit(3), main_step:ubit(36), h_src64:ubit(22), l_src64:ubit(7), src_offset:ubit(3), src_offset_after_pre:ubit(3), src64_inc_by_pre:bit, use_pre:bit, use_loop:bit, use_post:bit, pre_count:ubit(3), l_count64:ubit(9), loop_b0:u32, loop_extended_arg:u32, static_count:u32,
 });
-pub type DmaMemCpyTrace<F> = GenericTrace<DmaMemCpyTraceRow<F>, 16384, 0, 1>;
+pub type DmaMemCpyTrace<F> = GenericTrace<DmaMemCpyTraceRow<F>, 2097152, 0, 1>;
 
 
-pub type DmaMemCpyTracePacked<F> = GenericTrace<DmaMemCpyTraceRowPacked<F>, 16384, 0, 1>;
+pub type DmaMemCpyTracePacked<F> = GenericTrace<DmaMemCpyTraceRowPacked<F>, 2097152, 0, 1>;
 
 
 trace_row!(DmaInputCpyFixedRow<F> {
  __L1__: F,
 });
-pub type DmaInputCpyFixed<F> = GenericTrace<DmaInputCpyFixedRow<F>, 16384, 0, 2>;
+pub type DmaInputCpyFixed<F> = GenericTrace<DmaInputCpyFixedRow<F>, 2097152, 0, 2>;
 
 trace_row!(DmaInputCpyTraceRow<F> {
- sel_extended:bit, sel_inputcpy:bit, h_count:ubit(24), count_lt_256:bit, l_count:ubit(9), h_dst64:ubit(22), l_dst64:ubit(7), dst_offset:ubit(3), main_step:ubit(36), use_pre:bit, use_loop:bit, use_post:bit, pre_count:ubit(3), l_count64:ubit(9), loop_b0:u32, static_count:u32, b0:u32,
+ sel_extended:bit, sel_inputcpy:bit, h_count:ubit(24), count_lt_256:bit, l_count:ubit(9), h_dst64:ubit(22), l_dst64:ubit(7), dst_offset:ubit(3), main_step:ubit(36), use_pre:bit, use_loop:bit, use_post:bit, pre_count:ubit(3), l_count64:ubit(9), loop_b0:u32, static_count:u32,
 });
-pub type DmaInputCpyTrace<F> = GenericTrace<DmaInputCpyTraceRow<F>, 16384, 0, 2>;
+pub type DmaInputCpyTrace<F> = GenericTrace<DmaInputCpyTraceRow<F>, 2097152, 0, 2>;
 
 
-pub type DmaInputCpyTracePacked<F> = GenericTrace<DmaInputCpyTraceRowPacked<F>, 16384, 0, 2>;
+pub type DmaInputCpyTracePacked<F> = GenericTrace<DmaInputCpyTraceRowPacked<F>, 2097152, 0, 2>;
 
 
 trace_row!(Dma64AlignedFixedRow<F> {
  __L1__: F,
 });
-pub type Dma64AlignedFixed<F> = GenericTrace<Dma64AlignedFixedRow<F>, 16384, 0, 3>;
+pub type Dma64AlignedFixed<F> = GenericTrace<Dma64AlignedFixedRow<F>, 2097152, 0, 3>;
 
 trace_row!(Dma64AlignedTraceRow<F> {
  src64:ubit(29), seq_end:bit, previous_seq_end:bit, sel_memcpy:bit, sel_memeq:bit, sel_memset:bit, fill_byte:u8, sel_memcpy_count_load:bit, sel_inputcpy:bit, main_step:ubit(36), dst64:ubit(29), count64:u32, sel_op_from_1:[bit; 3], l_value_chunks:[[u8; 2]; 4], h_value_chunks:[[ubit(24); 2]; 4], sel_op_mem_load:[bit; 4],
 });
-pub type Dma64AlignedTrace<F> = GenericTrace<Dma64AlignedTraceRow<F>, 16384, 0, 3>;
+pub type Dma64AlignedTrace<F> = GenericTrace<Dma64AlignedTraceRow<F>, 2097152, 0, 3>;
 
 
-pub type Dma64AlignedTracePacked<F> = GenericTrace<Dma64AlignedTraceRowPacked<F>, 16384, 0, 3>;
+pub type Dma64AlignedTracePacked<F> = GenericTrace<Dma64AlignedTraceRowPacked<F>, 2097152, 0, 3>;
 
 
 trace_row!(Dma64AlignedInputCpyFixedRow<F> {
  __L1__: F,
 });
-pub type Dma64AlignedInputCpyFixed<F> = GenericTrace<Dma64AlignedInputCpyFixedRow<F>, 16384, 0, 4>;
+pub type Dma64AlignedInputCpyFixed<F> = GenericTrace<Dma64AlignedInputCpyFixedRow<F>, 2097152, 0, 4>;
 
 trace_row!(Dma64AlignedInputCpyTraceRow<F> {
  seq_end:bit, previous_seq_end:bit, sel_inputcpy:bit, main_step:ubit(36), dst64:ubit(29), count64:u32, sel_op_from_1:[bit; 3], l_value_chunks:[[u8; 2]; 4], h_value_chunks:[[ubit(24); 2]; 4],
 });
-pub type Dma64AlignedInputCpyTrace<F> = GenericTrace<Dma64AlignedInputCpyTraceRow<F>, 16384, 0, 4>;
+pub type Dma64AlignedInputCpyTrace<F> = GenericTrace<Dma64AlignedInputCpyTraceRow<F>, 2097152, 0, 4>;
 
 
-pub type Dma64AlignedInputCpyTracePacked<F> = GenericTrace<Dma64AlignedInputCpyTraceRowPacked<F>, 16384, 0, 4>;
+pub type Dma64AlignedInputCpyTracePacked<F> = GenericTrace<Dma64AlignedInputCpyTraceRowPacked<F>, 2097152, 0, 4>;
 
 
 trace_row!(Dma64AlignedMemSetFixedRow<F> {
  __L1__: F,
 });
-pub type Dma64AlignedMemSetFixed<F> = GenericTrace<Dma64AlignedMemSetFixedRow<F>, 16384, 0, 5>;
+pub type Dma64AlignedMemSetFixed<F> = GenericTrace<Dma64AlignedMemSetFixedRow<F>, 2097152, 0, 5>;
 
 trace_row!(Dma64AlignedMemSetTraceRow<F> {
  seq_end:bit, previous_seq_end:bit, sel_memset:bit, fill_byte:u8, main_step:ubit(36), dst64:ubit(29), count64:u32, sel_op_from_1:[bit; 7],
 });
-pub type Dma64AlignedMemSetTrace<F> = GenericTrace<Dma64AlignedMemSetTraceRow<F>, 16384, 0, 5>;
+pub type Dma64AlignedMemSetTrace<F> = GenericTrace<Dma64AlignedMemSetTraceRow<F>, 2097152, 0, 5>;
 
 
-pub type Dma64AlignedMemSetTracePacked<F> = GenericTrace<Dma64AlignedMemSetTraceRowPacked<F>, 16384, 0, 5>;
+pub type Dma64AlignedMemSetTracePacked<F> = GenericTrace<Dma64AlignedMemSetTraceRowPacked<F>, 2097152, 0, 5>;
 
 
 trace_row!(Dma64AlignedMemFixedRow<F> {
  __L1__: F,
 });
-pub type Dma64AlignedMemFixed<F> = GenericTrace<Dma64AlignedMemFixedRow<F>, 16384, 0, 6>;
+pub type Dma64AlignedMemFixed<F> = GenericTrace<Dma64AlignedMemFixedRow<F>, 2097152, 0, 6>;
 
 trace_row!(Dma64AlignedMemTraceRow<F> {
  src64:ubit(29), seq_end:bit, previous_seq_end:bit, sel_memcpy:bit, sel_memeq:bit, sel_memset:bit, fill_byte:u8, sel_memcpy_count_load:bit, main_step:ubit(36), dst64:ubit(29), count64:u32, sel_op_from_1:[bit; 3], value:[[u32; 2]; 4], sel_op_mem_load:[bit; 4],
 });
-pub type Dma64AlignedMemTrace<F> = GenericTrace<Dma64AlignedMemTraceRow<F>, 16384, 0, 6>;
+pub type Dma64AlignedMemTrace<F> = GenericTrace<Dma64AlignedMemTraceRow<F>, 2097152, 0, 6>;
 
 
-pub type Dma64AlignedMemTracePacked<F> = GenericTrace<Dma64AlignedMemTraceRowPacked<F>, 16384, 0, 6>;
+pub type Dma64AlignedMemTracePacked<F> = GenericTrace<Dma64AlignedMemTraceRowPacked<F>, 2097152, 0, 6>;
 
 
 trace_row!(Dma64AlignedMemCpyFixedRow<F> {
  __L1__: F,
 });
-pub type Dma64AlignedMemCpyFixed<F> = GenericTrace<Dma64AlignedMemCpyFixedRow<F>, 16384, 0, 7>;
+pub type Dma64AlignedMemCpyFixed<F> = GenericTrace<Dma64AlignedMemCpyFixedRow<F>, 2097152, 0, 7>;
 
 trace_row!(Dma64AlignedMemCpyTraceRow<F> {
  src64:ubit(29), seq_end:bit, previous_seq_end:bit, sel_memcpy:bit, sel_memcpy_count_load:bit, main_step:ubit(36), dst64:ubit(29), count64:u32, sel_op_from_1:[bit; 7], value:[[u32; 2]; 8],
 });
-pub type Dma64AlignedMemCpyTrace<F> = GenericTrace<Dma64AlignedMemCpyTraceRow<F>, 16384, 0, 7>;
+pub type Dma64AlignedMemCpyTrace<F> = GenericTrace<Dma64AlignedMemCpyTraceRow<F>, 2097152, 0, 7>;
 
 
-pub type Dma64AlignedMemCpyTracePacked<F> = GenericTrace<Dma64AlignedMemCpyTraceRowPacked<F>, 16384, 0, 7>;
+pub type Dma64AlignedMemCpyTracePacked<F> = GenericTrace<Dma64AlignedMemCpyTraceRowPacked<F>, 2097152, 0, 7>;
 
 
 trace_row!(DmaUnalignedFixedRow<F> {
  __L1__: F,
 });
-pub type DmaUnalignedFixed<F> = GenericTrace<DmaUnalignedFixedRow<F>, 16384, 0, 8>;
+pub type DmaUnalignedFixed<F> = GenericTrace<DmaUnalignedFixedRow<F>, 2097152, 0, 8>;
 
 trace_row!(DmaUnalignedTraceRow<F> {
  main_step:ubit(36), src64:ubit(29), dst64:ubit(29), count:u32, seq_end:bit, previous_seq_end:bit, is_memeq:bit, offset_7:bit, offset_6:bit, offset_5:bit, offset_4:bit, offset_3:bit, offset_2:bit, read_bytes:[u8; 8], no_last_no_seq_end:bit, write_value:[u32; 2],
 });
-pub type DmaUnalignedTrace<F> = GenericTrace<DmaUnalignedTraceRow<F>, 16384, 0, 8>;
+pub type DmaUnalignedTrace<F> = GenericTrace<DmaUnalignedTraceRow<F>, 2097152, 0, 8>;
 
 
-pub type DmaUnalignedTracePacked<F> = GenericTrace<DmaUnalignedTraceRowPacked<F>, 16384, 0, 8>;
+pub type DmaUnalignedTracePacked<F> = GenericTrace<DmaUnalignedTraceRowPacked<F>, 2097152, 0, 8>;
 
 
 trace_row!(DmaPrePostFixedRow<F> {
  __L1__: F,
 });
-pub type DmaPrePostFixed<F> = GenericTrace<DmaPrePostFixedRow<F>, 16384, 0, 9>;
+pub type DmaPrePostFixed<F> = GenericTrace<DmaPrePostFixedRow<F>, 2097152, 0, 9>;
 
 trace_row!(DmaPrePostTraceRow<F> {
  main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(3), is_post:bit, sel_memcpy:bit, sel_memcmp:bit, memcmp_result_nz:bit, l_memcmp_result:u32, sel_inputcpy:bit, sel_memset:bit, selr:[bit; 7], dst_offset_gt_src_offset:bit, src64:ubit(29), src_offset:ubit(3), enabled_second_read:bit, fill_byte:u8, rb:[u8; 16], pb:[u8; 8], sb:[bit; 8], last_dst_byte:u8, abs_diff_dst_src:u8, memcmp_result_is_negative:bit, diff_factor:[u64; 2], bus_write_value:[u32; 2], write_value:[u32; 4],
 });
-pub type DmaPrePostTrace<F> = GenericTrace<DmaPrePostTraceRow<F>, 16384, 0, 9>;
+pub type DmaPrePostTrace<F> = GenericTrace<DmaPrePostTraceRow<F>, 2097152, 0, 9>;
 
 
-pub type DmaPrePostTracePacked<F> = GenericTrace<DmaPrePostTraceRowPacked<F>, 16384, 0, 9>;
+pub type DmaPrePostTracePacked<F> = GenericTrace<DmaPrePostTraceRowPacked<F>, 2097152, 0, 9>;
 
 
 trace_row!(DmaPrePostMemCpyFixedRow<F> {
  __L1__: F,
 });
-pub type DmaPrePostMemCpyFixed<F> = GenericTrace<DmaPrePostMemCpyFixedRow<F>, 16384, 0, 10>;
+pub type DmaPrePostMemCpyFixed<F> = GenericTrace<DmaPrePostMemCpyFixedRow<F>, 2097152, 0, 10>;
 
 trace_row!(DmaPrePostMemCpyTraceRow<F> {
  main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(3), is_post:bit, sel_memcpy:bit, selr:[bit; 7], dst_offset_gt_src_offset:bit, src64:ubit(29), src_offset:ubit(3), enabled_second_read:bit, rb:[u8; 16], pb:[u8; 8], sb:[bit; 8], bus_write_value:[u32; 2], write_value:[u32; 4],
 });
-pub type DmaPrePostMemCpyTrace<F> = GenericTrace<DmaPrePostMemCpyTraceRow<F>, 16384, 0, 10>;
+pub type DmaPrePostMemCpyTrace<F> = GenericTrace<DmaPrePostMemCpyTraceRow<F>, 2097152, 0, 10>;
 
 
-pub type DmaPrePostMemCpyTracePacked<F> = GenericTrace<DmaPrePostMemCpyTraceRowPacked<F>, 16384, 0, 10>;
+pub type DmaPrePostMemCpyTracePacked<F> = GenericTrace<DmaPrePostMemCpyTraceRowPacked<F>, 2097152, 0, 10>;
 
 
 trace_row!(DmaPrePostInputCpyFixedRow<F> {
  __L1__: F,
 });
-pub type DmaPrePostInputCpyFixed<F> = GenericTrace<DmaPrePostInputCpyFixedRow<F>, 16384, 0, 11>;
+pub type DmaPrePostInputCpyFixed<F> = GenericTrace<DmaPrePostInputCpyFixedRow<F>, 2097152, 0, 11>;
 
 trace_row!(DmaPrePostInputCpyTraceRow<F> {
  main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(3), is_post:bit, sel_inputcpy:bit, rb:[u8; 8], pb:[u8; 8], sb:[bit; 8], bus_write_value:[u32; 2],
 });
-pub type DmaPrePostInputCpyTrace<F> = GenericTrace<DmaPrePostInputCpyTraceRow<F>, 16384, 0, 11>;
+pub type DmaPrePostInputCpyTrace<F> = GenericTrace<DmaPrePostInputCpyTraceRow<F>, 2097152, 0, 11>;
 
 
-pub type DmaPrePostInputCpyTracePacked<F> = GenericTrace<DmaPrePostInputCpyTraceRowPacked<F>, 16384, 0, 11>;
+pub type DmaPrePostInputCpyTracePacked<F> = GenericTrace<DmaPrePostInputCpyTraceRowPacked<F>, 2097152, 0, 11>;
 
 
 trace_row!(MainFixedRow<F> {
@@ -503,7 +503,7 @@ trace_row!(ArithEqFixedRow<F> {
 pub type ArithEqFixed<F> = GenericTrace<ArithEqFixedRow<F>, 1048576, 0, 26>;
 
 trace_row!(ArithEqTraceRow<F> {
- x1:u16, y1:u16, x2:u16, y2:u16, x3:u16, y3:u16, q0:ubit(22), q1:ubit(22), q2:ubit(22), s:ubit(22), sel_op:[bit; 9], sel_op_clk0:[bit; 9], x_delta_chunk_inv:u64, x_are_different:bit, x3_lt:bit, y3_lt:bit, carry:[[u64; 2]; 3], step_addr:ubit(40),
+ x1:u16, y1:u16, x2:u16, y2:u16, x3:u16, y3:u16, q0:ubit(22), q1:ubit(22), q2:ubit(22), s:ubit(22), sel_op:[bit; 11], sel_op_clk0:[bit; 11], x_delta_chunk_inv:u64, x_are_different:bit, x3_lt:bit, y3_lt:bit, carry:[[u64; 2]; 3], step_addr:ubit(40),
 });
 pub type ArithEqTrace<F> = GenericTrace<ArithEqTraceRow<F>, 1048576, 0, 26>;
 
@@ -809,18 +809,18 @@ values!(VirtualTable1AirGroupValues<F> {
 pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
     (0, 0, PackedInfoConst {
         is_packed: true,
-        num_packed_words: 8,
-        unpack_info: &[1, 1, 1, 8, 1, 1, 24, 1, 9, 16, 16, 22, 7, 3, 36, 22, 7, 3, 3, 1, 1, 1, 1, 3, 9, 1, 1, 32, 32, 32, 32, 32, 32, 32, 32, 32],
+        num_packed_words: 7,
+        unpack_info: &[1, 1, 1, 8, 1, 1, 24, 1, 9, 16, 16, 22, 7, 3, 36, 22, 7, 3, 3, 1, 1, 1, 1, 3, 9, 1, 1, 32, 32, 32, 32, 32, 32, 32],
     }),
     (0, 1, PackedInfoConst {
         is_packed: true,
-        num_packed_words: 5,
-        unpack_info: &[1, 1, 24, 1, 9, 22, 7, 3, 36, 22, 7, 3, 3, 1, 1, 1, 1, 3, 9, 32, 32, 32, 32, 32],
+        num_packed_words: 4,
+        unpack_info: &[1, 1, 24, 1, 9, 22, 7, 3, 36, 22, 7, 3, 3, 1, 1, 1, 1, 3, 9, 32, 32, 32],
     }),
     (0, 2, PackedInfoConst {
         is_packed: true,
-        num_packed_words: 4,
-        unpack_info: &[1, 1, 24, 1, 9, 22, 7, 3, 36, 1, 1, 1, 3, 9, 32, 32, 32],
+        num_packed_words: 3,
+        unpack_info: &[1, 1, 24, 1, 9, 22, 7, 3, 36, 1, 1, 1, 3, 9, 32, 32],
     }),
     (0, 3, PackedInfoConst {
         is_packed: true,
@@ -935,7 +935,7 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
     (0, 26, PackedInfoConst {
         is_packed: true,
         num_packed_words: 11,
-        unpack_info: &[16, 16, 16, 16, 16, 16, 22, 22, 22, 22, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 64, 1, 1, 1, 64, 64, 64, 64, 64, 64, 40],
+        unpack_info: &[16, 16, 16, 16, 16, 16, 22, 22, 22, 22, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 64, 1, 1, 1, 64, 64, 64, 64, 64, 64, 40],
     }),
     (0, 27, PackedInfoConst {
         is_packed: true,

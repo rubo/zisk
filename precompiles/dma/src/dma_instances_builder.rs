@@ -64,24 +64,6 @@ impl DmaInstancesBuilder {
     }
 
     pub fn open_new_instance(&mut self) {
-        println!(
-            "\x1B[36;1mOPEN_NEW_INSTANCE[{}]: {} instances, max_instances: {}, rows_available: {}, \
-        count_memcpy_rows: {}, count_inputcpy_rows: {}, count_memset_rows: {}, \
-        count_memcmp_rows: {}, skip_memcpy_rows: {}, skip_inputcpy_rows: {}, \
-        skip_memset_rows: {}, skip_memcmp_rows: {}\x1B[0m",
-            self.tag,
-            self.instances.len(),
-            self.max_instances,
-            self.rows_available,
-            self.count_memcpy_rows,
-            self.count_inputcpy_rows,
-            self.count_memset_rows,
-            self.count_memcmp_rows,
-            self.skip_memcpy_rows,
-            self.skip_inputcpy_rows,
-            self.skip_memset_rows,
-            self.skip_memcmp_rows
-        );
         if self.rows_available > 0 {
             panic!(
                 "[{}] Cannot open new instance, rows still available: {}",
@@ -170,10 +152,6 @@ impl DmaInstancesBuilder {
         inputs: usize,
         op: usize,
     ) {
-        println!(
-            "\x1B[34;1mADD_OP_ROWS[{}]: chunk_id: {:?}, rows: {}, inputs: {}, op: 0x{op:02X}\x1B[0m",
-            self.tag, chunk_id, rows, inputs
-        );
         if Some(chunk_id) != self.current_chunk {
             self.flush_current_chunk();
             self.reset_count_and_skip();

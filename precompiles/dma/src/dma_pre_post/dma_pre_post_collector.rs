@@ -87,11 +87,18 @@ impl DmaPrePostCollector {
 
         if let Some((skip, max_count, _)) = self.collect_counters.should_collect(rows as u64, op) {
             self.rlog.log_collect(rows, data);
-            if op == ZiskOp::DMA_XMEMSET {
-                self.inputs.extend(DmaPrePostInput::from_memset(data, data_ext, skip, max_count));
-            } else {
-                self.inputs.extend(DmaPrePostInput::from(data, data_ext, skip, max_count));
-            }
+            self.inputs.extend(match op {
+                ZiskOp::DMA_XMEMSET => {
+                    DmaPrePostInput::from_memset(data, data_ext, skip, max_count)
+                }
+                ZiskOp::DMA_MEMCMP | ZiskOp::DMA_XMEMCMP => {
+                    DmaPrePostInput::from(data, data_ext, skip, max_count)
+                }
+                ZiskOp::DMA_INPUTCPY | ZiskOp::DMA_MEMCPY | ZiskOp::DMA_XMEMCPY => {
+                    DmaPrePostInput::from(data, data_ext, skip, max_count)
+                }
+                _ => panic!("Invalid operation 0x{op:02X}"),
+            });
         } else {
             self.rlog.log_discard(10, data);
         }

@@ -23,6 +23,7 @@ impl DmaPrePostInput {
         let mut inputs = Vec::new();
         let pre_count = DmaInfo::get_pre_count(encoded);
         let mut skipped = 0;
+
         if pre_count > 0 {
             if skipped < skip {
                 skipped += 1;
@@ -101,9 +102,79 @@ impl DmaPrePostInput {
                 step: data[STEP],
                 encoded,
                 src_values: [0, 0],
+                // pre value words are at begging
                 dst_pre_value: data_ext[(pre_count > 0) as usize],
                 op,
             });
+        }
+        inputs
+    }
+    // memcmp has different format, because need to read dst and src, for this reason has a more
+    // easy format, first all dst (a), and after all src (b)
+    pub fn from_memcmp(data: &[u64], data_ext: &[u64], skip: u32, max_count: u32) -> Vec<Self> {
+        let dst = data[A] as u32;
+        let src = data[B] as u32;
+        let encoded = data[DMA_ENCODED];
+        let count = DmaInfo::get_count(encoded);
+        let op = data[OP] as u8;
+        let dst_words = (((dst + count as u32 + 7) >> 3) - (dst >> 3)) as usize;
+        let src_words = (((src + count as u32 + 7) >> 3) - (src >> 3)) as usize;
+        let mut inputs = Vec::new();
+        let pre_count = DmaInfo::get_pre_count(encoded);
+        let mut skipped = 0;
+        if data[STEP] == 31841694 {
+            println!(
+                "DATA data:{data:?}  data_ext:{data_ext:?} S:{} PRE_COUNT:{pre_count} POST_COUNT:{} SKIP:{skip} MAX_COUNT:{max_count}",
+                data[STEP],  DmaInfo::get_post_count(encoded)
+            );
+        }
+
+        if pre_count > 0 {
+            if skipped < skip {
+                skipped += 1;
+            } else {
+                let input = Self {
+                    dst,
+                    src,
+                    step: data[STEP],
+                    encoded,
+                    src_values: [
+                        data_ext[dst_words],
+                        if DmaInfo::is_double_read_pre(encoded) {
+                            data_ext[dst_words + 1]
+                        } else {
+                            0
+                        },
+                    ],
+                    op,
+                    dst_pre_value: data_ext[0],
+                };
+                inputs.push(input);
+            }
+        }
+        let post_count = DmaInfo::get_post_count(encoded);
+        if post_count > 0 && skipped >= skip && max_count as usize > inputs.len() {
+            // src_offset it's last src words
+            let src_offset =
+                dst_words + src_words - 1 - DmaInfo::is_double_read_post(encoded) as usize;
+            let loop_count = DmaInfo::get_loop_count(encoded);
+            let input = Self {
+                dst: dst + pre_count as u32 + loop_count as u32 * 8,
+                src: src + pre_count as u32 + loop_count as u32 * 8,
+                step: data[STEP],
+                encoded,
+                src_values: [
+                    data_ext[src_offset],
+                    if DmaInfo::is_double_read_post(encoded) {
+                        data_ext[src_offset + 1]
+                    } else {
+                        0
+                    },
+                ],
+                dst_pre_value: data_ext[dst_words - 1],
+                op,
+            };
+            inputs.push(input);
         }
         inputs
     }

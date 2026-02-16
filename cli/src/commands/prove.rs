@@ -1,14 +1,14 @@
-use crate::ux::print_banner;
+use crate::ux::{print_banner, print_banner_field};
 use anyhow::Result;
 
 use colored::Colorize;
 use proofman_common::ParamsGPU;
 use std::path::PathBuf;
+use tracing::warn;
 use zisk_build::ZISK_VERSION_MESSAGE;
-use zisk_common::io::ZiskStdin;
-#[cfg(feature = "stats")]
-use zisk_common::ExecutorStatsEvent;
-use zisk_sdk::{ProverClient, ZiskProveResult};
+use zisk_common::io::{StreamSource, ZiskStdin};
+use zisk_common::ElfBinaryFromFile;
+use zisk_sdk::{ProofOpts, ProverClient, ZiskProof, ZiskProveResult};
 
 // Structure representing the 'prove' subcommand of cargo.
 #[derive(clap::Args)]
@@ -37,12 +37,20 @@ pub struct ZiskProve {
     pub emulator: bool,
 
     /// Input path
-    #[clap(short = 'i', long)]
-    pub input: Option<PathBuf>,
+    #[clap(short = 'i', long, alias = "input")]
+    pub inputs: Option<String>,
+
+    /// Precompiles Hints path
+    #[clap(short = 'H', long)]
+    pub hints: Option<String>,
 
     /// Setup folder path
     #[clap(short = 'k', long)]
     pub proving_key: Option<PathBuf>,
+
+    /// Setup folder path for SNARK
+    #[clap(short = 'w', long)]
+    pub proving_key_snark: Option<PathBuf>,
 
     /// Output dir path
     #[clap(short = 'o', long, default_value = "tmp")]
@@ -100,92 +108,145 @@ pub struct ZiskProve {
 
     #[clap(short = 'r', long, default_value_t = false)]
     pub rma: bool,
+
+    #[clap(long, default_value_t = false)]
+    pub snark: bool,
 }
 
 impl ZiskProve {
     pub fn run(&mut self) -> Result<()> {
+        // Check if the deprecated alias was used
+        if std::env::args().any(|arg| arg == "--input") {
+            eprintln!("{}", "Warning: --input is deprecated, use --inputs instead".yellow().bold());
+        }
+
         print_banner();
 
-        let mut gpu_params = ParamsGPU::new(self.preallocate);
-
-        if let Some(max_streams) = self.max_streams {
-            gpu_params.with_max_number_streams(max_streams);
+        let mut gpu_params = None;
+        if self.preallocate
+            || self.max_streams.is_some()
+            || self.number_threads_witness.is_some()
+            || self.max_witness_stored.is_some()
+        {
+            let mut gpu_params_new = ParamsGPU::new(self.preallocate);
+            if let Some(max_witness_stored) = self.max_witness_stored {
+                gpu_params_new.with_max_witness_stored(max_witness_stored);
+            }
+            gpu_params = Some(gpu_params_new);
         }
-        if let Some(number_threads_witness) = self.number_threads_witness {
-            gpu_params.with_number_threads_pools_witness(number_threads_witness);
-        }
-        if let Some(max_witness_stored) = self.max_witness_stored {
-            gpu_params.with_max_witness_stored(max_witness_stored);
+
+        if let Some(inputs) = &self.inputs {
+            print_banner_field("Input", inputs);
         }
 
-        let stdin = self.create_stdin()?;
+        if let Some(hints) = &self.hints {
+            print_banner_field("Prec. Hints", hints);
+        }
 
-        let emulator = if cfg!(target_os = "macos") { true } else { self.emulator };
+        if self.snark && self.compressed {
+            anyhow::bail!("Compressed proofs are not supported for SNARK generation.");
+        }
+
+        let stdin = ZiskStdin::from_uri(self.inputs.as_ref())?;
+
+        let hints_stream = match self.hints.as_ref() {
+            Some(uri) => {
+                let stream = StreamSource::from_uri(uri)?;
+                if matches!(stream, StreamSource::Quic(_)) {
+                    anyhow::bail!("QUIC hints source is not supported in CLI mode.");
+                }
+                Some(stream)
+            }
+            None => None,
+        };
+
+        let emulator = if cfg!(target_os = "macos") {
+            if !self.emulator {
+                warn!("Emulator mode is forced on macOS due to lack of ASM support.");
+            }
+            true
+        } else {
+            self.emulator
+        };
 
         let (result, world_rank) = if emulator {
             self.run_emu(stdin, gpu_params)?
         } else {
-            self.run_asm(stdin, gpu_params)?
+            self.run_asm(stdin, hints_stream, gpu_params)?
         };
 
         if world_rank == 0 {
-            let elapsed = result.duration.as_secs_f64();
+            let elapsed = result.get_duration().as_secs_f64();
             tracing::info!("");
             tracing::info!(
                 "{}",
                 "--- PROVE SUMMARY ------------------------".bright_green().bold()
             );
-            if let Some(proof_id) = result.proof.id {
+
+            if let Some(proof_id) = &result.get_proof_id() {
+                let output_dir = match result.get_proof() {
+                    ZiskProof::VadcopFinal(_) | ZiskProof::VadcopFinalCompressed(_) => {
+                        self.output_dir.join("vadcop_final_proof.bin")
+                    }
+                    ZiskProof::Plonk(_) | ZiskProof::Fflonk(_) => {
+                        self.output_dir.join("final_snark_proof.bin")
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!("Unsupported proof type for saving proof file"))
+                    }
+                };
+                result.save_proof_with_publics(output_dir)?;
                 tracing::info!("      Proof ID: {}", proof_id);
             }
             tracing::info!("    ► Statistics");
             tracing::info!(
                 "      time: {} seconds, steps: {}",
                 elapsed,
-                result.execution.executed_steps
+                result.get_execution_steps()
             );
         }
 
         Ok(())
     }
 
-    fn create_stdin(&mut self) -> Result<ZiskStdin> {
-        let stdin = if let Some(input) = &self.input {
-            if !input.exists() {
-                return Err(anyhow::anyhow!("Input file not found at {:?}", input.display()));
-            }
-            ZiskStdin::from_file(input)?
-        } else {
-            ZiskStdin::null()
-        };
-        Ok(stdin)
-    }
-
     pub fn run_emu(
         &mut self,
         stdin: ZiskStdin,
-        gpu_params: ParamsGPU,
+        gpu_params: Option<ParamsGPU>,
     ) -> Result<(ZiskProveResult, i32)> {
         let prover = ProverClient::builder()
-            .emu()
-            .prove()
             .aggregation(self.aggregation)
-            .compressed(self.compressed)
-            .rma(self.rma)
             .proving_key_path_opt(self.proving_key.clone())
-            .elf_path(self.elf.clone())
+            .proving_key_snark_path_opt(self.proving_key_snark.clone())
             .verbose(self.verbose)
             .shared_tables(self.shared_tables)
-            .save_proofs(self.save_proofs)
-            .output_dir(self.output_dir.clone())
-            .verify_proofs(self.verify_proofs)
-            .minimal_memory(self.minimal_memory)
+            .with_snark(self.snark)
             .gpu(gpu_params)
             .print_command_info()
             .build()?;
 
-        let result = prover.prove(stdin)?;
+        let elf = ElfBinaryFromFile::new(&self.elf, false)?;
+        prover.setup(&elf)?;
+
+        let proof_options = ProofOpts {
+            aggregation: self.aggregation,
+            rma: self.rma,
+            minimal_memory: self.minimal_memory,
+            verify_proofs: self.verify_proofs,
+            save_proofs: self.save_proofs,
+            output_dir_path: Some(self.output_dir.clone()),
+        };
+
         let world_rank = prover.world_rank();
+
+        let mut prover = prover.prove(stdin).with_proof_options(proof_options);
+        if self.snark {
+            prover = prover.plonk();
+        }
+        if self.compressed {
+            prover = prover.compressed();
+        }
+        let result = prover.run()?;
 
         Ok((result, world_rank))
     }
@@ -193,31 +254,51 @@ impl ZiskProve {
     pub fn run_asm(
         &mut self,
         stdin: ZiskStdin,
-        gpu_params: ParamsGPU,
+        hints_stream: Option<StreamSource>,
+        gpu_params: Option<ParamsGPU>,
     ) -> Result<(ZiskProveResult, i32)> {
         let prover = ProverClient::builder()
-            .asm()
-            .prove()
             .aggregation(self.aggregation)
-            .compressed(self.compressed)
-            .rma(self.rma)
+            .asm()
             .proving_key_path_opt(self.proving_key.clone())
-            .elf_path(self.elf.clone())
+            .proving_key_snark_path_opt(self.proving_key_snark.clone())
             .verbose(self.verbose)
+            .with_snark(self.snark)
             .shared_tables(self.shared_tables)
             .asm_path_opt(self.asm.clone())
             .base_port_opt(self.port)
             .unlock_mapped_memory(self.unlock_mapped_memory)
-            .save_proofs(self.save_proofs)
-            .output_dir(self.output_dir.clone())
-            .verify_proofs(self.verify_proofs)
-            .minimal_memory(self.minimal_memory)
             .gpu(gpu_params)
             .print_command_info()
             .build()?;
 
-        let result = prover.prove(stdin)?;
+        let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
+        prover.setup(&elf)?;
+
+        let proof_options = ProofOpts {
+            aggregation: self.aggregation,
+            rma: self.rma,
+            minimal_memory: self.minimal_memory,
+            verify_proofs: self.verify_proofs,
+            save_proofs: self.save_proofs,
+            output_dir_path: Some(self.output_dir.clone()),
+        };
+
+        if let Some(hints_stream) = hints_stream {
+            prover.set_hints_stream(hints_stream)?;
+        }
+
         let world_rank = prover.world_rank();
+
+        let mut prover = prover.prove(stdin).with_proof_options(proof_options);
+        if self.snark {
+            prover = prover.plonk();
+        }
+        if self.compressed {
+            prover = prover.compressed();
+        }
+
+        let result = prover.run()?;
 
         Ok((result, world_rank))
     }

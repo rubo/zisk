@@ -3,7 +3,9 @@
 //! attribute.
 
 use riscv::{riscv_interpreter, RiscvInstruction};
-use ziskos::syscalls::SYSCALL_DMA_MEMSET_ID;
+use zisk_definitions::{
+    SYSCALL_DMA_INPUTCPY_ID, SYSCALL_DMA_MEMCMP_ID, SYSCALL_DMA_MEMCPY_ID, SYSCALL_DMA_MEMSET_ID,
+};
 
 use crate::{
     convert_vector, ZiskInstBuilder, ZiskRom, ARCH_ID_CSR_ADDR, ARCH_ID_ZISK, CSR_ADDR,
@@ -15,7 +17,7 @@ use std::collections::HashMap;
 // The CSR precompiled addresses are defined in the `ZiskOS` `ziskos/entrypoint/src` files
 // because legacy versions of Rust do not support constant parameters in `asm!` macros.
 
-const CSR_PRECOMPILED: [&str; 21] = [
+const CSR_PRECOMPILED: [&str; 25] = [
     "keccak",
     "arith256",
     "arith256_mod",
@@ -34,9 +36,13 @@ const CSR_PRECOMPILED: [&str; 21] = [
     "bls12_381_complex_sub",
     "bls12_381_complex_mul",
     "add256",
+    "poseidon2",
     "dma_memcpy",
     "dma_memcmp",
-    "poseidon2",
+    "dma_inputcpy",
+    "dma_memset",
+    "secp256r1_add",
+    "secp256r1_dbl",
 ];
 const CSR_PRECOMPILED_ADDR_START: u32 = 0x800;
 const CSR_PRECOMPILED_ADDR_END: u32 = CSR_PRECOMPILED_ADDR_START + CSR_PRECOMPILED.len() as u32;
@@ -1015,9 +1021,38 @@ impl Riscv2ZiskContext<'_> {
     pub fn jalr(&mut self, i: &RiscvInstruction, inst_size: u64) {
         assert!(inst_size == 4 || inst_size == 2);
         let mut rom_address = i.rom_address;
+
+        // Thanks to https://github.com/codygunton for reporting the issue with JALR alignment!
+
+        // JALR target address mask per RISC-V ISA spec Section 2.5.
+        // Must clear only bit 0 (0xfffffffffffffffe) for 2-byte alignment.
+        //
+        // BUG: Using 0xfffffffffffffffc (4-byte alignment) breaks zksync-os at _start.
+        // The startup code (zksync-airbender/riscv_common/src/asm/start64.s) is:
+        //   _start:
+        //       la ra, _abs_start    # auipc + addi (8 bytes)
+        //       jr ra                # c.jr ra (2 bytes, compressed)
+        //   _abs_start:              # offset 10 = 0x8000000a
+        //
+        // The assembler uses compressed `c.jr` (2 bytes), placing _abs_start at
+        // 0x8000000a - valid for C extension but not 4-byte aligned. We could change the start
+        // file but we leave as-is to document the issue.
+        //
+        // With mask 0xfc: 0x8000000a & 0xfc = 0x80000008 (jumps back to `jr ra`!)
+        // With mask 0xfe: 0x8000000a & 0xfe = 0x8000000a (correct target)
+        //
+        // The wrong mask causes an infinite self-loop at the first instruction,
+        // terminating after 16k steps instead of 1.6B.
+        //
+        // Note that this change fixes the misalign2-jalr-01.S test, which is part of the privilege
+        // architecture test suite but which seeems to test requirements of other parts of the
+        // spec.
+
+        const JALR_MASK: u64 = 0xfffffffffffffffe;
+
         if (i.imm % 4) == 0 {
             let mut zib = ZiskInstBuilder::new_from_riscv(rom_address, i.inst.clone());
-            zib.src_a("imm", 0xfffffffffffffffc, false);
+            zib.src_a("imm", JALR_MASK, false);
             zib.src_b("reg", i.rs1 as u64, false);
             zib.op("and").unwrap();
             zib.set_pc();
@@ -1040,7 +1075,7 @@ impl Riscv2ZiskContext<'_> {
             }
             {
                 let mut zib = ZiskInstBuilder::new(rom_address);
-                zib.src_a("imm", 0xfffffffffffffffc, false);
+                zib.src_a("imm", JALR_MASK, false);
                 zib.src_b("lastc", 0, false);
                 zib.op("and").unwrap();
                 zib.set_pc();
@@ -1285,14 +1320,14 @@ impl Riscv2ZiskContext<'_> {
             assert!(!next_instructions.is_empty());
             // Special "extended" precompiles that could be use jmp_offset1 as extended static parameter that
             // was sent to bus when is a precompiles
-            match i.csr {
-                0x813 | 0x814 => {
+            match i.csr as u16 {
+                SYSCALL_DMA_MEMCPY_ID | SYSCALL_DMA_MEMCMP_ID => {
                     self.transpile_dma_memcpy_memcmp_pattern(i, next_instructions);
                 }
-                0x815 => {
+                SYSCALL_DMA_INPUTCPY_ID => {
                     self.transpile_dma_inputcpy_pattern(i, next_instructions);
                 }
-                0x816 => {
+                SYSCALL_DMA_MEMSET_ID => {
                     self.transpile_dma_memset_pattern(i, next_instructions);
                 }
                 _ => {
@@ -1852,10 +1887,6 @@ impl Riscv2ZiskContext<'_> {
                 && next_instructions[0].inst == "addi"
                 && next_instructions[1].inst == "addi"
             {
-                println!(
-                    "Transpiling xmemset pattern at address 0x{:08x} with CSR 0x{:03X}",
-                    i.rom_address, i.csr
-                );
                 // xmemset transpilation pattern:
                 //
                 //  csrsi 0x816, 2              ===>  xmemset [x0|a0], a0, size, byte ─┐
@@ -1898,10 +1929,6 @@ impl Riscv2ZiskContext<'_> {
                 let rs2 = next_instructions[0].rs1; // count
                 let rd = next_instructions[0].rd;
                 let fill_byte = next_instructions[0].imm; // byte (fill_byte)
-                println!(
-                    "Transpiling xmemset pattern 2 at address 0x{:08x} with CSR 0x{:03X} fill_byte=0x{fill_byte:02X}",
-                    i.rom_address, i.csr
-                );
                 assert!((0..=0xFF).contains(&fill_byte));
                 self.create_extended_precompiles_op(
                     i,
@@ -1950,7 +1977,11 @@ impl Riscv2ZiskContext<'_> {
                 let rs2 = next_instructions[0].rs1;
                 let rd = next_instructions[0].rd;
                 let count = next_instructions[0].imm as i64; // count
-                let op = if i.csr == 0x813 { "dma_xmemcpy" } else { "dma_xmemcmp" };
+                let op = if i.csr == SYSCALL_DMA_MEMCPY_ID as u32 {
+                    "dma_xmemcpy"
+                } else {
+                    "dma_xmemcmp"
+                };
                 self.create_extended_precompiles_op(i, op, rs1, rs2 as u64, rd, count, false, 8);
                 return;
             }
@@ -2014,140 +2045,187 @@ impl Riscv2ZiskContext<'_> {
 /// Converts a buffer with RISC-V data into a vector of Zisk instructions, using the
 /// Riscv2ZiskContext to perform the instruction transpilation
 /// dma_addrs: (memcpy, memcmp, memset, memmove) addresses, 0 if not present
-pub fn add_zisk_code(rom: &mut ZiskRom, addr: u64, data: &[u8], dma_addrs: (u64, u64, u64, u64)) {
+pub fn add_zisk_code(rom: &mut ZiskRom, addr: u64, data: &[u8], _dma_addrs: (u64, u64, u64, u64)) {
     //print!("add_zisk_code() addr={}\n", addr);
 
-    let (memcpy_addr, memcmp_addr, memset_addr, memmove_addr) = dma_addrs;
+    // let (memcpy_addr, memcmp_addr, memset_addr, memmove_addr) = dma_addrs;
 
     // Convert input data to a u32 vector
     let code_vector: Vec<u16> = convert_vector(data);
 
     // Convert data vector to RISCV instructions
     let riscv_instructions = riscv_interpreter(addr, &code_vector);
+    /*
+        // Detect AUIPC + JALR patterns that jump to DMA functions
+        // Pattern: AUIPC rd, imm20 followed by JALR ra, rd, imm12
+        // Target address = PC + (imm20 << 12) + imm12
+        let mut dma_call_pcs: std::collections::HashSet<u64> = std::collections::HashSet::new();
 
-    // Detect AUIPC + JALR patterns that jump to DMA functions
-    // Pattern: AUIPC rd, imm20 followed by JALR ra, rd, imm12
-    // Target address = PC + (imm20 << 12) + imm12
-    let mut dma_call_pcs: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        // Register numbers for a0, a1, a2 (x10, x11, x12)
+        const REG_A0: u32 = 10;
+        const REG_A1: u32 = 11;
+        const REG_A2: u32 = 12;
 
-    // Register numbers for a0, a1, a2 (x10, x11, x12)
-    const REG_A0: u32 = 10;
-    const REG_A1: u32 = 11;
-    const REG_A2: u32 = 12;
+        // Types of register loading
+        #[derive(Debug, Clone)]
+        enum RegLoadType {
+            /// Immediate value: li rd, imm or addi rd, x0, imm
+            Immediate(i32),
+            /// Register + immediate: addi rd, rs, imm or mv rd, rs (imm=0)
+            RegPlusImm { rs: u32, imm: i32 },
+            /// Load from memory: ld/lw rd, imm(rs)
+            MemLoad { rs: u32, imm: i32, size: u8 },
+            /// Not found
+            NotFound,
+        }
 
-    // Types of register loading
-    #[derive(Debug, Clone)]
-    enum RegLoadType {
-        /// Immediate value: li rd, imm or addi rd, x0, imm
-        Immediate(i32),
-        /// Register + immediate: addi rd, rs, imm or mv rd, rs (imm=0)
-        RegPlusImm { rs: u32, imm: i32 },
-        /// Load from memory: ld/lw rd, imm(rs)
-        MemLoad { rs: u32, imm: i32, size: u8 },
-        /// Not found
-        NotFound,
-    }
+        /// Find how a register is loaded before a given instruction index
+        fn find_reg_load(
+            riscv_instructions: &[RiscvInstruction],
+            call_idx: usize,
+            target_reg: u32,
+        ) -> (usize, RegLoadType) {
+            // Search backwards from call_idx
+            for offset in 1..=20.min(call_idx) {
+                let idx = call_idx - offset;
+                let inst = &riscv_instructions[idx];
 
-    /// Find how a register is loaded before a given instruction index
-    fn find_reg_load(
-        riscv_instructions: &[RiscvInstruction],
-        call_idx: usize,
-        target_reg: u32,
-    ) -> (usize, RegLoadType) {
-        // Search backwards from call_idx
-        for offset in 1..=20.min(call_idx) {
-            let idx = call_idx - offset;
-            let inst = &riscv_instructions[idx];
-
-            // Check if this instruction writes to target_reg
-            if inst.rd != target_reg {
-                continue;
-            }
-
-            // li rd, imm -> actually addi rd, x0, imm or lui+addi
-            // addi rd, rs, imm
-            if inst.inst == "addi" || inst.inst == "c.addi" {
-                if inst.rs1 == 0 {
-                    // li rd, imm (addi rd, x0, imm)
-                    return (offset, RegLoadType::Immediate(inst.imm));
-                } else {
-                    // addi rd, rs, imm
-                    return (offset, RegLoadType::RegPlusImm { rs: inst.rs1, imm: inst.imm });
+                // Check if this instruction writes to target_reg
+                if inst.rd != target_reg {
+                    continue;
                 }
-            }
 
-            // c.li rd, imm
-            if inst.inst == "c.li" {
-                return (offset, RegLoadType::Immediate(inst.imm));
-            }
+                // li rd, imm -> actually addi rd, x0, imm or lui+addi
+                // addi rd, rs, imm
+                if inst.inst == "addi" || inst.inst == "c.addi" {
+                    if inst.rs1 == 0 {
+                        // li rd, imm (addi rd, x0, imm)
+                        return (offset, RegLoadType::Immediate(inst.imm));
+                    } else {
+                        // addi rd, rs, imm
+                        return (offset, RegLoadType::RegPlusImm { rs: inst.rs1, imm: inst.imm });
+                    }
+                }
 
-            // mv rd, rs -> addi rd, rs, 0 or c.mv
-            if inst.inst == "c.mv" {
-                return (offset, RegLoadType::RegPlusImm { rs: inst.rs2, imm: 0 });
-            }
+                // c.li rd, imm
+                if inst.inst == "c.li" {
+                    return (offset, RegLoadType::Immediate(inst.imm));
+                }
 
-            // lui rd, imm (upper immediate)
-            if inst.inst == "lui" || inst.inst == "c.lui" {
-                return (offset, RegLoadType::Immediate(inst.imm));
-            }
-
-            // ld rd, imm(rs) - 64-bit load
-            if inst.inst == "ld" || inst.inst == "c.ld" || inst.inst == "c.ldsp" {
-                return (offset, RegLoadType::MemLoad { rs: inst.rs1, imm: inst.imm, size: 8 });
-            }
-
-            // lw rd, imm(rs) - 32-bit load
-            if inst.inst == "lw" || inst.inst == "c.lw" || inst.inst == "c.lwsp" {
-                return (offset, RegLoadType::MemLoad { rs: inst.rs1, imm: inst.imm, size: 4 });
-            }
-
-            // lwu rd, imm(rs) - 32-bit unsigned load
-            if inst.inst == "lwu" {
-                return (offset, RegLoadType::MemLoad { rs: inst.rs1, imm: inst.imm, size: 4 });
-            }
-
-            // add rd, rs1, rs2 (could be mv if rs2=0 or rs1=0)
-            if inst.inst == "add" || inst.inst == "c.add" {
-                if inst.rs1 == 0 {
+                // mv rd, rs -> addi rd, rs, 0 or c.mv
+                if inst.inst == "c.mv" {
                     return (offset, RegLoadType::RegPlusImm { rs: inst.rs2, imm: 0 });
-                } else if inst.rs2 == 0 {
+                }
+
+                // lui rd, imm (upper immediate)
+                if inst.inst == "lui" || inst.inst == "c.lui" {
+                    return (offset, RegLoadType::Immediate(inst.imm));
+                }
+
+                // ld rd, imm(rs) - 64-bit load
+                if inst.inst == "ld" || inst.inst == "c.ld" || inst.inst == "c.ldsp" {
+                    return (offset, RegLoadType::MemLoad { rs: inst.rs1, imm: inst.imm, size: 8 });
+                }
+
+                // lw rd, imm(rs) - 32-bit load
+                if inst.inst == "lw" || inst.inst == "c.lw" || inst.inst == "c.lwsp" {
+                    return (offset, RegLoadType::MemLoad { rs: inst.rs1, imm: inst.imm, size: 4 });
+                }
+
+                // lwu rd, imm(rs) - 32-bit unsigned load
+                if inst.inst == "lwu" {
+                    return (offset, RegLoadType::MemLoad { rs: inst.rs1, imm: inst.imm, size: 4 });
+                }
+
+                // add rd, rs1, rs2 (could be mv if rs2=0 or rs1=0)
+                if inst.inst == "add" || inst.inst == "c.add" {
+                    if inst.rs1 == 0 {
+                        return (offset, RegLoadType::RegPlusImm { rs: inst.rs2, imm: 0 });
+                    } else if inst.rs2 == 0 {
+                        return (offset, RegLoadType::RegPlusImm { rs: inst.rs1, imm: 0 });
+                    }
+                    // General add - treat as reg+imm with imm=0 (approximate)
                     return (offset, RegLoadType::RegPlusImm { rs: inst.rs1, imm: 0 });
                 }
-                // General add - treat as reg+imm with imm=0 (approximate)
-                return (offset, RegLoadType::RegPlusImm { rs: inst.rs1, imm: 0 });
+
+                // Other instruction that writes to target_reg but we don't recognize
+                // Stop searching since the register was overwritten
+                return (offset, RegLoadType::NotFound);
+            }
+            (0, RegLoadType::NotFound)
+        }
+
+        fn reg_load_to_string(load: &RegLoadType) -> String {
+            match load {
+                RegLoadType::Immediate(imm) => format!("imm={}", imm),
+                RegLoadType::RegPlusImm { rs, imm } => format!("x{}+{}", rs, imm),
+                RegLoadType::MemLoad { rs, imm, size } => format!("{}(x{})[{}B]", imm, rs, size),
+                RegLoadType::NotFound => "???".to_string(),
+            }
+        }
+
+        for i in 0..riscv_instructions.len().saturating_sub(1) {
+            let inst = &riscv_instructions[i];
+            let next_inst = &riscv_instructions[i + 1];
+
+            // Check for AUIPC + JALR pattern
+            if inst.inst == "auipc" && next_inst.inst == "jalr" {
+                // AUIPC uses the same register that JALR reads from
+                if inst.rd == next_inst.rs1 {
+                    // Calculate target address: PC + imm_auipc + imm_jalr
+                    // Note: inst.imm for AUIPC is already shifted (has lower 12 bits as zero)
+                    let target = (inst.rom_address as i64)
+                        .wrapping_add(inst.imm as i64)
+                        .wrapping_add(next_inst.imm as i64) as u64;
+
+                    // Check if target is a DMA function
+                    let is_dma = (memcpy_addr != 0 && target == memcpy_addr)
+                        || (memcmp_addr != 0 && target == memcmp_addr)
+                        || (memset_addr != 0 && target == memset_addr)
+                        || (memmove_addr != 0 && target == memmove_addr);
+
+                    if is_dma {
+                        let func_name = if target == memcpy_addr {
+                            "memcpy"
+                        } else if target == memcmp_addr {
+                            "memcmp"
+                        } else if target == memset_addr {
+                            "memset"
+                        } else {
+                            "inputcpy"
+                        };
+
+                        // Find how a0, a1, a2 are loaded (search from JALR position = i+1)
+                        let jalr_idx = i + 1;
+                        let (a0_offset, a0_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A0);
+                        let (a1_offset, a1_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A1);
+                        let (a2_offset, a2_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A2);
+
+                        // Check if any register load was not found
+                        let has_missing = matches!(a0_load, RegLoadType::NotFound)
+                            || matches!(a1_load, RegLoadType::NotFound)
+                            || matches!(a2_load, RegLoadType::NotFound);
+
+                        println!(
+                            "DMA call to {} at PC=0x{:x}:{}",
+                            func_name,
+                            next_inst.rom_address,
+                            if has_missing { " [INCOMPLETE - needs analysis]" } else { "" }
+                        );
+                        println!("  a0: offset=-{}, {}", a0_offset, reg_load_to_string(&a0_load));
+                        println!("  a1: offset=-{}, {}", a1_offset, reg_load_to_string(&a1_load));
+                        println!("  a2: offset=-{}, {}", a2_offset, reg_load_to_string(&a2_load));
+
+                        dma_call_pcs.insert(inst.rom_address);
+                        dma_call_pcs.insert(next_inst.rom_address);
+                    }
+                }
             }
 
-            // Other instruction that writes to target_reg but we don't recognize
-            // Stop searching since the register was overwritten
-            return (offset, RegLoadType::NotFound);
-        }
-        (0, RegLoadType::NotFound)
-    }
+            // Check for JAL (direct jump) pattern
+            if inst.inst == "jal" {
+                let target = (inst.rom_address as i64).wrapping_add(inst.imm as i64) as u64;
 
-    fn reg_load_to_string(load: &RegLoadType) -> String {
-        match load {
-            RegLoadType::Immediate(imm) => format!("imm={}", imm),
-            RegLoadType::RegPlusImm { rs, imm } => format!("x{}+{}", rs, imm),
-            RegLoadType::MemLoad { rs, imm, size } => format!("{}(x{})[{}B]", imm, rs, size),
-            RegLoadType::NotFound => "???".to_string(),
-        }
-    }
-
-    for i in 0..riscv_instructions.len().saturating_sub(1) {
-        let inst = &riscv_instructions[i];
-        let next_inst = &riscv_instructions[i + 1];
-
-        // Check for AUIPC + JALR pattern
-        if inst.inst == "auipc" && next_inst.inst == "jalr" {
-            // AUIPC uses the same register that JALR reads from
-            if inst.rd == next_inst.rs1 {
-                // Calculate target address: PC + imm_auipc + imm_jalr
-                // Note: inst.imm for AUIPC is already shifted (has lower 12 bits as zero)
-                let target = (inst.rom_address as i64)
-                    .wrapping_add(inst.imm as i64)
-                    .wrapping_add(next_inst.imm as i64) as u64;
-
-                // Check if target is a DMA function
                 let is_dma = (memcpy_addr != 0 && target == memcpy_addr)
                     || (memcmp_addr != 0 && target == memcmp_addr)
                     || (memset_addr != 0 && target == memset_addr)
@@ -2164,11 +2242,10 @@ pub fn add_zisk_code(rom: &mut ZiskRom, addr: u64, data: &[u8], dma_addrs: (u64,
                         "inputcpy"
                     };
 
-                    // Find how a0, a1, a2 are loaded (search from JALR position = i+1)
-                    let jalr_idx = i + 1;
-                    let (a0_offset, a0_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A0);
-                    let (a1_offset, a1_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A1);
-                    let (a2_offset, a2_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A2);
+                    // Find how a0, a1, a2 are loaded
+                    let (a0_offset, a0_load) = find_reg_load(&riscv_instructions, i, REG_A0);
+                    let (a1_offset, a1_load) = find_reg_load(&riscv_instructions, i, REG_A1);
+                    let (a2_offset, a2_load) = find_reg_load(&riscv_instructions, i, REG_A2);
 
                     // Check if any register load was not found
                     let has_missing = matches!(a0_load, RegLoadType::NotFound)
@@ -2176,9 +2253,9 @@ pub fn add_zisk_code(rom: &mut ZiskRom, addr: u64, data: &[u8], dma_addrs: (u64,
                         || matches!(a2_load, RegLoadType::NotFound);
 
                     println!(
-                        "DMA call to {} at PC=0x{:x}:{}",
+                        "DMA call to {} at PC=0x{:x} (JAL):{}",
                         func_name,
-                        next_inst.rom_address,
+                        inst.rom_address,
                         if has_missing { " [INCOMPLETE - needs analysis]" } else { "" }
                     );
                     println!("  a0: offset=-{}, {}", a0_offset, reg_load_to_string(&a0_load));
@@ -2186,56 +2263,10 @@ pub fn add_zisk_code(rom: &mut ZiskRom, addr: u64, data: &[u8], dma_addrs: (u64,
                     println!("  a2: offset=-{}, {}", a2_offset, reg_load_to_string(&a2_load));
 
                     dma_call_pcs.insert(inst.rom_address);
-                    dma_call_pcs.insert(next_inst.rom_address);
                 }
             }
         }
-
-        // Check for JAL (direct jump) pattern
-        if inst.inst == "jal" {
-            let target = (inst.rom_address as i64).wrapping_add(inst.imm as i64) as u64;
-
-            let is_dma = (memcpy_addr != 0 && target == memcpy_addr)
-                || (memcmp_addr != 0 && target == memcmp_addr)
-                || (memset_addr != 0 && target == memset_addr)
-                || (memmove_addr != 0 && target == memmove_addr);
-
-            if is_dma {
-                let func_name = if target == memcpy_addr {
-                    "memcpy"
-                } else if target == memcmp_addr {
-                    "memcmp"
-                } else if target == memset_addr {
-                    "memset"
-                } else {
-                    "inputcpy"
-                };
-
-                // Find how a0, a1, a2 are loaded
-                let (a0_offset, a0_load) = find_reg_load(&riscv_instructions, i, REG_A0);
-                let (a1_offset, a1_load) = find_reg_load(&riscv_instructions, i, REG_A1);
-                let (a2_offset, a2_load) = find_reg_load(&riscv_instructions, i, REG_A2);
-
-                // Check if any register load was not found
-                let has_missing = matches!(a0_load, RegLoadType::NotFound)
-                    || matches!(a1_load, RegLoadType::NotFound)
-                    || matches!(a2_load, RegLoadType::NotFound);
-
-                println!(
-                    "DMA call to {} at PC=0x{:x} (JAL):{}",
-                    func_name,
-                    inst.rom_address,
-                    if has_missing { " [INCOMPLETE - needs analysis]" } else { "" }
-                );
-                println!("  a0: offset=-{}, {}", a0_offset, reg_load_to_string(&a0_load));
-                println!("  a1: offset=-{}, {}", a1_offset, reg_load_to_string(&a1_load));
-                println!("  a2: offset=-{}, {}", a2_offset, reg_load_to_string(&a2_load));
-
-                dma_call_pcs.insert(inst.rom_address);
-            }
-        }
-    }
-
+    */
     // Create a context to convert RISCV instructions to ZisK instructions, using rom.insts
     let mut ctx = Riscv2ZiskContext {
         insts: &mut rom.insts,

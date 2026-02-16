@@ -363,7 +363,7 @@ airtemplate Dma(int N = 2**21,
         col witness bits(32) air.bus_pre_result[2];
         col witness bits(32) air.bus_post_result[2];
 
-        bus_result[0] = bus_pre_result[0] + bus_post_result[0];
+        bus_result[0] = bus_pre_result[0] + bus_post_result[0] + dst * (1 - sel_memcmp);
         bus_result[1] = bus_pre_result[1] + bus_post_result[1];
 
         (bus_pre_result[0] + bus_pre_result[1]) * (bus_post_result[0] + bus_post_result[1]) === 0;
@@ -383,6 +383,9 @@ airtemplate Dma(int N = 2**21,
         bus_pre_result[1] * use_post === 0;
         pre_result_nz * use_post === 0;
 
+        (1 - sel_memcmp) * pre_result_nz === 0;
+        (1 - sel_memcmp) * post_result_nz === 0;
+        
         // if memcmp_result_is_zero means that bus_result must be zero
         (1 - pre_result_nz) * bus_pre_result[0] === 0;
         (1 - pre_result_nz) * bus_pre_result[1] === 0;
@@ -392,13 +395,10 @@ airtemplate Dma(int N = 2**21,
         // if memcmp_result_is_zero means count and count_eq are equals
         (1 - result_nz) * count_diff === 0;
         result_nz * (1 - sel_memcmp) === 0;
-
-        // if operation it isn't a memcmp, the result must be 0
-        bus_result[0] * (1 - sel_memcmp) === 0;
-        bus_result[1] * (1 - sel_memcmp) === 0;
     } else {
         result_nz = 0;
-        bus_result[0] = 0;
+        // return dst address
+        bus_result[0] = dst;
         bus_result[1] = 0;
         const int air.post_result_nz = 0;
         const int air.pre_result_nz = 0;
@@ -466,7 +466,8 @@ airtemplate Dma(int N = 2**21,
     // OP_DMA_XMEMSET            (dst, 0, count, 0, 0, 0, 0, main_step, value, src_offset_after_pre)
 
     assumes_operation(op: loop_op, a: [loop_dst, 0], 
-                                   b: [loop_b0, 0],                                    
+                                   b: [loop_b0, 0],  
+                                   c: [loop_dst, 0],
                                    main_step:,
                                    extended_arg: loop_extended_arg,
                                    extra_args: [src_offset_after_pre], 
@@ -480,8 +481,6 @@ airtemplate Dma(int N = 2**21,
     // OP_DMA_PRE_XMEMCMP   (dst, src, dst_offset, src_offset,  pre_count, main_step, 0, r_nz, R0, R1)
     // OP_DMA_PRE_XMEMSET   (dst, 0,   dst_offset,          0,  pre_count, main_step, value)
 
-    println(_pre_op);
-    println(pre_op);
     permutation_assumes(DMA_BUS_ID, [pre_op, 
                                      dst64, 
                                      src64, 
@@ -524,25 +523,6 @@ airtemplate Dma(int N = 2**21,
         const expr air.static_count = 0;
     }
 
-    expr _b0 = src * (sel_memcpy + sel_memcmp) + 
-               count * (sel_inputcpy + sel_memset);
-
-    if (degree(_b0) > 1) {
-        col witness bits(32) air.b0;
-        b0 <== _b0;
-    } else {
-        const expr air.b0 = _b0;
-    }
-
-    expr _extended_arg = static_count * (sel_memcpy + sel_memcmp) + fill_byte * sel_memset;
-
-    if (degree(_extended_arg) > 1) {
-        col witness bits(32) air.extended_arg;
-        extended_arg <== _extended_arg;
-    } else {
-        const expr air.extended_arg = _extended_arg;
-    }
-
     // BUS: DMA ===> MAIN
     // --------------------------------------------------------------------------------
     // OP_DMA_MEMCPY   (dst, 0, src,   0, 0,  0,  0, main_step) + MEM(count)
@@ -554,11 +534,11 @@ airtemplate Dma(int N = 2**21,
 
     proves_operation(op: bus_op, 
                      a: [dst, 0], 
-                     b: [b0, 0], 
-                     c: bus_result, 
+                     b: [src * (sel_memcpy + sel_memcmp) + count * (sel_inputcpy + sel_memset), 0], 
+                     c: bus_result,
                      flag: 0, 
                      main_step:, 
-                     extended_arg:,
+                     extended_arg: static_count * (sel_memcpy + sel_memcmp) + fill_byte * sel_memset,
                      mul: sel);
 
     // BUS: DMA ===> MEM

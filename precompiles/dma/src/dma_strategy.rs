@@ -15,6 +15,9 @@ use crate::{
     DMA_UNALIGNED_INPUTS_OFFSET, DMA_UNALIGNED_OFFSET,
 };
 
+#[cfg(feature = "save_dma_plans")]
+use crate::get_dma_air_name;
+
 use fields::PrimeField64;
 use zisk_common::{BusDeviceMetrics, BusDeviceMode, CheckPoint, ChunkId};
 use zisk_pil::DmaUnalignedTrace;
@@ -312,9 +315,8 @@ impl<F: PrimeField64> DmaStrategy<F> {
         counters: Vec<(ChunkId, Box<dyn BusDeviceMetrics>)>,
     ) -> Vec<(usize, Vec<(CheckPoint, DmaCheckPoint)>)> {
         let totals: DmaCounterInputGen = self.calculate_totals(&counters);
-        println!("TOTALS_DEBUG_INFO {:?}", totals);
+        #[cfg(feature = "save_dma_plans")]
         let totals_debug_info = format!("{}", totals);
-        println!("TOTALS_DEBUG_INFO_STR {}", totals_debug_info);
 
         self.calculate_strategy(&totals);
 
@@ -372,10 +374,6 @@ impl<F: PrimeField64> DmaStrategy<F> {
         for (current_chunk, dyn_counter) in counters.iter() {
             let counters =
                 (**dyn_counter).as_any().downcast_ref::<DmaCounterInputGen>().unwrap().counters;
-            println!(
-                "\x1B[33;1mProcessing chunk {:?} with counter: {:?}\x1B[0m",
-                current_chunk, counters
-            );
 
             // DMA
 
@@ -444,8 +442,6 @@ impl<F: PrimeField64> DmaStrategy<F> {
             let mut rows = counters[DMA_PRE_POST_OFFSET + DMA_COUNTER_MEMCPY];
             let skip = if rows > 0 && self.dma_pre_post.rows_memcpy_to_full > 0 {
                 let rows_applicable = std::cmp::min(rows, self.dma_pre_post.rows_memcpy_to_full);
-                println!("DMA_PRE_POST chunk {current_chunk} has {rows} memcpy rows, {rows_applicable} can \
-                          be sent to full instance [{}]", self.dma_pre_post.rows_memcpy_to_full);
                 dma_pre_post_full.add_op_rows(
                     *current_chunk,
                     0,
@@ -460,7 +456,6 @@ impl<F: PrimeField64> DmaStrategy<F> {
                 0
             };
             if rows > 0 {
-                println!("DMA_PRE_POST_MEMCPY chunk {current_chunk} has {rows} memcpy rows");
                 dma_pre_post_memcpy.add_op_rows(
                     *current_chunk,
                     skip,

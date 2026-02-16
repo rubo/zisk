@@ -9,6 +9,8 @@ categories = { workspace = true }
 
 [dependencies]
 executor = { workspace = true }
+asm-runner = { workspace = true }
+precompiles-hints = { workspace = true }
 sm-arith = { workspace = true }
 sm-binary = { workspace = true }
 sm-main = { workspace = true }
@@ -38,13 +40,11 @@ fields = { workspace=true }
 pil-std-lib = { workspace = true }
 tracing = { workspace = true }
 
-env_logger = "0.11"
+anyhow = { workspace = true }
+
 rayon = { workspace = true }
 
 [features]
 default = []
-gpu = ["proofman-common/gpu", "packed"]
-packed = ["proofman-common/packed", "proofman/packed"]
-no_lib_link = ["proofman-common/no_lib_link"]
-diagnostic = ["proofman-macros/diagnostic", "proofman/diagnostic"]
-disable_distributed = ["proofman/disable_distributed", "proofman-common/disable_distributed"]
+gpu = ["packed"]
+packed = []

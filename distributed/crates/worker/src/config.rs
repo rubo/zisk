@@ -146,6 +146,7 @@ impl WorkerServiceConfig {
 pub struct ProverServiceConfigDto {
     pub elf: PathBuf,
     pub asm: Option<PathBuf>,
+    pub hints: bool,
     pub emulator: bool,
     pub proving_key: Option<PathBuf>,
     pub asm_port: Option<u16>,
@@ -168,6 +169,7 @@ impl Default for ProverServiceConfigDto {
         Self {
             elf: PathBuf::new(),
             asm: None,
+            hints: false,
             emulator: false,
             proving_key: None,
             asm_port: None,

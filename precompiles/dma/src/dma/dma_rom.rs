@@ -12,6 +12,7 @@ impl DmaRom {
         assert!(dst_offset < 8, "dst_offset too big {dst_offset}");
         assert!(src_offset < 8, "src_offset too big {src_offset}");
         assert!(count < u32::MAX as usize, "count too big {count}");
+        assert!(!neq || use_src);
         let count = if count >= 256 { (count & 0xFF) + 256 } else { count & 0xFF };
         (dst_offset as usize * 8 + src_offset as usize) * 512
             + count

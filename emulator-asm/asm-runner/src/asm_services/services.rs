@@ -69,7 +69,7 @@ impl AsmServices {
     pub fn start_asm_services(
         &self,
         ziskemuasm_path: &Path,
-        options: AsmRunnerOptions,
+        mut options: AsmRunnerOptions,
     ) -> Result<()> {
         // ! TODO Remove this when we have a proper way to find the path
         let path_str = ziskemuasm_path.to_string_lossy();
@@ -91,14 +91,47 @@ impl AsmServices {
             }
         }
 
-        for service in &Self::SERVICES {
+        let shm_prefix = Self::shmem_prefix(
+            Self::port_for(&AsmService::MO, self.base_port, self.local_rank),
+            self.local_rank,
+        );
+
+        let service = &Self::SERVICES[0];
+        tracing::debug!(
+            ">>> [{}] Starting ASM service: {} on port {}",
+            self.world_rank,
+            service,
+            Self::port_for(service, self.base_port, self.local_rank)
+        );
+
+        // First service has to create the shared memory, the rest can use it
+        options.share_input_shmem = true;
+        options.open_input_shmem = false;
+        self.start_asm_service(service, trimmed_path, &options, &shm_prefix);
+
+        Self::wait_for_service_ready(
+            service,
+            Self::port_for(service, self.base_port, self.local_rank),
+        );
+        tracing::debug!(
+            ">>> [{}] ASM service {} is ready on port {}",
+            self.world_rank,
+            service,
+            Self::port_for(service, self.base_port, self.local_rank)
+        );
+
+        for service in &Self::SERVICES[1..] {
             tracing::debug!(
                 ">>> [{}] Starting ASM service: {} on port {}",
                 self.world_rank,
                 service,
                 Self::port_for(service, self.base_port, self.local_rank)
             );
-            self.start_asm_service(service, trimmed_path, &options);
+
+            options.share_input_shmem = true;
+            options.open_input_shmem = true;
+
+            self.start_asm_service(service, trimmed_path, &options, &shm_prefix);
         }
 
         for service in &Self::SERVICES {
@@ -162,16 +195,26 @@ impl AsmServices {
         asm_service: &AsmService,
         trimmed_path: &str,
         options: &AsmRunnerOptions,
+        shm_prefix: &str,
     ) {
         // Prepare command
         let command_path = trimmed_path.to_string() + &format!("-{asm_service}.bin");
 
-        let mut command = Command::new("nice");
-        command.arg("-n");
-        command.arg("-5");
-        command.arg(command_path);
+        let mut command = Command::new(command_path);
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        {
+            use std::os::unix::process::CommandExt;
 
-        options.apply_to_command(&mut command, asm_service);
+            unsafe {
+                command.pre_exec(|| {
+                    // Ignore failure silently (matches nice behavior)
+                    libc::setpriority(libc::PRIO_PROCESS, 0, -5);
+                    Ok(())
+                });
+            }
+        }
+
+        options.apply_to_command(&mut command, asm_service, shm_prefix);
 
         if let Err(e) = command.spawn() {
             tracing::error!("Child process failed: {:?}", e);
@@ -199,6 +242,12 @@ impl AsmServices {
         };
 
         base_port + service_offset as u16 + rank_offset
+    }
+
+    pub fn port_base_for(base_port: Option<u16>, local_rank: i32) -> u16 {
+        let rank_offset = local_rank as u16 * Self::SERVICES.len() as u16;
+
+        base_port.unwrap_or(ASM_SERVICE_BASE_PORT) + rank_offset
     }
 
     pub fn send_status_request(&self, service: &AsmService) -> Result<PingResponse> {
@@ -254,7 +303,14 @@ impl AsmServices {
             .context("Failed to set read timeout")?;
 
         // Send request payload
-        stream.write_all(&out_buffer).context("Failed to write request payload")?;
+        if let Err(e) = stream.write_all(&out_buffer) {
+            return Err(anyhow::anyhow!(
+                "Failed to write request payload to service {} on {}: {}",
+                service,
+                addr,
+                e
+            ));
+        }
 
         let total_timeout = Duration::from_secs(120);
         let start = Instant::now();
@@ -292,7 +348,7 @@ impl AsmServices {
 
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     pub fn send_shutdown_and_wait(&self, service: &AsmService) -> Result<()> {
-        let port = AsmServices::port_for(service, self.base_port, self.local_rank);
+        let port = AsmServices::port_base_for(Some(self.base_port), self.local_rank);
 
         let sem_name = format!(
             "/{}_{}_shutdown_done",

@@ -20,8 +20,8 @@ pub use zisk_pil::{
 pub use zisk_pil::{Dma64AlignedMemTrace, Dma64AlignedMemTraceRow};
 
 use crate::{
-    Dma64AlignedInput, Dma64AlignedModule, DMA_64_ALIGNED_MEM_OPS_BY_ROW, F_SEL_INPUTCPY,
-    F_SEL_MEMCMP, F_SEL_MEMCPY, F_SEL_MEMSET,
+    dma_trace, Dma64AlignedInput, Dma64AlignedModule, DMA_64_ALIGNED_MEM_OPS_BY_ROW,
+    F_SEL_INPUTCPY, F_SEL_MEMCMP, F_SEL_MEMCPY, F_SEL_MEMSET,
 };
 use precompiles_helpers::DmaInfo;
 
@@ -203,10 +203,7 @@ impl<F: PrimeField64> Dma64AlignedModule<F> for Dma64AlignedMemSM<F> {
             "Too many inputs, total_inputs:{total_inputs} num_rows:{num_rows}"
         );
 
-        tracing::debug!(
-            "··· Creating Dma64Aligned instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("Dma64AlignedMem", total_inputs, num_rows);
 
         timer_start_trace!(DMA_64_ALIGNED_TRACE);
 

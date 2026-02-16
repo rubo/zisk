@@ -33,15 +33,16 @@
 use crate::{
     config::Config,
     coordinator_errors::{CoordinatorError, CoordinatorResult},
-    hooks, WorkersPool,
+    hooks, PrecompileHintsRelay, WorkersPool,
 };
 
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use dashmap::DashMap;
-use proofman::ContributionsInfo;
+use proofman::{ContributionsInfo, ExecutionInfo};
 use std::{
     collections::HashMap,
+    fs,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -50,15 +51,19 @@ use std::{
 };
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
+use zisk_common::io::{StreamSource, ZiskStream};
 use zisk_distributed_common::{
     AggParamsDto, AggProofData, ChallengesDto, ComputeCapacity, ContributionParamsDto,
-    CoordinatorMessageDto, DataId, ExecuteTaskRequestDto, ExecuteTaskRequestTypeDto,
-    ExecuteTaskResponseDto, ExecuteTaskResponseResultDataDto, HeartbeatAckDto, InputModeDto,
-    InputSourceDto, Job, JobExecutionMode, JobId, JobPhase, JobResult, JobResultData, JobState,
-    JobStatusDto, JobsListDto, LaunchProofRequestDto, LaunchProofResponseDto, MetricsDto, ProofDto,
-    ProveParamsDto, StatusInfoDto, SystemStatusDto, WorkerErrorDto, WorkerId,
+    ContributionsResult, CoordinatorMessageDto, DataId, ExecuteTaskRequestDto,
+    ExecuteTaskRequestTypeDto, ExecuteTaskResponseDto, ExecuteTaskResponseResultDataDto,
+    HeartbeatAckDto, HintsModeDto, HintsSourceDto, InputSourceDto, InputsModeDto, Job,
+    JobExecutionMode, JobId, JobPhase, JobResult, JobResultData, JobState, JobStatusDto,
+    JobsListDto, LaunchProofRequestDto, LaunchProofResponseDto, MetricsDto, ProofDto,
+    ProveParamsDto, StatusInfoDto, StreamMessageKind, SystemStatusDto, WorkerErrorDto, WorkerId,
     WorkerReconnectRequestDto, WorkerRegisterRequestDto, WorkerState, WorkersListDto,
 };
+
+use zisk_sdk::ZiskProofWithPublicValues;
 
 /// Trait for sending messages to workers through various communication channels.
 ///
@@ -105,7 +110,7 @@ pub struct Coordinator {
     start_time_utc: DateTime<Utc>,
 
     /// Manages the pool of connected workers and their communication channels.
-    workers_pool: WorkersPool,
+    workers_pool: Arc<WorkersPool>,
 
     /// Concurrent storage for active jobs with fine-grained locking.
     jobs: DashMap<JobId, Arc<RwLock<Job>>>,
@@ -129,7 +134,7 @@ impl Coordinator {
         Self {
             config,
             start_time_utc,
-            workers_pool: WorkersPool::new(),
+            workers_pool: Arc::new(WorkersPool::new()),
             jobs: DashMap::new(),
             registrations: AtomicU64::new(0),
             reconnections: AtomicU64::new(0),
@@ -343,15 +348,17 @@ impl Coordinator {
                 request.data_id.clone(),
                 required_compute_capacity,
                 minimal_compute_capacity,
-                request.input_mode,
+                request.inputs_mode,
+                request.hints_mode,
                 request.simulated_node,
             )
             .await?;
 
         info!(
-            "[Job] Started {} successfully Inputs: {} Compute Capacity: {} Workers: {}",
+            "[Job] Started {} successfully Inputs: {:?} Hints: {:?} Capacity: {} Workers: {}",
             job.job_id,
-            job.input_mode,
+            job.inputs_mode,
+            job.hints_mode,
             job.compute_capacity,
             job.workers.len(),
         );
@@ -411,13 +418,13 @@ impl Coordinator {
 
         // Clone job.final_proof and error if does not exist
         let final_proof = if job.state == JobState::Completed {
-            job.final_proof.clone().ok_or_else(|| {
+            Some(job.final_proof.clone().ok_or_else(|| {
                 CoordinatorError::Internal(
                     "Final proof is missing during post-launch processing".to_string(),
                 )
-            })?
+            })?)
         } else {
-            Vec::new()
+            None
         };
 
         // Check if webhook URL is configured and spawn it in a separate task
@@ -432,11 +439,19 @@ impl Coordinator {
         // Save proof to disk
         if state == JobState::Completed && !self.config.server.no_save_proofs {
             let folder = self.config.server.proofs_dir.clone();
-            zisk_common::save_proof(job_id.as_str(), folder, &final_proof, false).map_err(|e| {
-                error!("Failed to save proof for job {}: {}", job_id, e);
-                job.cleanup();
-                CoordinatorError::Internal(e.to_string())
+
+            let zisk_proof = ZiskProofWithPublicValues::new_from_vadcop_proof(
+                &final_proof.unwrap(),
+                self.config.coordinator.compressed_proofs,
+            )
+            .map_err(|e| CoordinatorError::Internal(format!("Failed to create proof: {}", e)))?;
+            fs::create_dir_all(&folder).map_err(|e| {
+                CoordinatorError::Internal(format!("Failed to create proofs directory: {}", e))
             })?;
+            let raw_path = folder.join(format!("proof_{}.fri", job_id));
+            zisk_proof
+                .save(raw_path)
+                .map_err(|e| CoordinatorError::Internal(format!("Failed to save proof: {}", e)))?;
         }
 
         // Clean up process data for the job
@@ -537,7 +552,8 @@ impl Coordinator {
         data_id: DataId,
         required_compute_capacity: ComputeCapacity,
         minimal_compute_capacity: ComputeCapacity,
-        input_mode: InputModeDto,
+        inputs_mode: InputsModeDto,
+        hints_mode: HintsModeDto,
         simulated_node: Option<u32>,
     ) -> CoordinatorResult<Job> {
         let execution_mode = if let Some(node) = simulated_node {
@@ -561,7 +577,8 @@ impl Coordinator {
 
         Ok(Job::new(
             data_id,
-            input_mode,
+            inputs_mode,
+            hints_mode,
             required_compute_capacity,
             minimal_compute_capacity,
             selected_workers,
@@ -619,12 +636,12 @@ impl Coordinator {
         job: &Job,
         active_workers: &[WorkerId],
     ) -> CoordinatorResult<()> {
-        let input_source = match job.input_mode {
-            InputModeDto::InputModePath(ref path) => {
-                InputSourceDto::InputPath(path.display().to_string())
+        let input_source = match job.inputs_mode {
+            InputsModeDto::InputsPath(ref inputs_path) => {
+                InputSourceDto::InputPath(inputs_path.clone())
             }
-            InputModeDto::InputModeData(ref path) => {
-                let inputs = tokio::fs::read(path).await.map_err(|e| {
+            InputsModeDto::InputsData(ref inputs_uri) => {
+                let inputs = tokio::fs::read(inputs_uri).await.map_err(|e| {
                     CoordinatorError::Internal(format!(
                         "Failed to read input data for job {}: {}",
                         job.job_id, e
@@ -632,7 +649,16 @@ impl Coordinator {
                 })?;
                 InputSourceDto::InputData(inputs)
             }
-            InputModeDto::InputModeNone => InputSourceDto::InputNull,
+            InputsModeDto::InputsNone => InputSourceDto::InputNull,
+        };
+
+        let hints_source = match &job.hints_mode {
+            HintsModeDto::HintsPath(ref hints_uri) => HintsSourceDto::HintsPath(hints_uri.clone()),
+            HintsModeDto::HintsStream(hints_uri) => {
+                // Hints will be streamed separately
+                HintsSourceDto::HintsStream(hints_uri.clone())
+            }
+            HintsModeDto::HintsNone => HintsSourceDto::HintsNull,
         };
 
         // Use Arc to avoid expensive clones
@@ -641,10 +667,13 @@ impl Coordinator {
 
         use futures::stream::{self, StreamExt};
 
+        // TODO!!!!! Can we avoid this clone ????
+        let cloned_active_workers = active_workers.clone();
         let tasks = active_workers.into_iter().enumerate().map(|(rank_id, worker_id)| {
             let job_id = job.job_id.clone();
             let data_id = job.data_id.clone();
             let input_source = input_source.clone();
+            let hints_source = hints_source.clone();
             let worker_allocation = job.partitions[rank_id].clone();
             let job_compute_capacity = job.compute_capacity;
             let workers_pool = &self.workers_pool;
@@ -656,6 +685,7 @@ impl Coordinator {
                     params: ExecuteTaskRequestTypeDto::ContributionParams(ContributionParamsDto {
                         data_id,
                         input_source,
+                        hints_source,
                         rank_id: rank_id as u32,
                         total_workers,
                         worker_allocation,
@@ -676,7 +706,8 @@ impl Coordinator {
             }
         });
 
-        let results: Vec<_> = stream::iter(tasks).buffer_unordered(10).collect().await;
+        // Process tasks with a concurrency limit
+        let results: Vec<_> = stream::iter(tasks).buffer_unordered(16).collect().await;
 
         // Check for any errors
         for (worker_id, send_result, state_result) in results {
@@ -695,6 +726,83 @@ impl Coordinator {
             })?;
         }
 
+        if matches!(hints_source, HintsSourceDto::HintsStream(_)) {
+            self.initialize_stream(job, cloned_active_workers)?;
+        }
+
+        Ok(())
+    }
+
+    fn initialize_stream(
+        &self,
+        job: &Job,
+        cloned_active_workers: Vec<WorkerId>,
+    ) -> Result<(), CoordinatorError> {
+        let hints_uri = match &job.hints_mode {
+            HintsModeDto::HintsStream(uri) => uri,
+            _ => unreachable!(),
+        };
+        let job_id_clone = job.job_id.clone();
+        let workers_clone = Arc::new(cloned_active_workers.clone());
+        let workers_pool = Arc::clone(&self.workers_pool);
+
+        // Async dispatcher - no blocking, pure async flow for maximum performance
+        let dispatcher =
+            move |sequence_number: u32, stream_type: StreamMessageKind, payload: Vec<u8>| {
+                use futures::future::join_all;
+                use zisk_distributed_common::{StreamDataDto, StreamPayloadDto};
+
+                let job_id = job_id_clone.clone();
+                let workers = Arc::clone(&workers_clone);
+                let pool = Arc::clone(&workers_pool);
+
+                Box::pin(async move {
+                    let sends = workers.iter().map(|worker_id| {
+                        let job_id = job_id.clone();
+                        let worker_id = worker_id.clone();
+                        let payload = payload.clone();
+                        let pool = Arc::clone(&pool);
+                        let stream_type = stream_type.clone();
+
+                        async move {
+                            let msg = CoordinatorMessageDto::StreamData(StreamDataDto {
+                                job_id: job_id.clone(),
+                                stream_type,
+                                stream_payload: Some(StreamPayloadDto { sequence_number, payload }),
+                            });
+
+                            if let Err(e) = pool.send_message(&worker_id, msg).await {
+                                error!(
+                                    "Failed to send hints to worker {} for job {}: {}",
+                                    worker_id, job_id, e
+                                );
+                            }
+                        }
+                    });
+
+                    join_all(sends).await;
+                })
+            };
+        let hints_relay = PrecompileHintsRelay::new(dispatcher);
+        let mut stream = ZiskStream::new(hints_relay);
+        let stream_reader = StreamSource::from_uri(hints_uri).map_err(|e| {
+            CoordinatorError::Internal(format!(
+                "Failed to create hints stream reader for job {}: {}",
+                job.job_id, e
+            ))
+        })?;
+        stream.set_hints_stream_src(stream_reader).map_err(|e| {
+            CoordinatorError::Internal(format!(
+                "Failed to set hints stream for job {}: {}",
+                job.job_id, e
+            ))
+        })?;
+        stream.start_stream().map_err(|e| {
+            CoordinatorError::Internal(format!(
+                "Failed to start hints stream for job {}: {}",
+                job.job_id, e
+            ))
+        })?;
         Ok(())
     }
 
@@ -1068,6 +1176,9 @@ impl Coordinator {
             return Ok(());
         }
 
+        // Print execution summary from Phase 1 completion
+        self.print_execution_summary(&job);
+
         // Validate and extract challenges in a single operation to minimize lock time
         let challenges = self.validate_and_extract_challenges(&job).await?;
 
@@ -1136,14 +1247,15 @@ impl Coordinator {
         result_data: ExecuteTaskResponseResultDataDto,
     ) -> CoordinatorResult<JobResultData> {
         match result_data {
-            ExecuteTaskResponseResultDataDto::Challenges(challenges) => {
-                if challenges.is_empty() {
+            ExecuteTaskResponseResultDataDto::Challenges(ch_list) => {
+                if ch_list.challenges.is_empty() {
                     return Err(CoordinatorError::InvalidRequest(
                         "Received empty Challenges result data".to_string(),
                     ));
                 }
 
-                let contributions: Vec<ContributionsInfo> = challenges
+                let contributions: Vec<ContributionsInfo> = ch_list
+                    .challenges
                     .into_iter()
                     .map(|challenge| ContributionsInfo {
                         worker_index: challenge.worker_index,
@@ -1152,11 +1264,43 @@ impl Coordinator {
                     })
                     .collect();
 
-                Ok(JobResultData::Challenges(contributions))
+                let execution_info = ExecutionInfo {
+                    summary_info: ch_list.execution_info.summary_info,
+                    publics: ch_list.execution_info.publics,
+                    proof_values: ch_list.execution_info.proof_values,
+                    execution_time: ch_list.execution_info.execution_time,
+                };
+
+                Ok(JobResultData::Challenges(ContributionsResult {
+                    execution_info,
+                    challenges: contributions,
+                }))
             }
             _ => Err(CoordinatorError::InvalidRequest(
                 "Expected Challenges result data for Phase1".to_string(),
             )),
+        }
+    }
+
+    /// Prints execution summary information from Phase 1 completion.
+    ///
+    /// Extracts and displays execution information from the first completed worker's
+    /// contribution results, including timing, summary info, and key metrics.
+    ///
+    /// # Parameters
+    ///
+    /// * `job` - Reference to the job containing Phase 1 results
+    fn print_execution_summary(&self, job: &Job) {
+        // Find the first completed contribution result to extract ExecutionInfo summary
+        if let Some(contributions_results) = job.results.get(&JobPhase::Contributions) {
+            if let Some((_worker_id, job_result)) = contributions_results.iter().next() {
+                if let JobResultData::Challenges(contributions_result) = &job_result.data {
+                    info!(
+                        "Execution Summary: {}",
+                        contributions_result.execution_info.summary_info
+                    );
+                }
+            }
         }
     }
 
@@ -1178,13 +1322,27 @@ impl Coordinator {
         );
         let duration_ms = Duration::from_millis(duration.num_milliseconds() as u64);
 
+        // Get execution time from the worker's result
+        let exec_time_info = job
+            .results
+            .get(&JobPhase::Contributions)
+            .and_then(|results| results.get(worker_id))
+            .and_then(|job_result| match &job_result.data {
+                JobResultData::Challenges(contributions_result) => {
+                    Some(contributions_result.execution_info.execution_time)
+                }
+                _ => None,
+            })
+            .unwrap_or(0.0);
+
         info!(
-            "[Phase1] {} finished phase 1 for {} ({}/{} workers done, {:.3}s)",
+            "[Phase1] {} finished phase 1 for {} ({}/{} workers done, {:.3}s (execution {:.3}s))",
             worker_id,
             job.job_id,
             phase1_results_len,
             job.workers.len(),
-            duration_ms.as_secs_f32()
+            duration_ms.as_secs_f32(),
+            exec_time_info
         );
 
         // Ensure we have results from all assigned workers before proceeding.
@@ -1247,7 +1405,7 @@ impl Coordinator {
             // Simulation mode: replicate single worker's challenges across all expected workers
             // This maintains algorithm correctness while using minimal computational resources
             let first_challenges = match phase1_results.values().next().unwrap().data {
-                JobResultData::Challenges(ref values) => values,
+                JobResultData::Challenges(ref values) => &values.challenges,
                 _ => unreachable!("Expected Challenges data in Phase1 results"),
             };
 
@@ -1259,7 +1417,7 @@ impl Coordinator {
             let challenges: Vec<Vec<ContributionsInfo>> = phase1_results
                 .values()
                 .map(|results| match &results.data {
-                    JobResultData::Challenges(values) => values.clone(),
+                    JobResultData::Challenges(values) => values.challenges.clone(),
                     _ => unreachable!("Expected Challenges data in Phase1 results"),
                 })
                 .collect();
@@ -1795,6 +1953,21 @@ impl Coordinator {
 
         let duration = Duration::from_millis(job.duration_ms.unwrap_or(0));
 
+        // Extract execution time from Phase 1 results to split phase1 into execution + contributions
+        let phase1_execution_time = job
+            .results
+            .get(&JobPhase::Contributions)
+            .and_then(|results| results.values().next())
+            .and_then(|job_result| match &job_result.data {
+                JobResultData::Challenges(contributions_result) => {
+                    Some(contributions_result.execution_info.execution_time)
+                }
+                _ => None,
+            })
+            .unwrap_or(0.0);
+
+        let phase1_contributions_time = phase1_duration.as_seconds_f32() - phase1_execution_time;
+
         let header = format!("[Job] Finished {} successfully ✔", job_id).green();
         let duration_str = format!("Duration: {:.3}s", duration.as_secs_f32()).bold();
         let steps_str = if let Some(executed_steps) = job.executed_steps {
@@ -1803,14 +1976,15 @@ impl Coordinator {
             "Steps: N/A".to_string().red().bold()
         };
         info!(
-            "{} {} ({:.3}s+{:.3}s+{:.3}s) {} Inputs: {}, Capacity: {} ",
+            "{} {} ({:.3}s+{:.3}s+{:.3}s+{:.3}s) {} Inputs: {:?}, Capacity: {} ",
             header,
             duration_str,
-            phase1_duration.as_seconds_f32(),
+            phase1_execution_time,
+            phase1_contributions_time,
             phase2_duration.as_seconds_f32(),
             phase3_duration.as_seconds_f32(),
             steps_str,
-            job.input_mode,
+            job.inputs_mode,
             job.compute_capacity,
         );
 

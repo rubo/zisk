@@ -597,7 +597,7 @@ airtemplate Dma64Aligned(int N = 2**21,                   // Rows of instance
     proves_operation(op:,
                      a: [dst64 * 8, 0],
                      b: [b0, 0],
-                     c: [0, 0],
+                     c: [dst64 * 8, 0],
                      flag: 0,
                      main_step:,
                      extended_arg:,

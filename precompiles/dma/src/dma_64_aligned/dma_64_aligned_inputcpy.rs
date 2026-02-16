@@ -20,7 +20,8 @@ pub use zisk_pil::{
 pub use zisk_pil::{Dma64AlignedInputCpyTrace, Dma64AlignedInputCpyTraceRow};
 
 use crate::{
-    Dma64AlignedInput, Dma64AlignedModule, DMA_64_ALIGNED_INPUTCPY_OPS_BY_ROW, F_SEL_INPUTCPY,
+    dma_trace, Dma64AlignedInput, Dma64AlignedModule, DMA_64_ALIGNED_INPUTCPY_OPS_BY_ROW,
+    F_SEL_INPUTCPY,
 };
 use precompiles_helpers::DmaInfo;
 
@@ -176,7 +177,6 @@ impl<F: PrimeField64> Dma64AlignedModule<F> for Dma64AlignedInputCpySM<F> {
         let mut trace = Dma64AlignedInputCpyTrace::<F>::new_from_vec_zeroes(trace_buffer)?;
         let num_rows = trace.num_rows();
 
-        println!("{:?}", inputs);
         let total_inputs: usize = inputs
             .iter()
             .map(|inputs| inputs.iter().map(|input| input.rows as usize).sum::<usize>())
@@ -188,10 +188,7 @@ impl<F: PrimeField64> Dma64AlignedModule<F> for Dma64AlignedInputCpySM<F> {
             "Too many inputs, total_inputs:{total_inputs} num_rows:{num_rows}"
         );
 
-        tracing::debug!(
-            "··· Creating Dma64Aligned instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("Dma64AlignedInputCpy", total_inputs, num_rows);
 
         timer_start_trace!(DMA_64_ALIGNED_TRACE);
 
@@ -216,7 +213,6 @@ impl<F: PrimeField64> Dma64AlignedModule<F> for Dma64AlignedInputCpySM<F> {
         }
 
         let padding_size = num_rows.saturating_sub(row_offset);
-        println!("DMA: Total rows used: {row_offset}, padding with {padding_size} empty rows to reach {num_rows}");
         air_values.padding_size = F::from_u32(padding_size as u32);
 
         // padding
@@ -245,7 +241,6 @@ impl<F: PrimeField64> Dma64AlignedModule<F> for Dma64AlignedInputCpySM<F> {
         self.std.range_check(self.range_16_bits_id, ((last_count >> 16) & 0xFFFF) as i64, 1);
         self.std.inc_virtual_rows_ranged(self.dual_range_byte_id, &local_dual_byte);
         for value in values_24_bits.iter() {
-            // println!("R:{} VALUE 0x{:08X}", self.range_24_bits_id, *value as i64);
             self.std.range_check(self.range_24_bits_id, *value as i64, 1);
         }
 

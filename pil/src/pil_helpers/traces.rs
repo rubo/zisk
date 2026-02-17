@@ -268,7 +268,7 @@ trace_row!(DmaPrePostFixedRow<F> {
 pub type DmaPrePostFixed<F> = GenericTrace<DmaPrePostFixedRow<F>, 2097152, 0, 9>;
 
 trace_row!(DmaPrePostTraceRow<F> {
- main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(3), is_post:bit, sel_memcpy:bit, sel_memcmp:bit, memcmp_result_nz:bit, l_memcmp_result:u32, sel_inputcpy:bit, sel_memset:bit, selr:[bit; 7], dst_offset_gt_src_offset:bit, src64:ubit(29), src_offset:ubit(3), enabled_second_read:bit, fill_byte:u8, rb:[u8; 16], pb:[u8; 8], sb:[bit; 8], last_dst_byte:u8, abs_diff_dst_src:u8, memcmp_result_is_negative:bit, diff_factor:[u64; 2], bus_write_value:[u32; 2], write_value:[u32; 4],
+ main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(4), is_post:bit, sel_memcpy:bit, sel_memcmp:bit, memcmp_result_nz:bit, l_memcmp_result:u32, sel_inputcpy:bit, sel_memset:bit, selr:[bit; 7], dst_offset_gt_src_offset:bit, src64:ubit(29), src_offset:ubit(3), enabled_second_read:bit, fill_byte:u8, rb:[u8; 16], pb:[u8; 8], sb:[bit; 8], last_dst_byte:u8, abs_diff_dst_src:u8, memcmp_result_is_negative:bit, diff_factor:[u64; 2], bus_write_value:[u32; 2], write_value:[u32; 4],
 });
 pub type DmaPrePostTrace<F> = GenericTrace<DmaPrePostTraceRow<F>, 2097152, 0, 9>;
 
@@ -855,7 +855,7 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
     (0, 9, PackedInfoConst {
         is_packed: true,
         num_packed_words: 11,
-        unpack_info: &[36, 29, 3, 3, 1, 1, 1, 1, 32, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 29, 3, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 8, 8, 1, 64, 64, 32, 32, 32, 32, 32, 32],
+        unpack_info: &[36, 29, 3, 4, 1, 1, 1, 1, 32, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 29, 3, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 8, 8, 1, 64, 64, 32, 32, 32, 32, 32, 32],
     }),
     (0, 10, PackedInfoConst {
         is_packed: true,

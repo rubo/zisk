@@ -88,8 +88,8 @@ impl DmaInfo {
         (FAST_ENCODE_TABLE[(((dst & 0x07) << 7) + ((src & 0x07) << 4)) as usize
             + table_count
             + FAST_ENCODE_TABLE_WO_NEQ_SIZE * (result != 0) as usize]
-            + Self::DMA_REQUIRES_DMA_TEST_MASK 
-            +((result & 0x1FF) << Self::DMA_FILL_BYTE_RS))
+            + Self::DMA_REQUIRES_DMA_TEST_MASK
+            + ((result & 0x1FF) << Self::DMA_FILL_BYTE_RS))
             .wrapping_add((count as u64) << Self::DMA_LPRE_COUNT_RS)
     }
 
@@ -167,8 +167,8 @@ impl DmaInfo {
     pub const DMA_REQUIRES_DMA_TEST_MASK: u64 = 0x40000000;
     pub const DMA_REQUIRES_DMA_MASK: u64 = 0x00000001;
 
-    pub const DMA_PRE_OR_POST_TEST_MASK: u64 = Self::DMA_PRE_COUNT_TEST_MASK
-        | Self::DMA_POST_COUNT_TEST_MASK;
+    pub const DMA_PRE_OR_POST_TEST_MASK: u64 =
+        Self::DMA_PRE_COUNT_TEST_MASK | Self::DMA_POST_COUNT_TEST_MASK;
 
     pub const DMA_LOOP_COUNT_RS: u64 = 35;
     const DMA_FULL_ALIGNED_MASK: u64 = Self::DMA_PRE_COUNT_TEST_MASK
@@ -182,8 +182,7 @@ impl DmaInfo {
         | Self::DMA_SRC64_INC_BY_PRE_TEST_MASK
         | Self::DMA_UNALIGNED_DST_SRC_TEST_MASK;
 
-    const DMA_DIRECT_MASK: u64 = Self::DMA_FULL_ALIGNED_MASK
-        | Self::DMA_REQUIRES_DMA_TEST_MASK;
+    const DMA_DIRECT_MASK: u64 = Self::DMA_FULL_ALIGNED_MASK | Self::DMA_REQUIRES_DMA_TEST_MASK;
 
     #[inline(always)]
     pub const fn calculate_encode(dst: u64, src: u64, count: usize, neq: bool) -> u64 {
@@ -466,11 +465,11 @@ impl DmaInfo {
     }
     #[inline(always)]
     pub const fn is_direct(encoded: u64) -> bool {
-        (Self::DMA_DIRECT_MASK & encoded) == 0 &&  Self::get_loop_count(encoded) > 0
+        (Self::DMA_DIRECT_MASK & encoded) == 0 && Self::get_loop_count(encoded) > 0
     }
     #[inline(always)]
     pub const fn get_fill_byte(encoded: u64) -> u8 {
-        (encoded >> Self::DMA_FILL_BYTE_RS) as u8        
+        (encoded >> Self::DMA_FILL_BYTE_RS) as u8
     }
     #[inline(always)]
     pub const fn is_memcmp_negative(encoded: u64) -> bool {
@@ -483,26 +482,29 @@ impl DmaInfo {
             (encoded >> Self::DMA_FILL_BYTE_RS) | !Self::DMA_FILL_BYTE_MASK
         } else {
             (encoded >> Self::DMA_FILL_BYTE_RS) & Self::DMA_FILL_BYTE_MASK
-        }    }
+        }
+    }
 
     #[inline(always)]
     pub const fn get_memcmp_pre_result_nz(encoded: u64) -> bool {
-        (encoded & Self::DMA_FILL_BYTE_TEST_MASK) != 0 && (encoded & Self::DMA_POST_COUNT_TEST_MASK) == 0
-        && (encoded & Self::DMA_PRE_COUNT_TEST_MASK) != 0
+        (encoded & Self::DMA_FILL_BYTE_TEST_MASK) != 0
+            && (encoded & Self::DMA_POST_COUNT_TEST_MASK) == 0
+            && (encoded & Self::DMA_PRE_COUNT_TEST_MASK) != 0
     }
     #[inline(always)]
     pub const fn get_memcmp_post_result_nz(encoded: u64) -> bool {
-        (encoded & Self::DMA_FILL_BYTE_TEST_MASK) != 0 && (encoded & Self::DMA_POST_COUNT_TEST_MASK) != 0
+        (encoded & Self::DMA_FILL_BYTE_TEST_MASK) != 0
+            && (encoded & Self::DMA_POST_COUNT_TEST_MASK) != 0
     }
     #[inline(always)]
     pub const fn get_memcmp_result_nz(encoded: u64) -> bool {
-        (encoded & Self::DMA_FILL_BYTE_TEST_MASK) != 0 
+        (encoded & Self::DMA_FILL_BYTE_TEST_MASK) != 0
     }
 
     #[inline(always)]
     pub const fn has_pre_or_post(encoded: u64) -> bool {
-        (encoded & Self::DMA_PRE_OR_POST_TEST_MASK) != 0 
-    }    
+        (encoded & Self::DMA_PRE_OR_POST_TEST_MASK) != 0
+    }
 }
 
 impl DmaHelpers {
@@ -814,7 +816,7 @@ mod tests {
                 table[i * 4 + 3],
                 i * 4,
                 i * 4 + 3,
-                (i * 4) & 0xF,  
+                (i * 4) & 0xF,
                 if i >= 256 { " neq" } else { "" }
             );
         }
@@ -855,14 +857,15 @@ mod tests {
             for dst in 0..256 {
                 for src in 0..256 {
                     for count in 0..256 {
-                        let encode = DmaInfo::calculate_encode2(dst, src, count, neq) | DmaInfo::DMA_REQUIRES_DMA_MASK;
+                        let encode = DmaInfo::calculate_encode2(dst, src, count, neq)
+                            | DmaInfo::DMA_REQUIRES_DMA_MASK;
                         let fast_encode = DmaInfo::encode_memcmp_neq(dst, src, count, neq);
                         assert_eq!(
                         encode,
                         fast_encode,
                         "testing NEQ with memcmp dst:0x{dst:08X} src:0x{src:08X} count:{count} E:0x{encode:016X} FE:0x{fast_encode:016X}"
-                    ); 
-                    assert_eq!(count, DmaInfo::get_count(encode), "testing NEQ with memcmp dst:0x{dst:08X} src:0x{src:08X} count:{count} E:0x{encode:016X} FE:0x{fast_encode:016X}");
+                    );
+                        assert_eq!(count, DmaInfo::get_count(encode), "testing NEQ with memcmp dst:0x{dst:08X} src:0x{src:08X} count:{count} E:0x{encode:016X} FE:0x{fast_encode:016X}");
                     }
                 }
             }

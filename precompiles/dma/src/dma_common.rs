@@ -27,7 +27,7 @@ pub fn dma_trace(title: &str, rows: usize, num_rows: usize) {
     if rows == num_rows {
         tracing::debug!("··· Creating {title} instance [{rows} / {rows} rows filled 100%]");
     } else {
-        tracing::info!(
+        tracing::debug!(
             "··· Creating {title} instance [{rows} / {num_rows} rows filled {:.2}%]",
             rows as f64 / num_rows as f64 * 100.0
         );

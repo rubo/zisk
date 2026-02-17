@@ -20,20 +20,24 @@ use crate::get_dma_air_name;
 
 use fields::PrimeField64;
 use zisk_common::{BusDeviceMetrics, BusDeviceMode, CheckPoint, ChunkId};
-use zisk_pil::DmaUnalignedTrace;
 #[cfg(not(feature = "packed"))]
 use zisk_pil::{
     Dma64AlignedInputCpyTrace, Dma64AlignedMemCpyTrace, Dma64AlignedMemSetTrace,
     Dma64AlignedMemTrace, Dma64AlignedTrace, DmaInputCpyTrace, DmaMemCpyTrace,
-    DmaPrePostInputCpyTrace, DmaPrePostMemCpyTrace, DmaPrePostTrace, DmaTrace,
+    DmaPrePostInputCpyTrace, DmaPrePostMemCpyTrace, DmaPrePostTrace, DmaTrace, DmaUnalignedTrace,
 };
 
 #[cfg(feature = "packed")]
 use zisk_pil::{
+    Dma64AlignedInputCpyTracePacked as Dma64AlignedInputCpyTrace,
+    Dma64AlignedMemCpyTracePacked as Dma64AlignedMemCpyTrace,
+    Dma64AlignedMemSetTracePacked as Dma64AlignedMemSetTrace,
+    Dma64AlignedMemTracePacked as Dma64AlignedMemTrace,
     Dma64AlignedTracePacked as Dma64AlignedTrace, DmaInputCpyTracePacked as DmaInputCpyTrace,
-    DmaMemCpyTracePacked as DmaMemCpyTrace, DmaMemCpyTracePacked as DmaMemCpyTrace,
-    DmaPrePostTracePacked as DmaPrePostTrace, DmaTracePacked as DmaTrace,
-    DmaTraceRowPacked as DmaTraceRow, DmaUnalignedTracePacked as DmaUnalignedTrace,
+    DmaMemCpyTracePacked as DmaMemCpyTrace,
+    DmaPrePostInputCpyTracePacked as DmaPrePostInputCpyTrace,
+    DmaPrePostMemCpyTracePacked as DmaPrePostMemCpyTrace, DmaPrePostTracePacked as DmaPrePostTrace,
+    DmaTracePacked as DmaTrace, DmaUnalignedTracePacked as DmaUnalignedTrace,
 };
 
 #[derive(Debug, Default, Clone)]

@@ -10,14 +10,6 @@ use fields::PrimeField64;
 use zisk_common::{BusDeviceMetrics, ChunkId, InstanceType, Plan, Planner, SegmentId};
 use zisk_pil::ZISK_AIRGROUP_ID;
 
-#[cfg(feature = "packed")]
-use zisk_pil::{
-    Dma64AlignedTracePacked as Dma64AlignedTrace, DmaInputCpyTracePacked as DmaInputCpyTrace,
-    DmaMemCpyTracePacked as DmaMemCpyTrace, DmaMemCpyTracePacked as DmaMemCpyTrace,
-    DmaPrePostTracePacked as DmaPrePostTrace, DmaTracePacked as DmaTrace,
-    DmaTraceRowPacked as DmaTraceRow, DmaUnalignedTracePacked as DmaUnalignedTrace,
-};
-
 /// The `DmaPlanner` struct organizes execution plans for arithmetic instances and tables.
 ///
 /// It allows adding metadata about instances and tables and generates plans

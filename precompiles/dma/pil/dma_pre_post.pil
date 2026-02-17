@@ -27,7 +27,7 @@ airtemplate DmaPrePost(int N = 2**21,                    // Rows of instance
     col witness bits(MAIN_STEP_BITS) main_step;
     col witness bits(ADDR_W_BITS) dst64;
     col witness bits(3) dst_offset;
-    col witness bits(3) count;
+    col witness bits(4) count;
 
     //                                   bytes
     //                  has  sel    ┌──────────────┐      

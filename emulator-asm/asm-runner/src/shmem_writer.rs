@@ -204,9 +204,7 @@ impl SharedMemoryWriter {
 
         unsafe {
             (self.ptr.add(offset) as *mut u64).write(value);
-        }
 
-        unsafe {
             // Force changes to be flushed to the shared memory
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             if msync(self.ptr as *mut _, self.size, MS_SYNC) != 0 {

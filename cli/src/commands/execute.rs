@@ -129,9 +129,8 @@ impl ZiskExecute {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, false)?;
-
-        prover.setup(&elf)?;
-        prover.execute(stdin)
+        let (pk, _) = prover.setup(&elf)?;
+        prover.execute(&pk, stdin)
     }
 
     pub fn run_asm(
@@ -152,10 +151,10 @@ impl ZiskExecute {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
         if let Some(hints_stream) = hints_stream {
             prover.set_hints_stream(hints_stream)?;
         }
-        prover.execute(stdin)
+        prover.execute(&pk, stdin)
     }
 }

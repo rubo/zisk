@@ -142,9 +142,9 @@ impl ZiskVerifyConstraints {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, false)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
-        prover.verify_constraints_debug(stdin, self.debug.clone())
+        prover.verify_constraints_debug(&pk, stdin, self.debug.clone())
     }
 
     pub fn run_asm(
@@ -165,11 +165,11 @@ impl ZiskVerifyConstraints {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         if let Some(hints_stream) = hints_stream {
             prover.set_hints_stream(hints_stream)?;
         }
-        prover.verify_constraints_debug(stdin, self.debug.clone())
+        prover.verify_constraints_debug(&pk, stdin, self.debug.clone())
     }
 }

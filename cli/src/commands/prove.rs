@@ -226,7 +226,7 @@ impl ZiskProve {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, false)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         let proof_options = ProofOpts {
             aggregation: self.aggregation,
@@ -239,7 +239,7 @@ impl ZiskProve {
 
         let world_rank = prover.world_rank();
 
-        let mut prover = prover.prove(stdin).with_proof_options(proof_options);
+        let mut prover = prover.prove(&pk, stdin).with_proof_options(proof_options);
         if self.snark {
             prover = prover.plonk();
         }
@@ -273,7 +273,7 @@ impl ZiskProve {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         let proof_options = ProofOpts {
             aggregation: self.aggregation,
@@ -290,7 +290,7 @@ impl ZiskProve {
 
         let world_rank = prover.world_rank();
 
-        let mut prover = prover.prove(stdin).with_proof_options(proof_options);
+        let mut prover = prover.prove(&pk, stdin).with_proof_options(proof_options);
         if self.snark {
             prover = prover.plonk();
         }

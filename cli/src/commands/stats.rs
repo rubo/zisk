@@ -161,9 +161,10 @@ impl ZiskStats {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, false)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         prover.stats(
+            &pk,
             stdin,
             self.debug.clone(),
             self.minimal_memory,
@@ -189,13 +190,13 @@ impl ZiskStats {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         if let Some(hints_stream) = hints_stream {
             prover.set_hints_stream(hints_stream)?;
         }
         let mpi_node = self.mpi_node.map(|n| n as u32);
-        prover.stats(stdin, self.debug.clone(), self.minimal_memory, mpi_node)
+        prover.stats(&pk, stdin, self.debug.clone(), self.minimal_memory, mpi_node)
     }
 
     /// Prints stats individually and grouped, with aligned columns.

@@ -9,7 +9,6 @@
 //!   collectors.
 
 use std::{
-    path::PathBuf,
     sync::{atomic::AtomicU64, Arc, Mutex},
     thread::JoinHandle,
 };
@@ -30,7 +29,7 @@ use zisk_pil::{MainTrace, RomRomTrace, RomRomTraceRow, RomTrace};
 /// The `RomSM` struct represents the ROM State Machine
 pub struct RomSM {
     /// Zisk Rom
-    zisk_rom: Arc<ZiskRom>,
+    zisk_rom: Mutex<Option<Arc<ZiskRom>>>,
 
     /// Shared biod instruction counter for monitoring ROM operations.
     bios_inst_count: Arc<Vec<AtomicU64>>,
@@ -49,8 +48,8 @@ impl RomSM {
     ///
     /// # Returns
     /// An `Arc`-wrapped instance of `RomSM`.
-    pub fn new(zisk_rom: Arc<ZiskRom>, asm_rom_path: Option<PathBuf>) -> Arc<Self> {
-        let (bios_inst_count, prog_inst_count) = if asm_rom_path.is_some() {
+    pub fn new(is_asm_emulator: bool) -> Arc<Self> {
+        let (bios_inst_count, prog_inst_count) = if is_asm_emulator {
             (vec![], vec![])
         } else {
             (
@@ -60,7 +59,7 @@ impl RomSM {
         };
 
         Arc::new(Self {
-            zisk_rom,
+            zisk_rom: Mutex::new(None),
             bios_inst_count: Arc::new(bios_inst_count),
             prog_inst_count: Arc::new(prog_inst_count),
             asm_runner_handler: Mutex::new(None),
@@ -69,6 +68,10 @@ impl RomSM {
 
     pub fn set_asm_runner_handler(&self, handler: JoinHandle<AsmRunnerRH>) {
         *self.asm_runner_handler.lock().unwrap() = Some(handler);
+    }
+
+    pub fn set_rom(&self, zisk_rom: Arc<ZiskRom>) {
+        *self.zisk_rom.lock().unwrap() = Some(zisk_rom);
     }
 
     /// Computes the witness for the provided plan using the given ROM.
@@ -301,7 +304,7 @@ impl<F: PrimeField64> ComponentBuilder<F> for RomSM {
         let handle_rh = handle_rh_guard.take();
 
         Box::new(RomInstance::new(
-            self.zisk_rom.clone(),
+            self.zisk_rom.lock().unwrap().as_ref().unwrap().clone(),
             ictx,
             self.bios_inst_count.clone(),
             self.prog_inst_count.clone(),

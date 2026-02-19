@@ -132,8 +132,8 @@ pub struct ZiskProgramPK {
 impl Drop for ZiskProgramPK {
     fn drop(&mut self) {
         // Shut down ASM microservices
-        info!(">>> [{}] Stopping ASM microservices.", self.rank_info.world_rank);
         if let Some(asm_services) = &self.asm_services {
+            info!(">>> [{}] Stopping ASM microservices.", self.rank_info.world_rank);
             if let Err(e) = asm_services.stop_asm_services() {
                 tracing::error!(
                     ">>> [{}] Failed to stop ASM microservices: {}",

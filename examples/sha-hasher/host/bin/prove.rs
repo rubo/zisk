@@ -2,8 +2,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zisk_sdk::{
-    ElfBinary, ProofOpts, ProverClient, ZiskIO, ZiskProof, ZiskProofWithPublicValues, ZiskPublics,
-    ZiskStdin, include_elf,
+    include_elf, ElfBinary, ProofOpts, ProverClient, ZiskIO, ZiskProof, ZiskProofWithPublicValues,
+    ZiskPublics, ZiskStdin,
 };
 
 pub const ELF: ElfBinary = include_elf!("sha-hasher-guest");

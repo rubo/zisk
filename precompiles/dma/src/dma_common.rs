@@ -24,14 +24,10 @@ pub fn get_dma_air_name<F: PrimeField64>(air_id: usize) -> &'static str {
 }
 
 pub fn dma_trace(title: &str, rows: usize, num_rows: usize) {
-    if rows == num_rows {
-        tracing::debug!("··· Creating {title} instance [{rows} / {rows} rows filled 100%]");
-    } else {
-        tracing::debug!(
-            "··· Creating {title} instance [{rows} / {num_rows} rows filled {:.2}%]",
-            rows as f64 / num_rows as f64 * 100.0
-        );
-    }
+    tracing::debug!(
+        "··· Creating {title} instance [{rows} / {num_rows} rows filled {:.2}%]",
+        rows as f64 / num_rows as f64 * 100.0
+    );
 }
 
 /// Flattens and reorders input vectors to ensure proper sequencing.

@@ -37,7 +37,8 @@ const FAST_ENCODE_TABLE_WO_NEQ_SIZE: usize = 8 * 8 * 16;
 const FAST_ENCODE_TABLE_SIZE: usize = FAST_ENCODE_TABLE_WO_NEQ_SIZE * 2;
 const FAST_ENCODE_NO_SRC_TABLE_SIZE: usize = 8 * 16;
 const FAST_ENCODE_TABLE: [u64; FAST_ENCODE_TABLE_SIZE] = generate_fast_encode_table();
-const FAST_ENCODE_NO_SRC_TABLE: [u64; FAST_ENCODE_NO_SRC_TABLE_SIZE] = generate_fast_encode_no_src_table();
+const FAST_ENCODE_NO_SRC_TABLE: [u64; FAST_ENCODE_NO_SRC_TABLE_SIZE] =
+    generate_fast_encode_no_src_table();
 
 const fn generate_fast_encode_table() -> [u64; FAST_ENCODE_TABLE_SIZE] {
     let mut table = [0u64; FAST_ENCODE_TABLE_SIZE];
@@ -77,20 +78,20 @@ const fn generate_fast_encode_no_src_table() -> [u64; FAST_ENCODE_NO_SRC_TABLE_S
     let mut table = [0u64; FAST_ENCODE_NO_SRC_TABLE_SIZE];
     // fill table
     let mut dst_offset: u64 = 0;
-     while dst_offset < 8 {
+    while dst_offset < 8 {
         let index = (dst_offset << 4) as usize;
-            let mut count: usize = 0;
-            while count < 16 {
-                let value = DmaInfo::calculate_encode_no_src(dst_offset, count);
-                let loop_count = DmaInfo::get_loop_count(value) as u64;
-                // The table is create to add directly de loop count and after all values
-                // are correct, for this reason substract de count, because we need diference
-                // between loop_count (shifted 32) and count (shifted 29)
-                table[index + count] = ((value & 0x0000_0007_FFFF_FFFF)
-                    + (loop_count << DmaInfo::DMA_LOOP_COUNT_RS))
-                    .wrapping_sub((count as u64) << DmaInfo::DMA_LPRE_COUNT_RS);
-                count += 1;
-            }
+        let mut count: usize = 0;
+        while count < 16 {
+            let value = DmaInfo::calculate_encode_no_src(dst_offset, count);
+            let loop_count = DmaInfo::get_loop_count(value) as u64;
+            // The table is create to add directly de loop count and after all values
+            // are correct, for this reason substract de count, because we need diference
+            // between loop_count (shifted 32) and count (shifted 29)
+            table[index + count] = ((value & 0x0000_0007_FFFF_FFFF)
+                + (loop_count << DmaInfo::DMA_LOOP_COUNT_RS))
+                .wrapping_sub((count as u64) << DmaInfo::DMA_LPRE_COUNT_RS);
+            count += 1;
+        }
         dst_offset += 1;
     }
     table
@@ -230,7 +231,13 @@ impl DmaInfo {
     const DMA_DIRECT_MASK: u64 = Self::DMA_FULL_ALIGNED_MASK | Self::DMA_REQUIRES_DMA_TEST_MASK;
 
     #[inline(always)]
-    pub const fn calculate_encode(dst: u64, src: u64, count: usize, neq: bool, has_src: bool) -> u64 {
+    pub const fn calculate_encode(
+        dst: u64,
+        src: u64,
+        count: usize,
+        neq: bool,
+        has_src: bool,
+    ) -> u64 {
         let dst_offset = dst & 0x07;
         let src_offset = src & 0x07;
 
@@ -272,7 +279,7 @@ impl DmaInfo {
         }
         let requires_dma = count == 0 || pre_count != 0 || post_count != 0;
         if has_src {
-        pre_count
+            pre_count
             | (post_count << Self::DMA_POST_COUNT_RS)
             | (pre_writes << Self::DMA_PRE_WRITES_RS)
             | (dst_offset << Self::DMA_DST_OFFSET_RS)
@@ -286,7 +293,7 @@ impl DmaInfo {
             | (loop_count << Self::DMA_LOOP_COUNT_RS)
             | ((requires_dma as u64) << Self::DMA_REQUIRES_DMA_RS)
         } else {
-        pre_count
+            pre_count
             | (post_count << Self::DMA_POST_COUNT_RS)
             | (pre_writes << Self::DMA_PRE_WRITES_RS)
             | (dst_offset << Self::DMA_DST_OFFSET_RS)
@@ -810,7 +817,7 @@ mod tests {
                 table[i * 4 + 3],
                 i * 4,
                 i * 4 + 3,
-                (i * 4) & 0xF,  
+                (i * 4) & 0xF,
             );
         }
         assert!(table.len() == 128);
@@ -851,12 +858,8 @@ mod tests {
             for dst in 0..256 {
                 for src in 0..256 {
                     for count in 0..256 {
-<<<<<<< fix/packed-dma
-                        let encode = DmaInfo::calculate_encode2(dst, src, count, neq)
+                        let encode = DmaInfo::calculate_encode(dst, src, count, neq)
                             | DmaInfo::DMA_REQUIRES_DMA_MASK;
-=======
-                        let encode = DmaInfo::calculate_encode(dst, src, count, neq, true) | DmaInfo::DMA_REQUIRES_DMA_MASK;
->>>>>>> feature/dma-memcmp-inputcpy
                         let fast_encode = DmaInfo::encode_memcmp_neq(dst, src, count, neq);
                         assert_eq!(
                         encode,

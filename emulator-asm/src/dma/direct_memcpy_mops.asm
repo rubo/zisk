@@ -34,9 +34,6 @@
 .extern fast_dma_encode
 
 .include "dma_constants.inc"
-.equ MOPS_ALIGNED_READ_2W, ((2 << MOPS_BLOCK_WORDS_RS) + MOPS_ALIGNED_BLOCK_READ)
-.equ LOOP_COUNT_TO_MOPS_BLOCK, (MOPS_BLOCK_WORDS_RS - LOOP_COUNT_RS)
-.equ PRE_WRITES_TO_MOPS_BLOCK, (MOPS_BLOCK_WORDS_RS - PRE_WRITES_RS)
 
 .section .text
 

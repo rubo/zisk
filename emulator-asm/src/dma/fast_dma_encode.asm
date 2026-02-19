@@ -1,6 +1,9 @@
 .intel_syntax noprefix
 .code64
 
+# Include DMA constants
+.include "dma_constants.inc"
+
 ################################################################################
 # fast_dma_encode - Optimized function to encode dma information
 #
@@ -28,8 +31,9 @@
 #      19: src64_inc_by_pre   - Flag: indicate loop use src64 + 8 
 #      20: unaligned_dst_src  - Flag: dst and src has diferent alignement
 #   21-28: fill_byte/cmp_res  - Byte value for fill or compare result
-#      29: requires_dma       - Flag: indicates if operation requires DMA (*)
-#   30-31: reserved 
+#      29: cmp_negative flag  - Comparation between two bytes generate 9 bits (one of them for sign)
+#      30: requires_dma       - Flag: indicates if operation requires DMA (*)
+#      31: reserved 
 #   32-34: pre_count (loop)   - Byte value for fill or compare result
 #   35-63: loop_count         - Number of 8-byte chunks in main copy loop
 #
@@ -45,8 +49,15 @@
 .global fast_dma_encode_memcpy
 .global fast_dma_encode_memcmp
 .global fast_dma_encode_memset
+.global fast_dma_encode_memset_with_byte
 .global fast_dma_encode_inputcpy
+.global fast_dma_encode_memcmp_with_result
+.global fast_dma_encode
 .section .text
+
+# Alias for compatibility
+fast_dma_encode:
+    jmp fast_dma_encode_memcpy
 
 fast_dma_encode_memcpy:
     mov     rax, rdi
@@ -76,76 +87,72 @@ fast_dma_encode_memcpy:
 
     # Add (count >> 3) to result
     mov     r8, rdx
-    shl     r8, 29                  # r8 = count << 29
+    shl     r8, DMA_LPRE_COUNT_RS   # r8 = count << 29
     add     rax, r8                 # result += (count << 29)
     
     ret
 
-// result ?
+# PARAMETERS:
+#   rdi = dst (u64)        - Destination address
+#   rdx = count (usize)    - Number of bytes to copy
 
-fast_dma_encode_memcmp:
+fast_dma_encode_inputcpy:
+fast_dma_encode_no_src:
     mov     rax, rdi
     and     rax, 0x07               # dst_offset (0-7)
-    shl     rax, 7                  # dst_offset << 7
-
-    mov     r8, rsi
-    and     r8, 0x07                # src_offset (0-7)
-    shl     r8, 4                   # src_offset << 4
-
-    or      rax, r8                 # combine dst and src offsets
+    shl     rax, 4                  # dst_offset << 7
 
     # Calculate table_count
     mov     r8, rdx
     cmp     r8, 16
-    jb      .L_memcmp_count_lt_16
+    jb      .L_fast_dma_encode_inputcpy_count_lt_16
     
     # count >= 16: table_count = (count & 0x07) | 0x08
     and     r8, 0x07
     or      r8, 0x08
 
-.L_memcmp_count_lt_16:
+.L_fast_dma_encode_inputcpy_count_lt_16:
     or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
     
     # Look up encoded value in table (direct access since it's in the same file)
-    mov     rax, [fast_dma_encode_table + rax * 8]
+    mov     rax, [fast_dma_encode_no_src_table + rax * 8]
 
     # Add (count >> 3) to result
     mov     r8, rdx
-    shl     r8, 29                  # r8 = count << 29
+    shl     r8, DMA_LPRE_COUNT_RS   # r8 = count << 29
     add     rax, r8                 # result += (count << 29)
+    
+    ret
+
+fast_dma_encode_memcmp:
+    call    fast_dma_encode_memcpy   # Get the same encoding as memcpy for pre/post counts and offsets  
     or      rax, REQUIRES_DMA_MASK
     
     ret
 
-// byte ?
-
-fast_dma_encode_memset:
-    mov     rax, rdi
-    and     rax, 0x07               # dst_offset (0-7)
-    shl     rax, 7                  # dst_offset << 7
-
-    # Calculate table_count
-    mov     r8, rdx
-    cmp     r8, 16
-    jb      .L_memset_count_lt_16
-    
-    # count >= 16: table_count = (count & 0x07) | 0x08
-    and     r8, 0x07
-    or      r8, 0x08
-
-.L_memset_count_lt_16:
-    or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
-    
-    # Look up encoded value in table (direct access since it's in the same file)
-    mov     rax, [fast_dma_encode_table + rax * 8]
-
-    # Add (count >> 3) to result
-    mov     r8, rdx
-    shl     r8, 29                  # r8 = count << 29
-    add     rax, r8                 # result += (count << 29)
-    
+# PARAMETERS (System V AMD64 ABI):
+#   rdi = dst (u64)        - Destination address
+#   rsi = src (u64)        - Source address
+#   rdx = count (usize)    - Number of bytes to copy
+#   r9  = result (9 bits)  - NOTE: value will be modified
+fast_dma_encode_memcmp_with_result:
+    call    fast_dma_encode_memcpy   # Get the same encoding as memcpy for pre/post counts and offsets  
+    or      rax, REQUIRES_DMA_MASK
+    and     r9, DMA_FILL_BITS9_MASK  # Ensure result is in lower 9 bits
+    shl     r9, DMA_FILL_BYTE_RS     # r8 has the result byte in the lower 8 bits
+    or      rax, r9
     ret
 
+# PARAMETERS (System V AMD64 ABI):
+#   rdi = dst (u64)        - Destination address
+#   rsi = fill byte        - Source address
+#   rdx = count (usize)    - Number of bytes to copy
+fast_dma_encode_memset_with_byte:
+    call    fast_dma_encode_no_src
+    movzx   r9, sil  
+    shl     r9, DMA_FILL_BYTE_RS     # r8 has the result byte in the lower 8 bits
+    or      rax, r9
+    ret
 
 # Mark stack as non-executable (required by modern linkers)
 .section .note.GNU-stack,"",%progbits

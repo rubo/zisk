@@ -9,11 +9,18 @@
 
 // External assembly function declarations
 extern "C" {
+    uint64_t trace_address_threshold = 0;
     uint64_t dma_memcpy_mtrace(uint64_t dst, uint64_t src, uint64_t count, uint64_t* trace_ptr);
     uint64_t dma_memcpy_mops(uint64_t dst, uint64_t src, uint64_t count, uint64_t* mops_ptr);
     void dma_memcpy_fast(uint64_t dst, uint64_t src, uint64_t count);
     uint64_t fast_dma_encode(uint64_t dst, uint64_t src, uint64_t count);
+    void _realloc_trace(void);
 }
+
+void _realloc_trace(void) {
+
+}
+
 const char *mops_labels[16] = {"NOP", "CWR1", "RD1", "WR1", "RD2", "WR2", "RD4", "WR4", "RD8", "WR8",
                              "ARD", "AWR", "BR", "BW", "ABR", "ABW"};
 

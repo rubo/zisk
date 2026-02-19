@@ -101,30 +101,36 @@ macro_rules! ziskos_memcpy {
 #[macro_export]
 macro_rules! ziskos_memcmp {
     ($dst:expr, $src: expr, $size:literal) => {{
+        let v: i64;
         unsafe {
             core::arch::asm!(
                 "csrs {port}, {src}",
-                "addi x0, {dst}, {size}",
+                "addi {res}, {dst}, {size}",
                 port = const zisk_definitions::SYSCALL_DMA_MEMCMP_ID,
                 size = const $size,
-                dst = in(reg) $dst.as_mut_ptr(),
+                dst = in(reg) $dst.as_ptr(),
                 src = in(reg) $src.as_ptr(),
+                res = out(reg) v,
                 options(nostack, preserves_flags),
             );
         }
+        v
     }};
     ($dst:expr, $src: expr, $size:expr) => {{
+        let v: i64;
         unsafe {
             core::arch::asm!(
                 "csrs {port}, {src}",
-                "add x0, {dst}, {size}",
+                "add {res}, {dst}, {size}",
                 port = const zisk_definitions::SYSCALL_DMA_MEMCMP_ID,
                 size = in(reg) $size,
-                dst = in(reg) $dst.as_mut_ptr(),
+                dst = in(reg) $dst.as_ptr(),
                 src = in(reg) $src.as_ptr(),
+                res = out(reg) v,
                 options(nostack, preserves_flags),
             );
         }
+        v
     }};
 }
 

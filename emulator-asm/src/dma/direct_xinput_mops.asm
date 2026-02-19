@@ -2,11 +2,11 @@
 .code64
 
 ################################################################################
-# memset_mops - Optimized memset with memory ops tracing
+# inputcpy_mops - Optimized inputcpy with memory ops tracing
 #
 # This function performs two main tasks:
 # 1. Records all addresses of memory operations (read and write addresses)
-# 2. Performs the actual memset operation filling dst with the byte value
+# 2. Performs the actual inputcpy operation filling with free-inputs
 #
 # REGISTER USAGE:
 # Uses general-purpose registers: rax, rbx, rcx, rdx, rdi, rsi, r8, r9, r12, r13
@@ -22,9 +22,10 @@
 #
 ################################################################################
 
-.global direct_dma_xmemset_mops
-.global dma_xmemset_mops
-.extern fast_memset
+.global direct_dma_inputcpy_mops
+.global dma_inputcpy_mops
+.extern fast_memcpy
+.extern fcall_ctx
 
 .include "dma_constants.inc"
 
@@ -34,20 +35,21 @@
 # and initializes mops tracking state before calling direct implementation 
 
 # rdi = destination
-# rsi: byte to write
-# rdx: count (bytes)
-# rcx = pointer to data trace
+# rsi = count (bytes)
+# rdx = pointer to data trace
 # rax = return qword of trace
 
-dma_xmemset_mops:
+dma_inputcpy_mops:
 
     # Save callee-saved registers
     push    r12         # ~3 cycles - save r12 (used as mops base address)
     push    r13         # ~3 cycles - save r13 (used as mops index)
     
-    mov     r12, rcx              # 1 cycle - r12 = mops buffer base address
+    mov     r12, rdx              # 1 cycle - r12 = mops buffer base address
     xor     r13, r13              # 1 cycle - r13 = 0 (initialize mops index)
-    call    direct_dma_xmemset_mops  # ~5 cycles + function cost
+    mov     rdx, rsi
+
+    call    direct_dma_inputcpy_mops  # ~5 cycles + function cost
 
     mov     rax, r13              # 1 cycle - return mops count in rax
     pop     r13                   # ~3 cycles - restore r13
@@ -60,11 +62,10 @@ dma_xmemset_mops:
 
 # arguments:
 # rdi: destination adress
-# rsi: byte to write
 # rdx: count (bytes)
 # r12 + r13: mops trace
 
-direct_dma_xmemset_mops:
+direct_dma_inputcpy_mops:
    
     # Modified registers (caller must handle): 
     #       r9  = scratch for mops address calculation
@@ -72,15 +73,15 @@ direct_dma_xmemset_mops:
 
     # test count = 0
     test    rdx, rdx
-    jz      .L_xmemset_mops_done
+    jz      .L_inputcpy_mops_done
 
     # test dst aligned
     test    rdi, 0x7
-    jnz     .L_xmemset_mops_rdi_unaligned
+    jnz     .L_inputcpy_mops_rdi_unaligned
 
     # test count multiple of 8
     test    rdx, 0x07
-    jnz     .L_memset_mops_count_remain
+    jnz     .L_inputcpy_mops_count_remain
 
     # FAST BRANCH
     # dst is aligned, count is a multiple of 8 and greater than zero
@@ -98,9 +99,9 @@ direct_dma_xmemset_mops:
     mov     [r12 + r13 * 8], r9           # ~4 cycles - write mops entry (block write)
     inc     r13                           # 1 cycle - advance mops index
 
-    jmp     fast_memset
+    jmp     .L_fast_inputcpy
 
-.L_memset_mops_count_remain:
+.L_inputcpy_mops_count_remain:
     # BRANCH 1
     # dst is aligned, but count is NOT a multiple of 8,
     # => one pre-read (post) before one MOPS write block
@@ -131,9 +132,9 @@ direct_dma_xmemset_mops:
     mov     [r12 + r13 * 8 + 8], rax        # ~4 cycles - write mops entry (block write)
     add     r13, 2
 
-    jmp     fast_memset
+    jmp     .L_fast_inputcpy
 
-.L_xmemset_mops_rdi_unaligned:
+.L_inputcpy_mops_rdi_unaligned:
     # BRANCH 2 - worse
     # dst is NOT aligned 
     # => BRANCH 2.1 one pre-read (pre) + no post
@@ -178,7 +179,7 @@ direct_dma_xmemset_mops:
     mov     [r12 + r13 * 8], rcx
     add     r13, 2
 
-    jmp     fast_memset
+    jmp     .L_fast_inputcpy
 
 .L_branch_2_2:
 
@@ -213,9 +214,21 @@ direct_dma_xmemset_mops:
 
     add     r13, 3
 
-    jmp     fast_memset
-.L_xmemset_mops_done:
+    # rsi = input + mops
+    # incr mops
+
+.L_fast_inputcpy:
+    mov     rcx, qword ptr [fcall_ctx + FCALL_RESULT_GOT * 8]
+    lea     rsi, [fcall_ctx + rcx * 8 + FCALL_RESULT * 8 - 8]
+    lea     rcx, [rdx + 7]
+    shr     rcx, 3
+    add     qword ptr [fcall_ctx + FCALL_RESULT_GOT * 8], rcx
+
+    jmp     fast_memcpy
+
+.L_inputcpy_mops_done:
     ret
+
 
 
 # Performance estimate (Modern x86-64, Intel Skylake/AMD Zen+, L1 cache hits):
@@ -249,7 +262,7 @@ direct_dma_xmemset_mops:
 # - For fills >256 bytes, performance approaches memory bandwidth limits
 # - Actual cycles vary ±20-30% by microarchitecture (Skylake/Zen/Alder Lake)
 # - Mops overhead: ~30-50 cycles base + minimal per-byte impact
-# - No overlap handling needed for memset (writes only, no read-modify-write hazards)
+# - No overlap handling needed for inputcpy (writes only, no read-modify-write hazards)
 
 # Mark stack as non-executable (required by modern linkers)
 .section .note.GNU-stack,"",%progbits

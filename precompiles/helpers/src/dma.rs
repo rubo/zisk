@@ -15,9 +15,29 @@ pub struct DmaValues {
     pub src_offset_after_pre: u64,
 }
 
+//                    #bits     bits
+// pre_count:  0-7        3     0-2
+// post_count: 0-8(*)     4     3-6 (*) memcmp
+// pre_writes: 0,1,2      2     7-8
+// dst_offset: 0-7        3     9-11
+// src_offset: 0-7        3     12-14
+// double_src_pre: 0,1    1     15
+// double_src_post: 0,1   1     16
+// extra_src_reads: 0-3   2     17-18
+// src64_inc_by_pre:      1     19
+// unaligned_dst_src:     1     20
+// fill_byte/cmp:         8     21-28
+// cmp_negative:          1     29
+// requires_dma:          1     30
+// (reserved)             1     31
+// lpre_count             3     32-34
+// loop_count            29     35-63
+
 const FAST_ENCODE_TABLE_WO_NEQ_SIZE: usize = 8 * 8 * 16;
 const FAST_ENCODE_TABLE_SIZE: usize = FAST_ENCODE_TABLE_WO_NEQ_SIZE * 2;
+const FAST_ENCODE_NO_SRC_TABLE_SIZE: usize = 8 * 16;
 const FAST_ENCODE_TABLE: [u64; FAST_ENCODE_TABLE_SIZE] = generate_fast_encode_table();
+const FAST_ENCODE_NO_SRC_TABLE: [u64; FAST_ENCODE_NO_SRC_TABLE_SIZE] = generate_fast_encode_no_src_table();
 
 const fn generate_fast_encode_table() -> [u64; FAST_ENCODE_TABLE_SIZE] {
     let mut table = [0u64; FAST_ENCODE_TABLE_SIZE];
@@ -34,7 +54,7 @@ const fn generate_fast_encode_table() -> [u64; FAST_ENCODE_TABLE_SIZE] {
                 let index = (base_index + (src_offset << 4)) as usize;
                 let mut count: usize = 0;
                 while count < 16 {
-                    let value = DmaInfo::calculate_encode(dst_offset, src_offset, count, neq);
+                    let value = DmaInfo::calculate_encode(dst_offset, src_offset, count, neq, true);
                     let loop_count = DmaInfo::get_loop_count(value) as u64;
                     // The table is create to add directly de loop count and after all values
                     // are correct, for this reason substract de count, because we need diference
@@ -49,6 +69,29 @@ const fn generate_fast_encode_table() -> [u64; FAST_ENCODE_TABLE_SIZE] {
             dst_offset += 1;
         }
         neq_index += 1;
+    }
+    table
+}
+
+const fn generate_fast_encode_no_src_table() -> [u64; FAST_ENCODE_NO_SRC_TABLE_SIZE] {
+    let mut table = [0u64; FAST_ENCODE_NO_SRC_TABLE_SIZE];
+    // fill table
+    let mut dst_offset: u64 = 0;
+     while dst_offset < 8 {
+        let index = (dst_offset << 4) as usize;
+            let mut count: usize = 0;
+            while count < 16 {
+                let value = DmaInfo::calculate_encode_no_src(dst_offset, count);
+                let loop_count = DmaInfo::get_loop_count(value) as u64;
+                // The table is create to add directly de loop count and after all values
+                // are correct, for this reason substract de count, because we need diference
+                // between loop_count (shifted 32) and count (shifted 29)
+                table[index + count] = ((value & 0x0000_0007_FFFF_FFFF)
+                    + (loop_count << DmaInfo::DMA_LOOP_COUNT_RS))
+                    .wrapping_sub((count as u64) << DmaInfo::DMA_LPRE_COUNT_RS);
+                count += 1;
+            }
+        dst_offset += 1;
     }
     table
 }
@@ -103,14 +146,14 @@ impl DmaInfo {
     #[inline(always)]
     pub const fn encode_inputcpy(dst: u64, count: usize) -> u64 {
         let table_count = if count >= 16 { count & 0x07 | 0x08 } else { count };
-        FAST_ENCODE_TABLE[((dst & 0x07) << 7) as usize + table_count]
+        FAST_ENCODE_NO_SRC_TABLE[((dst & 0x07) << 4) as usize + table_count]
             .wrapping_add((count as u64) << Self::DMA_LPRE_COUNT_RS)
     }
 
     #[inline(always)]
     pub const fn encode_memset(dst: u64, count: usize, fill_byte: u8) -> u64 {
         let table_count = if count >= 16 { count & 0x07 | 0x08 } else { count };
-        (FAST_ENCODE_TABLE[((dst & 0x07) << 7) as usize + table_count]
+        (FAST_ENCODE_NO_SRC_TABLE[((dst & 0x07) << 4) as usize + table_count]
             .wrapping_add((count as u64) << Self::DMA_LPRE_COUNT_RS))
             | ((fill_byte as u64) << Self::DMA_FILL_BYTE_RS)
     }
@@ -154,6 +197,8 @@ impl DmaInfo {
     pub const DMA_FILL_BYTE_TEST_MASK: u64 = 0x1FE00000;
     pub const DMA_FILL_BYTE_MASK: u64 = 0x000000FF;
 
+    pub const DMA_FILL_BITS9_MASK: u64 = 0x000001FF;
+
     pub const DMA_FILL_BYTE_SIGN_TEST_MASK: u64 = 0x20000000;
 
     pub const DMA_LPRE_COUNT_RS: u64 = 32;
@@ -185,116 +230,7 @@ impl DmaInfo {
     const DMA_DIRECT_MASK: u64 = Self::DMA_FULL_ALIGNED_MASK | Self::DMA_REQUIRES_DMA_TEST_MASK;
 
     #[inline(always)]
-    pub const fn calculate_encode(dst: u64, src: u64, count: usize, neq: bool) -> u64 {
-        //                    #bits     bits
-        // pre_count:  0-7        3     0-2
-        // post_count: 0-8(*)     4     3-6 (*) memcmp
-        // pre_writes: 0,1,2      2     7-8
-        // dst_offset: 0-7        3     9-11
-        // src_offset: 0-7        3     12-14
-        // double_src_pre: 0,1    1     15
-        // double_src_post: 0,1   1     16
-        // extra_src_reads: 0-3   2     17-18
-        // src64_inc_by_pre:      1     19
-        // unaligned_dst_src:     1     20
-        // fill_byte/cmp:         8     21-28
-        // cmp_negative:          1     29
-        // requires_dma:          1     30
-        // (reserved)             1     31
-        // lpre_count             3     32-34
-        // loop_count            29     35-63
-
-        // (dst + count) & 0x7 = 7
-        // (dst_offset + count) 0x07 = 7
-        //
-        //      loop = loop - 1
-        //      pre_writes = pre_writes + 1
-        //      post = 8
-        //      double_src_post = unaligned_dst_src ? 1:0;
-        //      extra_src_reads = extra_src_read + 1
-
-        let dst_offset = dst & 0x07;
-        let src_offset = src & 0x07;
-
-        let count = count as u64;
-        let (pre_count, mut loop_count, mut post_count) = if dst_offset > 0 {
-            let _pre_count = 8 - dst_offset;
-            if _pre_count >= count {
-                (count, 0, 0)
-            } else {
-                let pending = count - _pre_count;
-                (_pre_count, pending >> 3, pending & 0x07)
-            }
-        } else {
-            (0, count >> 3, count & 0x07)
-        };
-        let mut pre_writes = (pre_count > 0) as u64 + (post_count > 0) as u64;
-        // let to_src_offset = (src + count - 1) & 0x07;
-        let src_offset_pos = (src_offset + pre_count) & 0x07;
-        let mut double_src_post = (src_offset_pos + post_count) > 8;
-        let double_src_pre = (src_offset + pre_count) > 8;
-        let mut extra_src_reads =
-            if count == 0 { 0 } else { (((src + count - 1) >> 3) - (src >> 3) + 1) - loop_count };
-
-        let src64_inc_by_pre = (pre_count > 0 && (src_offset + pre_count) >= 8) as u64;
-        let unaligned_dst_src = (src_offset != dst_offset) as u64;
-
-        if neq && post_count == 0 && loop_count > 0 {
-            // (dst + count) 0x07 == 7  ==> (dst_offset + count) 0x07 == 7  ==> post_count == 0
-            //      loop = loop - 1
-            //      pre_writes = pre_writes + 1
-            //      post = 8
-            //      double_src_post = unaligned_dst_src ? 1:0;
-            //      extra_src_reads = extra_src_read + 1
-            loop_count = loop_count - 1;
-            pre_writes = pre_writes + 1;
-            post_count = 8;
-            double_src_post = src_offset != dst_offset;
-            extra_src_reads = extra_src_reads + 1;
-        }
-        pre_count
-            | (post_count << Self::DMA_POST_COUNT_RS)
-            | (pre_writes << Self::DMA_PRE_WRITES_RS)
-            | (dst_offset << Self::DMA_DST_OFFSET_RS)
-            | (src_offset << Self::DMA_SRC_OFFSET_RS)
-            | ((double_src_pre as u64) << Self::DMA_DOUBLE_SRC_PRE_RS)
-            | ((double_src_post as u64) << Self::DMA_DOUBLE_SRC_POST_RS)
-            | (extra_src_reads << Self::DMA_EXTRA_SRC_READS_RS)
-            | (src64_inc_by_pre << Self::DMA_SRC64_INC_BY_PRE_RS)
-            | (unaligned_dst_src << Self::DMA_UNALIGNED_DST_SRC_RS)
-            // fill_byte / memcmp is 0 for memcpy << 21
-            | (pre_count << Self::DMA_LPRE_COUNT_RS) // optimization to read loop_count * 8 + pre_count
-            | (loop_count << Self::DMA_LOOP_COUNT_RS)
-    }
-
-    #[inline(always)]
-    pub fn calculate_encode2(dst: u64, src: u64, count: usize, neq: bool) -> u64 {
-        //                    #bits     bits
-        // pre_count:  0-7        3     0-2
-        // post_count: 0-8(*)     4     3-6 (*) memcmp
-        // pre_writes: 0,1,2      2     7-8
-        // dst_offset: 0-7        3     9-11
-        // src_offset: 0-7        3     12-14
-        // double_src_pre: 0,1    1     15
-        // double_src_post: 0,1   1     16
-        // extra_src_reads: 0-3   2     17-18
-        // src64_inc_by_pre:      1     19
-        // unaligned_dst_src:     1     20
-        // fill_byte/cmp:         8     21-28
-        // requires_dma:          1     29
-        // (reserved)             2     30-31
-        // lpre_count             3     32-34
-        // loop_count            29     35-63
-
-        // (dst + count) & 0x7 = 7
-        // (dst_offset + count) 0x07 = 7
-        //
-        //      loop = loop - 1
-        //      pre_writes = pre_writes + 1
-        //      post = 8
-        //      double_src_post = unaligned_dst_src ? 1:0;
-        //      extra_src_reads = extra_src_read + 1
-
+    pub const fn calculate_encode(dst: u64, src: u64, count: usize, neq: bool, has_src: bool) -> u64 {
         let dst_offset = dst & 0x07;
         let src_offset = src & 0x07;
 
@@ -332,8 +268,10 @@ impl DmaInfo {
             pre_writes += 1;
             post_count = 8;
             double_src_post = src_offset != dst_offset;
-            extra_src_reads += extra_src_reads;
+            extra_src_reads += 1;
         }
+        let requires_dma = count == 0 || pre_count != 0 || post_count != 0;
+        if has_src {
         pre_count
             | (post_count << Self::DMA_POST_COUNT_RS)
             | (pre_writes << Self::DMA_PRE_WRITES_RS)
@@ -344,9 +282,45 @@ impl DmaInfo {
             | (extra_src_reads << Self::DMA_EXTRA_SRC_READS_RS)
             | (src64_inc_by_pre << Self::DMA_SRC64_INC_BY_PRE_RS)
             | (unaligned_dst_src << Self::DMA_UNALIGNED_DST_SRC_RS)
-            // fill_byte / memcmp is 0 for memcpy << 21
             | (pre_count << Self::DMA_LPRE_COUNT_RS) // optimization to read loop_count * 8 + pre_count
             | (loop_count << Self::DMA_LOOP_COUNT_RS)
+            | ((requires_dma as u64) << Self::DMA_REQUIRES_DMA_RS)
+        } else {
+        pre_count
+            | (post_count << Self::DMA_POST_COUNT_RS)
+            | (pre_writes << Self::DMA_PRE_WRITES_RS)
+            | (dst_offset << Self::DMA_DST_OFFSET_RS)
+            | (pre_count << Self::DMA_LPRE_COUNT_RS) // optimization to read loop_count * 8 + pre_count
+            | (loop_count << Self::DMA_LOOP_COUNT_RS)
+            | ((requires_dma as u64) << Self::DMA_REQUIRES_DMA_RS)
+        }
+    }
+
+    #[inline(always)]
+    pub const fn calculate_encode_no_src(dst: u64, count: usize) -> u64 {
+        let dst_offset = dst & 0x07;
+
+        let count = count as u64;
+        let (pre_count, loop_count, post_count) = if dst_offset > 0 {
+            let _pre_count = 8 - dst_offset;
+            if _pre_count >= count {
+                (count, 0, 0)
+            } else {
+                let pending = count - _pre_count;
+                (_pre_count, pending >> 3, pending & 0x07)
+            }
+        } else {
+            (0, count >> 3, count & 0x07)
+        };
+        let pre_writes = (pre_count > 0) as u64 + (post_count > 0) as u64;
+        let requires_dma = count == 0 || pre_count != 0 || post_count != 0;
+        pre_count
+            | (post_count << Self::DMA_POST_COUNT_RS)
+            | (pre_writes << Self::DMA_PRE_WRITES_RS)
+            | (dst_offset << Self::DMA_DST_OFFSET_RS)
+            | (pre_count << Self::DMA_LPRE_COUNT_RS) // optimization to read loop_count * 8 + pre_count
+            | (loop_count << Self::DMA_LOOP_COUNT_RS)
+            | ((requires_dma as u64) << Self::DMA_REQUIRES_DMA_RS)
     }
 
     #[inline(always)]
@@ -822,17 +796,37 @@ mod tests {
         }
         assert!(table.len() == 2048);
     }
+
+    #[test]
+    fn asm_fast_encode_no_src_table() {
+        let table = generate_fast_encode_no_src_table();
+        for i in 0..32 {
+            let dst_offset = (i >> 3) & 0x7;
+            println!(
+                "\t.quad 0x{:016x}, 0x{:016X}, 0x{:016X}, 0x{:016X} # {:4} - {:4} D{dst_offset} C{}",
+                table[i * 4],
+                table[i * 4 + 1],
+                table[i * 4 + 2],
+                table[i * 4 + 3],
+                i * 4,
+                i * 4 + 3,
+                (i * 4) & 0xF,  
+            );
+        }
+        assert!(table.len() == 128);
+    }
+
     #[test]
     fn test_simple() {
         let dst = 0xA011FE70;
         let src = 0xA011F4D0;
         let count = 5;
 
-        let encode = DmaInfo::calculate_encode(dst, src, count, false);
+        let encode = DmaInfo::calculate_encode(dst, src, count, false, true);
         let fast_encode = DmaInfo::encode_memcpy(dst, src, count);
         println!("encode: 0x{encode:016X} {}", DmaInfo::to_string(encode));
         println!("fast_encode: 0x{fast_encode:016X} {}", DmaInfo::to_string(fast_encode));
-        let encode = DmaInfo::calculate_encode(dst, src, count, true);
+        let encode = DmaInfo::calculate_encode(dst, src, count, true, true);
         let fast_encode = DmaInfo::encode_memcmp(dst, src, count, 0xDB);
         println!("encode: 0x{encode:016X} {}", DmaInfo::to_string(encode));
         println!("fast_encode: 0x{fast_encode:016X} {}", DmaInfo::to_string(fast_encode));
@@ -844,7 +838,7 @@ mod tests {
         for dst in 0..256 {
             for src in 0..256 {
                 for count in 0..256 {
-                    let encode = DmaInfo::calculate_encode(dst, src, count, false);
+                    let encode = DmaInfo::calculate_encode(dst, src, count, false, true);
                     let fast_encode = DmaInfo::encode_memcpy(dst, src, count);
                     assert_eq!(encode, fast_encode,
                         "testing with memcpy dst:0x{dst:08X} src:0x{src:08X} count:{count} E:0x{encode:016X} FE:0x{fast_encode:016X}"
@@ -857,8 +851,12 @@ mod tests {
             for dst in 0..256 {
                 for src in 0..256 {
                     for count in 0..256 {
+<<<<<<< fix/packed-dma
                         let encode = DmaInfo::calculate_encode2(dst, src, count, neq)
                             | DmaInfo::DMA_REQUIRES_DMA_MASK;
+=======
+                        let encode = DmaInfo::calculate_encode(dst, src, count, neq, true) | DmaInfo::DMA_REQUIRES_DMA_MASK;
+>>>>>>> feature/dma-memcmp-inputcpy
                         let fast_encode = DmaInfo::encode_memcmp_neq(dst, src, count, neq);
                         assert_eq!(
                         encode,

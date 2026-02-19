@@ -54,6 +54,7 @@ const REG_CHUNK_PLAYER_ADDRESS: &str = "rbp"; // Used only in chunk player
 const TRACE_ADDR_NUMBER: u64 = 0xd0000000 + 0x20;
 
 // Fcall params and result lengths
+// NOTE: if these parameters are update, review dma_constants.inc
 const FCALL_PARAMS_LENGTH: u64 = 386;
 const FCALL_RESULT_LENGTH: u64 = 8193;
 

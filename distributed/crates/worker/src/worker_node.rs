@@ -1,6 +1,5 @@
 use crate::{worker::ComputationResult, ProverConfig, Worker};
 use anyhow::{anyhow, Result};
-use asm_runner::GRPC_METRICS;
 use proofman::{AggProofs, ContributionsInfo, ExecutionInfo};
 use std::path::Path;
 use std::{path::PathBuf, time::Duration};
@@ -484,21 +483,7 @@ impl<T: ZiskBackend + 'static> WorkerNodeGrpc<T> {
                 }
             }
             coordinator_message::Payload::StreamData(stream_data) => {
-                GRPC_METRICS.active_streams.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                GRPC_METRICS.callbacks_invoked.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let before = std::time::Instant::now();
-
                 self.handle_stream_data(stream_data).await?;
-
-                let elapsed = before.elapsed();
-                if elapsed > Duration::from_millis(100) {
-                    println!("WARNING: Callback took {:?} - possible starvation", elapsed);
-                    GRPC_METRICS
-                        .thread_starvation_count
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
-
-                GRPC_METRICS.active_streams.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             }
             coordinator_message::Payload::JobCancelled(cancelled) => {
                 info!("Job {} cancelled: {}", cancelled.job_id, cancelled.reason);

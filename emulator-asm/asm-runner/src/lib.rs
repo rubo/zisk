@@ -1,8 +1,5 @@
 extern crate libc;
 
-mod grpc_metrics;
-pub use grpc_metrics::{GrpcMetrics, GRPC_METRICS};
-
 mod asm_mo;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod asm_mo_runner;

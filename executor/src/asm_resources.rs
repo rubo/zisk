@@ -34,7 +34,7 @@ pub struct AsmResources {
     /// Pipeline for handling precompile hints.
     pub hints_stream: Option<Arc<Mutex<ZiskStream>>>,
 
-    pub hints_stream_initialized: Arc<AtomicBool>,
+    hints_stream_initialized: Arc<AtomicBool>,
 }
 
 impl std::fmt::Debug for AsmResources {

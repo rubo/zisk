@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+use crate::ux::print_banner_field;
 use crate::{commands::get_proving_key, ux::print_banner};
 use colored::Colorize;
 use fields::Goldilocks;
@@ -40,13 +41,9 @@ impl ZiskRomSetup {
     pub fn run(&self) -> Result<()> {
         setup_logger(self.verbose.into());
 
-        tracing::info!(
-            "{}",
-            format!("{} Rom Setup", format!("{: >12}", "Command").bright_green().bold())
-        );
-        tracing::info!("");
-
         print_banner();
+
+        print_banner_field("Command", "Rom Setup");
 
         let proving_key = get_proving_key(self.proving_key.as_ref());
 

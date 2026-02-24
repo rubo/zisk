@@ -154,8 +154,8 @@ pub fn secp256k1_ecdsa_recover(
 
     // Hint the result
     // The following functions hints (x,y) satisfying
-    //    [z]G + [r]R + [-s](x,y) == 𝒪
-    // We can use it
+    //    (x, y) == [s⁻¹·z (mod n)]G + [s⁻¹·r (mod n)]R iff  [z]G + [r]R + [-s](x, y) == 𝒪
+    // We can use it by flipping the signs of r and s and its order
     let neg_s = secp256k1_fn_neg(
         s,
         #[cfg(feature = "hints")]

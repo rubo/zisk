@@ -2,374 +2,369 @@
 .code64
 
 ################################################################################
-# memcpy_mops - Optimized version with memory ops tracing and actual copy. This
-#               is an variant of memcpy operation, xmemcpy operation, that it
-#               doesn't read the count from zisk memory.
+# direct_memcpy_mops / direct_xmemcpy_mops - Memory copy with mops tracing
 #
-# This function performs two main tasks:
-# 1. Records all addresses of memory operations (read and write addresses)
-# 2. Performs the actual memory copy from src to dst (with overlap handling)
+# These functions perform memory copy operations while recording all memory
+# operation addresses (mops) for verification. Two variants exist:
+#
+# - memcpy_mops:  Records an EXTRA_PARAMETER_ADDR read (count comes from memory)
+# - xmemcpy_mops: Extended variant where count is passed directly (no extra read)
+#
+# MAIN TASKS:
+# 1. Encode memcpy metadata (offsets, counts, alignment flags)
+# 2. Record all memory operation addresses (reads and writes) to mops buffer
+# 3. Perform the actual memory copy from src to dst (with overlap handling)
 #
 # REGISTER USAGE:
-# Uses general-purpose registers: rax, rbx, rcx, rdx, rdi, rsi, r9, r11, r12, r13
-# Does NOT use XMM registers (caller doesn't need to save them)
-# Preserves callee-saved registers (rbx, r12, r13 saved/restored in wrapper)
+#   Uses: rax, rcx, rdx, rdi, rsi, r9, r12, r13
+#   Does NOT use XMM registers (caller doesn't need to save them)
+#   Modifies: r13 (mops index output)
 #
-# PARAMETERS (NON System V AMD64 ABI):
-#   rdi -> rbx = dst (u64)              - Destination address
-#   rsi -> rax = src (u64)              - Source address
-#   rdx -> count (usize)                - Number of bytes to copy
-#   [r12 + r13*8] = trace_ptr (u64*)    - Pointer to memory trace buffer (input/output)
+# PARAMETERS (non-standard ABI):
+#   rdi = dst (u64)                   - Destination address
+#   rsi = src (u64)                   - Source address  
+#   rdx = count (usize)               - Number of bytes to copy
+#   r12 = mops buffer base address    - Base pointer to memory ops buffer
+#   r13 = mops buffer index           - Current index (updated on return)
+#
+# RETURN:
+#   r13 = Updated mops index (number of entries written)
 #
 # MEMORY COPY BEHAVIOR:
 # - Handles overlapping src/dst correctly (like memmove)
-# - For non-overlapping: optimized copy using pre_count/loop_count/post_count
-# - For overlapping: backward byte-by-byte copy to avoid corruption
+# - Non-overlapping: optimized 3-phase copy (pre/loop/post alignment)
+# - Overlapping: backward byte-by-byte copy to avoid corruption
 ################################################################################
 
 .global direct_dma_memcpy_mops
 .global direct_dma_xmemcpy_mops
-.global dma_memcpy_mops
-.global dma_xmemcpy_mops
-.extern fast_dma_encode
+.extern check_dynamic_mtrace
 
 .include "dma_constants.inc"
+.include "fast_dma_encode_macro.inc"
 
 .section .text
 
-#    mov     rdx, [0xA000_0F00]                     # save count before call
-#    mov     rdi, rbx                # rdi = dst (rbx)
-#    mov     rsi, rax                # rsi = src (rax)
-
-#   [r12 + r13*8] = trace_ptr (u64*)    - Pointer to memory trace buffer (input/output)
-
-# call function with standard ABI call 
-dma_xmemcpy_mops:
-
-    # save registers used
-    push    r12         # register used as mops base address
-    push    r13         # register used as mops index
-    push    rbx         #
-    
-    mov     r12, rcx
-    xor     r13, r13
-    call    direct_dma_xmemcpy_mops
-
-    mov     rax, r13
-    pop     rbx
-    pop     r13
-    pop     r12
-
-    ret
-
-# call directly from assembly without standard ABI call
-# more eficient
+################################################################################
+# direct_dma_xmemcpy_mops - Fast memory copy with mops (extended variant)
+#
+# Direct entry point for generated code (non-standard ABI). The extended
+# variant receives count in rdx, so no extra memory read is recorded.
+#
+# PARAMETERS (non-standard ABI):
+#   rdi = destination address
+#   rsi = source address
+#   rdx = byte count
+#   r12 = mops buffer base address
+#   r13 = mops buffer index (input/output)
+#
+# RETURN:
+#   r13 = updated mops index
+################################################################################
 
 direct_dma_xmemcpy_mops:
 
-    # updated registers: 
-    #       r9 = no save (value_reg)
-    #       rcx = no save (available from asm)
-    #       rdi = no save (available from asm)
-    #       rsi = no save (available from asm)
-    #       r13 = with new mops index (output)
-    #       rax = encoded 
+    # Modified registers (no save needed - caller expects these to change):
+    #   r9  = scratch register
+    #   rcx = scratch register
+    #   rdi = advanced during copy
+    #   rsi = advanced during copy
+    #   r13 = updated mops index (output)
+    #   rax = encoded metadata
 
-    # Call fast_dma_encode to calculate encoding
-    # Parameters already in correct registers: rdi=dst, rsi=src, rdx=count
-    # Result will be returned in rax (encoded value)
+    # Encode memcpy parameters: rdi=dst, rsi=src, rdx=count
+    FAST_DMA_ENCODE  # ~15-20 cycles - table lookup encoding
 
-    call    fast_dma_encode         # ~15-20 cycles - table lookup encoding
-
-    # jmp the part of write 
+    # Skip the EXTENDED_PARAM read entry (not needed for xmemcpy)
     jmp     direct_dma_xmemcpy_common_entry_point
 
-
-# call function with standard ABI call 
-dma_memcpy_mops:
-
-    # save registers used
-    push    r12         # register used as mops base address
-    push    r13         # register used as mops index
-    push    rbx         #
-    
-    mov     r12, rcx
-    xor     r13, r13
-    call    direct_dma_memcpy_mops
-
-    mov     rax, r13
-    pop     rbx
-    pop     r13
-    pop     r12
-
-    ret
-
-# call directly from assembly without standard ABI call
-# more eficient
+################################################################################
+# direct_dma_memcpy_mops - Fast memory copy with mops (standard variant)
+#
+# Direct entry point for generated code (non-standard ABI). Records an extra
+# memory read from EXTENDED_PARAM address because the memcpy opcode reads
+# count from that location.
+#
+# PARAMETERS (non-standard ABI):
+#   rdi = destination address
+#   rsi = source address
+#   rdx = byte count
+#   r12 = mops buffer base address
+#   r13 = mops buffer index (input/output)
+#
+# RETURN:
+#   r13 = updated mops index
+################################################################################
 
 direct_dma_memcpy_mops:
    
-    # updated registers: 
-    #       r9 = no save (value_reg)
-    #       rcx = no save (available from asm)
-    #       rdi = no save (available from asm)
-    #       rsi = no save (available from asm)
-    #       r13 = with new mops index (output)
-    #       rax = encoded 
+    # Modified registers (no save needed - caller expects these to change):
+    #   r9  = scratch register
+    #   rcx = scratch register  
+    #   rdi = advanced during copy
+    #   rsi = advanced during copy
+    #   r13 = updated mops index (output)
+    #   rax = encoded metadata
 
-    # Call fast_dma_encode to calculate encoding
-    # Parameters already in correct registers: rdi=dst, rsi=src, rdx=count
-    # Result will be returned in rax (encoded value)
+    # Encode memcpy parameters: rdi=dst, rsi=src, rdx=count
+    FAST_DMA_ENCODE            # ~15-20 cycles - table lookup encoding
 
-    call    fast_dma_encode         # ~15-20 cycles - table lookup encoding
-
-    # add read parameter count to mops
-
-    mov     r9, (MOPS_ALIGNED_READ + EXTRA_PARAMETER_ADDR)
-    mov     [r12 + r13 * 8], r9
-    inc     r13
+    # Record EXTENDED_PARAM read (memcpy opcode reads count from this address)
+    mov     r9, (MOPS_ALIGNED_READ + EXTRA_PARAMETER_ADDR)  # 1 cycle
+    mov     [r12 + r13 * 8], r9                             # ~4 cycles
+    inc     r13                                             # 1 cycle
 
 direct_dma_xmemcpy_common_entry_point:
 
-    # check if count is zero
-    test    rdx, rdx                   # compare count
-    jz      .L_done                    # jump if zero
+    # Early exit if count is zero
+    test    rdx, rdx                   # 1 cycle - check count
+    jz      .L_done                    # 2 cycles (predicted) - nothing to copy
+
+    # ========== PHASE 1: Record PRE-alignment memory operations ==========
 
 .L_pre_dst_to_mops:
-    # If pre_count > 0, write aligned dst value to trace
-    test    rax, PRE_COUNT_MASK        # 1 cycle - check if pre_count > 0
-    jz      .L_post_dst_to_mops          # 2 cycles (predicted taken)
+    # Check if pre_count > 0 (unaligned prefix bytes to copy)
+    test    rax, DMA_PRE_COUNT_MASK        # 1 cycle - check pre_count bits
+    jz      .L_post_dst_to_mops        # 2 cycles (predicted) - skip if aligned
 
 .L_pre_is_active:
-    # Branch with pre_count > 0: save original dst value before it's overwritten
-    mov     r9, MOPS_ALIGNED_READ      # r9 = flags aligned read
-    add     r9, rdi                    # 1 cycle - get original dst
+    # Pre-alignment read: record dst read (original value before overwrite)
+    mov     r9, MOPS_ALIGNED_READ      # 1 cycle - read operation flag
+    add     r9, rdi                    # 1 cycle - add dst address
     and     r9, ALIGN_MASK             # 1 cycle - align to 8-byte boundary
-    mov     [r12 + r13 * 8], r9        # ~4 cycles - write dst pre-address to trace
+    mov     [r12 + r13 * 8], r9        # ~4 cycles - write mops entry
 
-    test    rax, DOUBLE_SRC_PRE_MASK
-    jnz     .L_pre_double_src_to_mops
+    # Check if source spans two qwords (unaligned causing double read)
+    test    rax, DMA_DOUBLE_SRC_PRE_MASK   # 1 cycle
+    jnz     .L_pre_double_src_to_mops  # 2 cycles (predicted)
 
 .L_pre_single_src_to_mops:
-
-    mov     r9, MOPS_ALIGNED_READ      # r9 = flags aligned read
-    add     r9, rsi                    # 1 cycle - get original src
+    # Source fits in single qword
+    mov     r9, MOPS_ALIGNED_READ      # 1 cycle - single read flag
+    add     r9, rsi                    # 1 cycle - add src address
     and     r9, ALIGN_MASK             # 1 cycle - align to 8-byte boundary
-    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write src address
-    jmp     .L_pre_src_inc_mops_index
+    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write mops entry
+    jmp     .L_pre_src_inc_mops_index  # 2 cycles
 
 .L_pre_double_src_to_mops:
-
-    mov     r9, MOPS_ALIGNED_READ_2W   # r9 = flags double read
-    add     r9, rsi                    # 1 cycle - get original src
+    # Source spans two qwords (needs double read)
+    mov     r9, MOPS_ALIGNED_READ_2W   # 1 cycle - double read flag
+    add     r9, rsi                    # 1 cycle - add src address
     and     r9, ALIGN_MASK             # 1 cycle - align to 8-byte boundary
-    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write src address
+    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write mops entry
 
 .L_pre_src_inc_mops_index:
-    add     r13, 2                     # add 2 (pre-write, block single/dual src)
+    add     r13, 2                     # 1 cycle - advance index (dst + src entries)
+
+    # ========== PHASE 2: Record POST-alignment memory operations ==========
 
 .L_post_dst_to_mops:
-
-    # If post_count > 0, write aligned (dst+count) value to trace
-    test    rax, POST_COUNT_MASK       # 1 cycle - check if post_count > 0
-    jz      .L_src_to_mops               # 2 cycles (predicted taken) - skip to src copy
+    # Check if post_count > 0 (unaligned suffix bytes to copy)
+    test    rax, DMA_POST_COUNT_MASK       # 1 cycle - check post_count bits
+    jz      .L_src_to_mops             # 2 cycles (predicted) - skip if no suffix
 
 .L_post_is_active:
-    mov     rcx, MOPS_ALIGNED_READ     # rcx = flags aligned read
-    lea     r9, [rdi + rdx - 1]        # 1 cycle - r9 = dst + count - 1 (last dst byte)
+    # Post-alignment read: record dst read at end of copy region
+    mov     rcx, MOPS_ALIGNED_READ     # 1 cycle - read operation flag
+    lea     r9, [rdi + rdx - 1]        # 1 cycle - r9 = last dst byte address
     and     r9, ALIGN_MASK             # 1 cycle - align to 8-byte boundary
-    add     r9, rcx                    # 1 cycle - r9 mops with dst aligned address
-    mov     [r12 + r13 * 8], r9        # ~4 cycles - write dst post-value to trace
+    add     r9, rcx                    # 1 cycle - add mops flags
+    mov     [r12 + r13 * 8], r9        # ~4 cycles - write mops entry
 
-    mov     r9, rax
-    shr     r9, PRE_AND_LOOP_BYTES_RS
-    add     r9, rsi
-    and     r9, ALIGN_MASK
+    # Calculate source address for post-alignment bytes
+    mov     r9, rax                    # 1 cycle
+    shr     r9, DMA_PRE_AND_LOOP_BYTES_RS  # 1 cycle - extract pre+loop byte offset
+    add     r9, rsi                    # 1 cycle - add to source
+    and     r9, ALIGN_MASK             # 1 cycle - align to 8-byte boundary
 
-    test    rax, DOUBLE_SRC_POST_MASK
-    jnz     .L_post_double_src_to_mops
+    # Check if source spans two qwords
+    test    rax, DMA_DOUBLE_SRC_POST_MASK  # 1 cycle
+    jnz     .L_post_double_src_to_mops # 2 cycles (predicted)
 
 .L_post_single_src_to_mops:
-
-    mov     rcx, MOPS_ALIGNED_READ     # r9 = flags aligned read
-    add     r9, rcx                    # 1 cycle - get original src
-    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write src address
-    jmp     .L_post_src_inc_mops_index
+    # Source fits in single qword
+    mov     rcx, MOPS_ALIGNED_READ     # 1 cycle - single read flag
+    add     r9, rcx                    # 1 cycle - add mops flags
+    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write mops entry
+    jmp     .L_post_src_inc_mops_index # 2 cycles
 
 .L_post_double_src_to_mops:
-
-    mov     rcx, MOPS_ALIGNED_READ_2W  # r9 = flags aligned read
-    add     r9, rcx                    # 1 cycle - get original src
-    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write src address
+    # Source spans two qwords (needs double read)
+    mov     rcx, MOPS_ALIGNED_READ_2W  # 1 cycle - double read flag
+    add     r9, rcx                    # 1 cycle - add mops flags
+    mov     [r12 + r13 * 8 + 8], r9    # ~4 cycles - write mops entry
 
 .L_post_src_inc_mops_index:
-    add     r13, 2                     # add 2 (pre-write, block single/dual src)
+    add     r13, 2                     # 1 cycle - advance index (dst + src entries)
+
+    # ========== PHASE 3: Record LOOP (aligned bulk) memory operations ==========
 
 .L_src_to_mops:
-    mov     rcx, rax                       # 1 cycle - rcx = encoded
-    shr     rcx, LOOP_COUNT_RS          # 1 cycle - rcx = loop (32 bits)
-    jz      .L_save_dst_with_loop_count_zero
-    shl     rcx, MOPS_BLOCK_WORDS_RS    # 1 cycle - rcx = loop | 0 (4 bits) | (32 bits)
+    # Extract loop_count (number of aligned qwords to copy)
+    mov     rcx, rax                   # 1 cycle - rcx = encoded
+    shr     rcx, DMA_LOOP_COUNT_RS         # 1 cycle - rcx = loop_count
+    jz      .L_save_dst_with_loop_count_zero  # 2 cycles - no aligned bulk
+    shl     rcx, MOPS_BLOCK_WORDS_RS   # 1 cycle - format for mops block entry
 
-    test    rax, UNALIGNED_DST_SRC_MASK
-    jnz     .L_src_extra_for_unaligned_loop
+    # Check if source is unaligned (needs extra word per iteration)
+    test    rax, DMA_UNALIGNED_DST_SRC_MASK  # 1 cycle
+    jnz     .L_src_extra_for_unaligned_loop  # 2 cycles (predicted)
 
-    mov     r9, MOPS_ALIGNED_BLOCK_READ    # 1 cycle - r9 = read block
-    jmp     .L_src_block_before_address
+    mov     r9, MOPS_ALIGNED_BLOCK_READ    # 1 cycle - aligned block read flag
+    jmp     .L_src_block_before_address    # 2 cycles
 
 .L_src_extra_for_unaligned_loop:    
-    mov     r9, MOPS_ALIGNED_BLOCK_READ + MOPS_BLOCK_ONE_WORD
+    # Unaligned source requires one extra word per block
+    mov     r9, MOPS_ALIGNED_BLOCK_READ + MOPS_BLOCK_ONE_WORD  # 1 cycle
 
 .L_src_block_before_address:
-    add     r9, rcx
-    test    rax, SRC64_INC_BY_PRE_MASK
-    jnz     .L_src_incr_by_pre
-    add     r9, rsi                        # 1 cycle - rcx = first block src address
-    jmp     .L_src_to_mops_ready
+    add     r9, rcx                        # 1 cycle - add block word count
+    test    rax, DMA_SRC64_INC_BY_PRE_MASK     # 1 cycle - check pre-alignment offset
+    jnz     .L_src_incr_by_pre             # 2 cycles (predicted)
+    add     r9, rsi                        # 1 cycle - use base src address
+    jmp     .L_src_to_mops_ready           # 2 cycles
 
 .L_src_incr_by_pre: 
-    lea     r9, [rsi + r9 + 8]
+    # Source starts one qword after base (due to pre-alignment)
+    lea     r9, [rsi + r9 + 8]             # 1 cycle
 
 .L_src_to_mops_ready:
-    and     r9, ALIGN_MASK
-    mov     [r12 + r13 * 8], r9            # ~4 cycles - write first block src read address
-    inc     r13
+    and     r9, ALIGN_MASK                 # 1 cycle - align address
+    mov     [r12 + r13 * 8], r9            # ~4 cycles - write mops entry
+    inc     r13                            # 1 cycle
 
 .L_save_dst_addr_reusing_rcx:
+    # Record destination write block
+    # Strategy: treat all writes as one block (cannot write same address twice per step)
   
-    mov     r9, rax                        # rcx = encoded
-    and     r9, PRE_WRITES_MASK            # rcx = pre_writes mask
-    shl     r9, PRE_WRITES_TO_MOPS_BLOCK   # rcx = pre_writes offset (with correct shift)
-    add     r9, rcx
-    add     r9, rdi
+    mov     r9, rax                        # 1 cycle - r9 = encoded
+    and     r9, DMA_PRE_WRITES_MASK        # 1 cycle - extract pre_writes count
+    shl     r9, PRE_WRITES_TO_MOPS_BLOCK   # 1 cycle - format for mops block
+    add     r9, rcx                        # 1 cycle - add loop block count
+    add     r9, rdi                        # 1 cycle - add dst base address
 
-    mov     rcx, MOPS_ALIGNED_BLOCK_WRITE
-    add     r9, rcx
-    and     r9, ALIGN_MASK
+    mov     rcx, MOPS_ALIGNED_BLOCK_WRITE  # 1 cycle - write block flag
+    add     r9, rcx                        # 1 cycle - add mops flags
+    and     r9, ALIGN_MASK                 # 1 cycle - align address
 
-    mov     [r12 + r13 * 8], r9
-    inc     r13
-    jmp     .L_mops_done
+    mov     [r12 + r13 * 8], r9            # ~4 cycles - write mops entry
+    inc     r13                            # 1 cycle
+    jmp     .L_mops_done                   # 2 cycles
 
 .L_save_dst_with_loop_count_zero:
-    mov     r9, rax                        # rcx = encoded
-    and     r9, PRE_WRITES_MASK            # rcx = pre_writes mask
-    shl     r9, PRE_WRITES_TO_MOPS_BLOCK   # rcx = pre_writes offset (with correct shift)
-    add     r9, rdi
+    # No loop iterations - pre/post writes may be consecutive (single block)
 
-    mov     rcx, MOPS_ALIGNED_BLOCK_WRITE
-    add     r9, rcx
-    and     r9, ALIGN_MASK
+    mov     r9, rax                        # 1 cycle - r9 = encoded
+    and     r9, DMA_PRE_WRITES_MASK            # 1 cycle - extract pre_writes count
+    shl     r9, PRE_WRITES_TO_MOPS_BLOCK   # 1 cycle - format for mops block
+    add     r9, rdi                        # 1 cycle - add dst base address
 
-    mov     [r12 + r13 * 8], r9
-    inc     r13
+    mov     rcx, MOPS_ALIGNED_BLOCK_WRITE  # 1 cycle - write block flag
+    add     r9, rcx                        # 1 cycle - add mops flags
+    and     r9, ALIGN_MASK                 # 1 cycle - align address
+
+    mov     [r12 + r13 * 8], r9            # ~4 cycles - write mops entry
+    inc     r13                            # 1 cycle
+
+    # ========== PHASE 4: Perform actual memory copy ==========
 
 .L_mops_done:  
 
     # Check for memory overlap to decide copy direction
-    # NOTE: rdi and rsi contain their ORIGINAL values (not modified in mops section)
-    # Overlap exists if: src < dst < src+count (forward overlap)
+    # Overlap exists if: src < dst < src+count (forward copy would corrupt)
     cmp     rdi, rsi                # 1 cycle - compare dst with src
-    jb      .L_copy_forward           # 2 cycles (predicted) - dst < src, no overlap
+    jb      .L_copy_forward         # 2 cycles (predicted) - dst < src, safe
     lea     r9, [rsi + rdx]         # 1 cycle - r9 = src + count
     cmp     rdi, r9                 # 1 cycle - compare dst with (src+count)
-    jae     .L_copy_forward           # 2 cycles (predicted) - dst >= src+count, no overlap
+    jae     .L_copy_forward         # 2 cycles (predicted) - dst >= src+count, safe
     
     # Overlap detected (src < dst < src+count), must copy backward
-    # Setup: rsi = src+count-1, rdi = dst+count-1, rcx = count
-    # Uses ORIGINAL rsi and rdi values (not modified during mops recording)
+    # Setup pointers to end of regions for backward copy
     
-    lea     rsi, [rsi + rdx - 1]    # 1 cycle - rsi = src + count - 1 (from original)
-    lea     rdi, [rdi + rdx - 1]    # 1 cycle - rdi = dst + count - 1 (from original)
-    mov     rcx, rdx                # 1 cycle - rcx = count
+    mov     rax, rdi
+    lea     rsi, [rsi + rdx - 1]    # 1 cycle - rsi = last src byte
+    lea     rdi, [rdi + rdx - 1]    # 1 cycle - rdi = last dst byte
+    mov     rcx, rdx                # 1 cycle - rcx = byte count
 
-    std                             # ~20-50 cycles - set DF (serializing, pipeline flush)
-    rep movsb                       # ~3-5 cycles per byte (backward copy, slower than forward)
-    cld                             # ~20-50 cycles - clear DF (serializing, pipeline flush)
+    std                             # ~20-50 cycles - set direction flag (backward)
+    rep movsb                       # ~3-5 cycles/byte (backward, slower)
+    cld                             # ~20-50 cycles - clear direction flag
 
-    ret                             # ~5 cycles
+    ret                             # ~3 cycles
 
 .L_copy_forward:
-    # No overlap detected, perform optimized forward copy
-    cmp      rdx, 16                  # 1 cycle - check if count >= 16 (worth alignment)
-    jae      .L_copy_forward_pre        # 2 cycles (predicted) - use 3-phase aligned copy
+    # No overlap - perform optimized forward copy
+    // cmp      rdx, 16                # 1 cycle - check if count >= 16
+    // jae      .L_copy_forward_pre    # 2 cycles (predicted) - use 3-phase copy
 
-    # Small copy (count < 16): copy all bytes directly
+    mov     rax, rdi
+    # Small copy (count < 16): direct byte copy
     mov     rcx, rdx                # 1 cycle - rcx = count
-    rep movsb                       # ~3-5 cycles per byte (unaligned small copy)
+    rep movsb                       # ~3-5 cycles/byte
 
-    ret                             # ~5 cycles
-
+    ret                             # ~3 cycles
+/*
 .L_copy_forward_pre:
-    # Copy in 3 phases: pre-alignment bytes, aligned qwords, post-alignment bytes
-    # If pre_count > 0, copy unaligned prefix bytes
-    test    rax, PRE_COUNT_MASK     # 1 cycle - check if pre_count > 0
-    jz      .L_copy_forward_loop      # 2 cycles (predicted)
+    # 3-phase copy: pre-alignment bytes, aligned qwords, post-alignment bytes
+    
+    # Phase A: Pre-alignment bytes (0-7 bytes to reach 8-byte alignment)
+    test    rax, DMA_PRE_COUNT_MASK     # 1 cycle - check if pre_count > 0
+    jz      .L_copy_forward_loop    # 2 cycles (predicted)
 
-    # Extract and copy pre_count bytes (1-7 bytes to reach alignment)
     mov     rcx, rax                # 1 cycle
-    and     rcx, PRE_COUNT_MASK     # 1 cycle - rcx = pre_count (bits 0-3)
-
-    rep     movsb                   # ~3-5 cycles per byte
-                                    # rsi, rdi now 8-byte aligned
+    and     rcx, DMA_PRE_COUNT_MASK     # 1 cycle - rcx = pre_count
+    rep     movsb                   # ~3-5 cycles/byte - rsi/rdi now aligned
 
 .L_copy_forward_loop:
-    # Copy aligned qwords (main bulk of data)
+    # Phase B: Aligned qwords (bulk data transfer)
     mov     rcx, rax                # 1 cycle
-    shr     rcx, LOOP_COUNT_RS   # 1 cycle - rcx = loop_count (bits 32-63)
-    rep     movsq                   # ~1.5-2 cycles per qword (aligned, optimized)
-                                    # rsi, rdi advanced by loop_count * 8
+    shr     rcx, DMA_LOOP_COUNT_RS      # 1 cycle - rcx = loop_count
+    rep     movsq                   # ~1.5-2 cycles/qword (optimized)
 
 .L_check_forward_post:
+    # Phase C: Post-alignment bytes (0-7 remaining bytes)
+    test    rax, DMA_POST_COUNT_MASK    # 1 cycle - check if post_count > 0
+    jz      .L_done                 # 2 cycles (predicted)
 
-    # If post_count > 0, copy remaining unaligned suffix bytes
-    test    rax, POST_COUNT_MASK    # 1 cycle - check if post_count > 0
-    jz      .L_done                   # 2 cycles (predicted)
-
-    # Extract and copy post_count bytes (1-7 bytes after aligned data)
     mov     rcx, rax                # 1 cycle
-    shr     rcx, POST_COUNT_RS   # 1 cycle - shift post_count to position
-    and     rcx, 0x07               # 1 cycle - rcx = post_count (bits 43-45)
-
-    rep     movsb                   # ~3-5 cycles per byte
-                                    # rsi, rdi now point past end of data
-
+    shr     rcx, DMA_POST_COUNT_RS  # 1 cycle - extract post_count
+    and     rcx, 0x0F               # 1 cycle - mask to 3 bits
+    rep     movsb                   # ~3-5 cycles/byte
+*/
 .L_done:
-    ret                             # ~5 cycles
+    mov    rax, rdi
+    ret                             # ~3 cycles
 
-# Performance estimate (Modern x86-64, L1 cache hits):
+################################################################################
+# PERFORMANCE ESTIMATES (Modern x86-64, L1 cache hits)
 #
-# NON-OVERLAPPING FORWARD COPY PATH:
-# - fast_dma_encode call:           ~15-20 cycles (function call + table lookup)
-# - Write mops entries:             ~4-6 cycles per entry
-# - Pre-read mops (conditional):    ~12 cycles (if pre_count > 0)
-# - Post-read mops (conditional):   ~12 cycles (if post_count > 0)
-# - Block src read mops:            ~8-12 cycles (address calculation + write)
-# - Pre-bytes copy:                 ~3-5 cycles per byte (if pre_count > 0, max 7 bytes)
-# - Aligned qwords copy:            ~1.5-2 cycles per qword (rep movsq, main data)
-# - Post-bytes copy:                ~3-5 cycles per byte (if post_count > 0, max 7 bytes)
-# - Function overhead:              ~10 cycles (push/pop, branches, return)
+# NON-OVERLAPPING FORWARD COPY:
+#   - FAST_DMA_ENCODE macro:        ~15-20 cycles (table lookup)
+#   - EXTENDED_PARAM entry:         ~6 cycles (memcpy variant only)
+#   - Pre-alignment mops:           ~12 cycles (if pre_count > 0)
+#   - Post-alignment mops:          ~12 cycles (if post_count > 0)
+#   - Block src/dst mops:           ~10-15 cycles (address calc + writes)
+#   - Pre-bytes copy:               ~3-5 cycles/byte (max 7 bytes)
+#   - Aligned qwords copy:          ~1.5-2 cycles/qword (rep movsq)
+#   - Post-bytes copy:              ~3-5 cycles/byte (max 7 bytes)
 #
-# TOTAL (best case, aligned, no pre/post):
-#   ~30 cycles base + ~2 cycles per qword (trace + copy)
+#   Best case (aligned, no pre/post):  ~35 cycles + ~2 cycles/qword
+#   Typical case (some alignment):     ~55 cycles + ~2 cycles/qword
 #
-# TOTAL (typical case, some alignment):
-#   ~50 cycles base + ~2 cycles per qword + ~4 cycles per pre/post byte
+# OVERLAPPING BACKWARD COPY:
+#   - Same mops overhead:           ~35-55 cycles
+#   - std instruction:              ~20-50 cycles (pipeline flush)
+#   - Backward byte copy:           ~3-5 cycles/byte (rep movsb)
+#   - cld instruction:              ~20-50 cycles (pipeline flush)
 #
-# OVERLAPPING BACKWARD COPY PATH:
-# - Same mops overhead:             ~30-50 cycles
-# - std instruction:                ~20-50 cycles (serializing, causes pipeline flush)
-# - Backward byte copy:             ~3-5 cycles per byte (rep movsb backward)
-# - cld instruction:                ~20-50 cycles (serializing, causes pipeline flush)
-#
-# TOTAL (overlap, worst case):
-#   ~100-150 cycles base + ~4-5 cycles per byte
+#   Worst case:  ~100-150 cycles + ~4-5 cycles/byte
 #
 # NOTES:
-# - Assumes L1 cache hits for all memory accesses
-# - rep movsq/movsb performance varies by microarchitecture
-# - Actual cycles may vary ±20% depending on CPU model and memory alignment
-# - Fast path (aligned, no overlap) is ~2-3x faster than overlap path
+#   - Assumes L1 cache hits for all memory accesses
+#   - rep movsq/movsb performance varies by microarchitecture
+#   - Actual cycles may vary ±20% depending on CPU model
+#   - Forward aligned path is ~2-3x faster than backward path
+################################################################################
 
 # Mark stack as non-executable (required by modern linkers)
 .section .note.GNU-stack,"",%progbits

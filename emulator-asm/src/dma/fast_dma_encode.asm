@@ -46,88 +46,46 @@
 #
 ################################################################################
 
-.global fast_dma_encode_memcpy
-.global fast_dma_encode_memcmp
-.global fast_dma_encode_memset
-.global fast_dma_encode_memset_with_byte
-.global fast_dma_encode_inputcpy
-.global fast_dma_encode_memcmp_with_result
+.global fast_dma_memcpy_encode
+.global fast_dma_memcmp_encode
+.global fast_dma_memset_encode
+.global fast_dma_memset_with_byte_encode
+.global fast_dma_inputcpy_encode
+.global fast_dma_memcmp_with_result_encode
 .global fast_dma_encode
 .section .text
 
-# Alias for compatibility
-fast_dma_encode:
-    jmp fast_dma_encode_memcpy
+.include "dma_constants.inc"
+.include "fast_dma_encode_macro.inc"
 
-fast_dma_encode_memcpy:
-    mov     rax, rdi
-    and     rax, 0x07               # dst_offset (0-7)
-    shl     rax, 7                  # dst_offset << 7
-
-    mov     r8, rsi
-    and     r8, 0x07                # src_offset (0-7)
-    shl     r8, 4                   # src_offset << 4
-
-    or      rax, r8                 # combine dst and src offsets
-
-    # Calculate table_count
-    mov     r8, rdx
-    cmp     r8, 16
-    jb      .L_memcpy_count_lt_16
-    
-    # count >= 16: table_count = (count & 0x07) | 0x08
-    and     r8, 0x07
-    or      r8, 0x08
-
-.L_memcpy_count_lt_16:
-    or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
-    
-    # Look up encoded value in table (direct access since it's in the same file)
-    mov     rax, [fast_dma_encode_table + rax * 8]
-
-    # Add (count >> 3) to result
-    mov     r8, rdx
-    shl     r8, DMA_LPRE_COUNT_RS   # r8 = count << 29
-    add     rax, r8                 # result += (count << 29)
-    
-    ret
-
-# PARAMETERS:
+# PARAMETERS (System V AMD64 ABI):
 #   rdi = dst (u64)        - Destination address
+#   rsi = src (u64)        - Source address
 #   rdx = count (usize)    - Number of bytes to copy
-
-fast_dma_encode_inputcpy:
-fast_dma_encode_no_src:
-    mov     rax, rdi
-    and     rax, 0x07               # dst_offset (0-7)
-    shl     rax, 4                  # dst_offset << 7
-
-    # Calculate table_count
-    mov     r8, rdx
-    cmp     r8, 16
-    jb      .L_fast_dma_encode_inputcpy_count_lt_16
-    
-    # count >= 16: table_count = (count & 0x07) | 0x08
-    and     r8, 0x07
-    or      r8, 0x08
-
-.L_fast_dma_encode_inputcpy_count_lt_16:
-    or      rax, r8                 # rax = index = (dst<<7) + (src<<4) + table_count
-    
-    # Look up encoded value in table (direct access since it's in the same file)
-    mov     rax, [fast_dma_encode_no_src_table + rax * 8]
-
-    # Add (count >> 3) to result
-    mov     r8, rdx
-    shl     r8, DMA_LPRE_COUNT_RS   # r8 = count << 29
-    add     rax, r8                 # result += (count << 29)
-    
+# RESULT rax = encoded value
+fast_dma_memcpy_encode:
+    FAST_DMA_ENCODE
     ret
 
-fast_dma_encode_memcmp:
-    call    fast_dma_encode_memcpy   # Get the same encoding as memcpy for pre/post counts and offsets  
-    or      rax, REQUIRES_DMA_MASK
-    
+# PARAMETERS (System V AMD64 ABI):
+#   rdi = dst (u64)        - Destination address
+#   rsi = src (u64)        - Source address
+#   rdx = count (usize)    - Number of bytes to copy
+# RESULT rax = encoded value
+# NOTE: This function don't encode the result, only take in consideration to calculate
+# NOTE: FAST_ENCODE_TABLE_WO_NEQ_SIZE ==> DMA_REQUIRES_DMA_MASK
+fast_dma_memcmp_neq_encode:
+    FAST_DMA_ENCODE_MEMCMP FAST_ENCODE_TABLE_WO_NEQ_SIZE 
+    ret
+
+# PARAMETERS (System V AMD64 ABI):
+#   rdi = dst (u64)        - Destination address
+#   rsi = src (u64)        - Source address
+#   rdx = count (usize)    - Number of bytes to copy
+# RESULT rax = encoded value
+# NOTE: This function don't encode the result, only take in consideration to calculate
+fast_dma_memcmp_eq_encode:
+    FAST_DMA_ENCODE_MEMCMP 0
     ret
 
 # PARAMETERS (System V AMD64 ABI):
@@ -135,20 +93,37 @@ fast_dma_encode_memcmp:
 #   rsi = src (u64)        - Source address
 #   rdx = count (usize)    - Number of bytes to copy
 #   r9  = result (9 bits)  - NOTE: value will be modified
-fast_dma_encode_memcmp_with_result:
-    call    fast_dma_encode_memcpy   # Get the same encoding as memcpy for pre/post counts and offsets  
-    or      rax, REQUIRES_DMA_MASK
+# RESULT rax = encoded value
+fast_dma_memcmp_encode:
     and     r9, DMA_FILL_BITS9_MASK  # Ensure result is in lower 9 bits
+    jz      .L_fast_dma_memcmp_encode_eq
+    FAST_DMA_ENCODE_MEMCMP FAST_ENCODE_TABLE_WO_NEQ_SIZE
     shl     r9, DMA_FILL_BYTE_RS     # r8 has the result byte in the lower 8 bits
     or      rax, r9
     ret
+
+.L_fast_dma_memcmp_encode_eq:
+    FAST_DMA_ENCODE_MEMCMP 0
+    ret
+
+
+# PARAMETERS:
+#   rdi = dst (u64)        - Destination address
+#   rdx = count (usize)    - Number of bytes to copy
+
+
+fast_dma_inputcpy_encode:
+fast_dma_no_src_encode:
+    FAST_DMA_ENCODE_NO_SRC   
+    ret
+
 
 # PARAMETERS (System V AMD64 ABI):
 #   rdi = dst (u64)        - Destination address
 #   rsi = fill byte        - Source address
 #   rdx = count (usize)    - Number of bytes to copy
-fast_dma_encode_memset_with_byte:
-    call    fast_dma_encode_no_src
+fast_dma_memset_with_byte_encode:
+    FAST_DMA_ENCODE_NO_SRC
     movzx   r9, sil  
     shl     r9, DMA_FILL_BYTE_RS     # r8 has the result byte in the lower 8 bits
     or      rax, r9

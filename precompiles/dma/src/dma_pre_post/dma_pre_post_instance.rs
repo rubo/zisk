@@ -10,8 +10,7 @@ use crate::{DmaCheckPoint, DmaPrePostCollector, DmaPrePostModule};
 use fields::PrimeField64;
 use proofman_common::{AirInstance, ProofCtx, ProofmanResult, SetupCtx};
 use std::sync::Arc;
-#[cfg(feature = "save_dma_inputs")]
-use zisk_common::SegmentId;
+
 use zisk_common::{
     BusDevice, CheckPoint, ChunkId, Instance, InstanceCtx, InstanceType, PayloadType, StatsType,
 };

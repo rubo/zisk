@@ -33,15 +33,45 @@ pub struct DmaValues {
 // lpre_count             3     32-34
 // loop_count            29     35-63
 
-const FAST_ENCODE_TABLE_WO_NEQ_SIZE: usize = 8 * 8 * 16;
-const FAST_ENCODE_TABLE_SIZE: usize = FAST_ENCODE_TABLE_WO_NEQ_SIZE * 2;
+const FAST_ENCODE_TABLE_SIZE: usize = 8 * 8 * 16;
+const FAST_ENCODE_TABLE_MEMCMP_SIZE: usize = FAST_ENCODE_TABLE_SIZE * 2;
 const FAST_ENCODE_NO_SRC_TABLE_SIZE: usize = 8 * 16;
 const FAST_ENCODE_TABLE: [u64; FAST_ENCODE_TABLE_SIZE] = generate_fast_encode_table();
+const FAST_ENCODE_MEMCMP_TABLE: [u64; FAST_ENCODE_TABLE_MEMCMP_SIZE] =
+    generate_fast_encode_memcmp_table();
 const FAST_ENCODE_NO_SRC_TABLE: [u64; FAST_ENCODE_NO_SRC_TABLE_SIZE] =
     generate_fast_encode_no_src_table();
 
 const fn generate_fast_encode_table() -> [u64; FAST_ENCODE_TABLE_SIZE] {
     let mut table = [0u64; FAST_ENCODE_TABLE_SIZE];
+    // fill table
+    let mut dst_offset: u64 = 0;
+    while dst_offset < 8 {
+        let base_index = dst_offset << 7;
+        let mut src_offset: u64 = 0;
+        while src_offset < 8 {
+            let index = (base_index + (src_offset << 4)) as usize;
+            let mut count: usize = 0;
+            while count < 16 {
+                let value = DmaInfo::calculate_encode(dst_offset, src_offset, count, false, true);
+                let loop_count = DmaInfo::get_loop_count(value) as u64;
+                // The table is create to add directly de loop count and after all values
+                // are correct, for this reason substract de count, because we need diference
+                // between loop_count (shifted 32) and count (shifted 29)
+                table[index + count] = ((value & 0x0000_0007_FFFF_FFFF)
+                    + (loop_count << DmaInfo::DMA_LOOP_COUNT_RS))
+                    .wrapping_sub((count as u64) << DmaInfo::DMA_LPRE_COUNT_RS);
+                count += 1;
+            }
+            src_offset += 1;
+        }
+        dst_offset += 1;
+    }
+    table
+}
+
+const fn generate_fast_encode_memcmp_table() -> [u64; FAST_ENCODE_TABLE_MEMCMP_SIZE] {
+    let mut table = [0u64; FAST_ENCODE_TABLE_MEMCMP_SIZE];
     // fill table
     let mut neq_index = 0;
     while neq_index < 2 {
@@ -55,7 +85,8 @@ const fn generate_fast_encode_table() -> [u64; FAST_ENCODE_TABLE_SIZE] {
                 let index = (base_index + (src_offset << 4)) as usize;
                 let mut count: usize = 0;
                 while count < 16 {
-                    let value = DmaInfo::calculate_encode(dst_offset, src_offset, count, neq, true);
+                    let value = DmaInfo::calculate_encode(dst_offset, src_offset, count, neq, true)
+                        | DmaInfo::DMA_REQUIRES_DMA_TEST_MASK;
                     let loop_count = DmaInfo::get_loop_count(value) as u64;
                     // The table is create to add directly de loop count and after all values
                     // are correct, for this reason substract de count, because we need diference
@@ -119,21 +150,19 @@ impl DmaInfo {
     #[inline(always)]
     pub const fn encode_memcmp_neq(dst: u64, src: u64, count: usize, neq: bool) -> u64 {
         let table_count = if count >= 16 { count & 0x07 | 0x08 } else { count };
-        (FAST_ENCODE_TABLE[(((dst & 0x07) << 7) + ((src & 0x07) << 4)) as usize
+        (FAST_ENCODE_MEMCMP_TABLE[(((dst & 0x07) << 7) + ((src & 0x07) << 4)) as usize
             + table_count
-            + FAST_ENCODE_TABLE_WO_NEQ_SIZE * neq as usize]
-            + Self::DMA_REQUIRES_DMA_TEST_MASK)
+            + FAST_ENCODE_TABLE_SIZE * neq as usize])
             .wrapping_add((count as u64) << Self::DMA_LPRE_COUNT_RS)
     }
 
     #[inline(always)]
     pub const fn encode_memcmp(dst: u64, src: u64, count: usize, result: u64) -> u64 {
         let table_count = if count >= 16 { count & 0x07 | 0x08 } else { count };
-        (FAST_ENCODE_TABLE[(((dst & 0x07) << 7) + ((src & 0x07) << 4)) as usize
+        (FAST_ENCODE_MEMCMP_TABLE[(((dst & 0x07) << 7) + ((src & 0x07) << 4)) as usize
             + table_count
-            + FAST_ENCODE_TABLE_WO_NEQ_SIZE * (result != 0) as usize]
-            + Self::DMA_REQUIRES_DMA_TEST_MASK
-            + ((result & 0x1FF) << Self::DMA_FILL_BYTE_RS))
+            + FAST_ENCODE_TABLE_SIZE * (result != 0) as usize]
+            + ((result & Self::DMA_FILL_BITS9_MASK) << Self::DMA_FILL_BYTE_RS))
             .wrapping_add((count as u64) << Self::DMA_LPRE_COUNT_RS)
     }
 
@@ -262,7 +291,7 @@ impl DmaInfo {
             if count == 0 { 0 } else { (((src + count - 1) >> 3) - (src >> 3) + 1) - loop_count };
 
         let src64_inc_by_pre = (pre_count > 0 && (src_offset + pre_count) >= 8) as u64;
-        let unaligned_dst_src = (src_offset != dst_offset) as u64;
+        let unaligned_dst_src = (count > 0 && src_offset != dst_offset) as u64;
 
         if neq && post_count == 0 && loop_count > 0 {
             // (dst + count) 0x07 == 7  ==> (dst_offset + count) 0x07 == 7  ==> post_count == 0
@@ -786,6 +815,27 @@ mod tests {
     #[test]
     fn asm_fast_encode_table() {
         let table = generate_fast_encode_table();
+        for i in 0..256 {
+            let dst_offset = (i >> 5) & 0x7;
+            let src_offset = (i >> 2) & 0x7;
+            println!(
+                "\t.quad 0x{:016x}, 0x{:016X}, 0x{:016X}, 0x{:016X} # {:4} - {:4} D{dst_offset} S{src_offset} C{}{}",
+                table[i * 4],
+                table[i * 4 + 1],
+                table[i * 4 + 2],
+                table[i * 4 + 3],
+                i * 4,
+                i * 4 + 3,
+                (i * 4) & 0xF,
+                if i >= 256 { " neq" } else { "" }
+            );
+        }
+        assert!(table.len() == 1024);
+    }
+
+    #[test]
+    fn asm_fast_encode_memcmp_table() {
+        let table = generate_fast_encode_memcmp_table();
         for i in 0..512 {
             let dst_offset = (i >> 5) & 0x7;
             let src_offset = (i >> 2) & 0x7;
@@ -858,7 +908,7 @@ mod tests {
             for dst in 0..256 {
                 for src in 0..256 {
                     for count in 0..256 {
-                        let encode = DmaInfo::calculate_encode(dst, src, count, neq)
+                        let encode = DmaInfo::calculate_encode(dst, src, count, neq, true)
                             | DmaInfo::DMA_REQUIRES_DMA_MASK;
                         let fast_encode = DmaInfo::encode_memcmp_neq(dst, src, count, neq);
                         assert_eq!(

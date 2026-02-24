@@ -80,6 +80,8 @@ impl DmaUnalignedCollector {
             return true;
         }
 
+        // Method get_count get the rows that applies, means that if a
+        // input has src, dst aligned not applies
         let rows = DmaUnalignedInput::get_count(data) as u64;
         if rows == 0 {
             return true;
@@ -93,11 +95,11 @@ impl DmaUnalignedCollector {
 
         if self.inputs.len() == self.num_inputs as usize {
             self.collect_counters.debug_assert_is_final_skip();
-            return self.rlog.log_discard_cond(false, 1, data, true);
+            return self.rlog.log_discard_cond(false, 3, data, true);
         }
 
         if let Some((skip, max_count)) = self.collect_counters.should_collect(rows, op) {
-            self.rlog.log_collect(rows as usize, data);
+            self.rlog.log_collect(rows as u32, data, skip, max_count);
             self.add_input(DmaUnalignedInput::from(
                 data,
                 data_ext,

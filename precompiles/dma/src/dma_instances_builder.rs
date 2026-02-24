@@ -51,6 +51,10 @@ impl DmaInstancesBuilder {
         self.skip_memset_rows += self.count_memset_rows;
         self.skip_memcmp_rows += self.count_memcmp_rows;
         self.skip_inputcpy_rows += self.count_inputcpy_rows;
+        self.count_memcpy_rows = 0;
+        self.count_memset_rows = 0;
+        self.count_memcmp_rows = 0;
+        self.count_inputcpy_rows = 0;
     }
     pub fn reset_count_and_skip(&mut self) {
         self.skip_memcpy_rows = 0;
@@ -94,30 +98,29 @@ impl DmaInstancesBuilder {
             if self.instances.is_empty() {
                 self.open_new_instance();
             }
-            self.instances.last_mut().unwrap().chunks.insert(
-                chunk_id,
-                (
-                    self.inputs_counter as u64,
-                    DmaCollectCounters {
-                        memcpy: CollectCounter::new(
-                            self.skip_memcpy_rows as u32,
-                            self.count_memcpy_rows as u32,
-                        ),
-                        inputcpy: CollectCounter::new(
-                            self.skip_inputcpy_rows as u32,
-                            self.count_inputcpy_rows as u32,
-                        ),
-                        memset: CollectCounter::new(
-                            self.skip_memset_rows as u32,
-                            self.count_memset_rows as u32,
-                        ),
-                        memcmp: CollectCounter::new(
-                            self.skip_memcmp_rows as u32,
-                            self.count_memcmp_rows as u32,
-                        ),
-                    },
+            let collect_counters = DmaCollectCounters {
+                memcpy: CollectCounter::new(
+                    self.skip_memcpy_rows as u32,
+                    self.count_memcpy_rows as u32,
                 ),
-            );
+                inputcpy: CollectCounter::new(
+                    self.skip_inputcpy_rows as u32,
+                    self.count_inputcpy_rows as u32,
+                ),
+                memset: CollectCounter::new(
+                    self.skip_memset_rows as u32,
+                    self.count_memset_rows as u32,
+                ),
+                memcmp: CollectCounter::new(
+                    self.skip_memcmp_rows as u32,
+                    self.count_memcmp_rows as u32,
+                ),
+            };
+            self.instances
+                .last_mut()
+                .unwrap()
+                .chunks
+                .insert(chunk_id, (self.inputs_counter as u64, collect_counters));
             self.instances.last_mut().unwrap().last_chunk = Some(chunk_id);
         }
     }

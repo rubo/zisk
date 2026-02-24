@@ -162,8 +162,18 @@ impl Dma64AlignedInput {
         // Write header
         writeln!(
             file,
-            "{:>8}|{:>10}|{:>10}|{:>22}|{:>21}|{:>4}|{:>12}|{:>9}|{:>8}|{:>14}|{:>18}|{:>9}|src_values",
-            "pos", "src", "dst", "is_last_instance_input", "op", "trace_offset", "skip_rows", "rows", "step", "encoded", "fill_byte"
+            "{:>8}|{:>10}|{:>10}|{:>22}|{:>4}|{:>12}|{:>9}|{:>8}|{:>14}|{:>18}|{:>9}|src_values",
+            "pos",
+            "src",
+            "dst",
+            "is_last_input",
+            "op",
+            "trace_offset",
+            "skip_rows",
+            "rows",
+            "step",
+            "encoded",
+            "fill_byte"
         )?;
 
         // Write data rows
@@ -172,7 +182,7 @@ impl Dma64AlignedInput {
                 input.src_values.iter().map(|v| format!("0x{:016X}", v)).collect();
             writeln!(
                 file,
-                "{:>8}|0x{:08X}|0x{:08X}|{:>22}|{:>21}|{:>4}|{:>12}|{:>9}|{:>8}|{:>14}|0x{:016X}|{:>9}|{}",
+                "{:>8}|0x{:08X}|0x{:08X}|{:>22}|{:>4}|{:>12}|{:>9}|{:>8}|{:>14}|0x{:016X}|{:>9}|{}",
                 pos,
                 input.src,
                 input.dst,

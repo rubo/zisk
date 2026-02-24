@@ -86,7 +86,7 @@ impl DmaCollector {
         }
 
         if self.collect_counters.should_collect_single_row(op) {
-            self.rlog.log_collect(1, data);
+            self.rlog.log_collect(1, data, 0, 0);
             self.inputs.push(if op == ZiskOp::DMA_XMEMSET {
                 DmaInput::from_memset(encoded, op, data, data_ext)
             } else {

@@ -13,7 +13,8 @@
 
 fast_memset:
     movzx   eax, sil
-    
+    mov     rsi, rdi
+
     test    rdx, 0xFFFFFFFFFFFFFFF8
     jz      .L_fast_memset_count_lt_8
 
@@ -134,6 +135,7 @@ fast_memset:
 .L_b2:    stosb
 .L_b1:    stosb
 .L_b0:
+    mov   rax, rsi
     ret
 
 .size fast_memset, .-fast_memset

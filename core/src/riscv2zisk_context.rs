@@ -1891,15 +1891,15 @@ impl Riscv2ZiskContext<'_> {
             {
                 // xmemset transpilation pattern:
                 //
-                //  csrsi 0x816, 2              ===>  xmemset [x0|a0], a0, size, byte ─┐
-                //  addi  x0, reg(dst), byte    addi  x0, reg(dst), byte (no-executed) │ jmp+12
-                //  addi  x0, reg(dst), size    addi  x0, reg(dst), size (no-executed) │
-                // ..........                   ..........    <────────────────────────┘
+                //  csrsi 0x816, 2              ===>  xmemset [x0|a0], a0, size, byte ──┐
+                //  addi  x0, reg(dst), size    addi  x0, reg(dst), size (no-executed)  │ jmp+12
+                //  addi  x0, reg(dst), value   addi  x0, reg(dst), value (no-executed) │
+                // ..........                   ..........    <─────────────────────────┘
 
-                let rs1 = i.rs1; // dst
-                let rs2 = next_instructions[1].imm; // count
+                let rs1 = next_instructions[0].rs1; // dst
+                let rs2 = next_instructions[0].imm; // count
                 let rd = next_instructions[0].rd;
-                let fill_byte = next_instructions[0].imm; // fill_byte
+                let fill_byte = next_instructions[1].imm; // fill_byte
                 assert!((0..=0xFF).contains(&fill_byte));
                 self.create_extended_precompiles_op(
                     i,
@@ -1908,7 +1908,7 @@ impl Riscv2ZiskContext<'_> {
                     rs2 as u64,
                     rd,
                     fill_byte as i64,
-                    false,
+                    true,
                     12,
                 );
             } else {
@@ -1923,9 +1923,9 @@ impl Riscv2ZiskContext<'_> {
             if !next_instructions.is_empty() && next_instructions[0].inst == "addi" {
                 // xmemset transpilation pattern:
                 //
-                //  csrs  0x816, reg(count)      ===>  xmemset [x0|a0], a0, reg(count), byte ─┐
-                //  addi  x0, reg(dst), byte    addi  x0, reg(dst), byte (no-executed)        │ jmp+8
-                // ..........                   ..........    <───────────────────────────────┘
+                //  csrs  0x816, reg(dst)      ===>  xmemset [x0|a0], a0, reg(count), byte ─┐
+                //  addi  x0, reg(cout), byte        addi  x0, reg(dst), byte (no-executed) │ jmp+8
+                // ..........                   ..........    <─────────────────────────────┘
 
                 let rs1 = i.rs1; // dst
                 let rs2 = next_instructions[0].rs1; // count

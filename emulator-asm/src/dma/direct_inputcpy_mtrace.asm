@@ -52,23 +52,15 @@
 # - Preserves direction flag (cld called after any std)
 
 .global direct_dma_inputcpy_mtrace
-.global dma_inputcpy_mtrace
 .global direct_dma_inputcpy_mtrace_with_count_check
 
-.extern fast_dma_encode_inputcpy
 .extern trace_address_threshold
-# .extern trace_resize_request
-
-.ifdef DEBUG
-.section .data
-.align 8
-    dma_check_case:      .quad 0
-    dma_check_step:      .quad 0
-    dma_check_aux:       .quad 0
-    dma_check_threshold: .quad 0
-.endif
+.extern fcall_ctx
+.extern fast_memcpy
+.extern fast_memcpy64
 
 .include "dma_constants.inc"
+.include "fast_dma_encode_macro.inc"
 
 .section .text
 
@@ -82,122 +74,12 @@
 .set R_COUNT,        rdx
 .set R_ENCODE,       rax
 
-dma_inputcpy_mtrace:
-    push    R_MT_ADDR                 # ~3 cycles - save callee-saved register
-    push    R_MT_INDEX                # ~3 cycles - save callee-saved register
-    push    R_AUX                     # ~3 cycles - save callee-saved register
-    push    rbx                       # ~3 cycles - save callee-saved register
-    
-    mov     R_MT_ADDR, R_COUNT        # 1 cycle - setup trace address from count
-    xor     R_MT_INDEX, R_MT_INDEX    # 1 cycle - initialize trace index to 0
-    call    direct_dma_inputcpy_mtrace  # ~5 cycles + function cost
 
-    mov     R_ENCODE, R_MT_INDEX      # 1 cycle - return trace index in R_ENCODE
-    pop     rbx                       # ~3 cycles - restore register
-    pop     R_AUX                     # ~3 cycles - restore register
-    pop     R_MT_INDEX                # ~3 cycles - restore register
-    pop     R_MT_ADDR                 # ~3 cycles - restore register
-
-    ret                               # ~5 cycles
-
-.L_inputcpy_check_mtrace_available:
-
-    # trace_address_threshold containt the address "limit" before call _realloc_trace
-    # trace_address_threshold = TRACE_ADDR + trace_size - MAX_CHUNK_TRACE_SIZE
-
-    # calculate bytes of mtrace used and verify if throw the limit
-
-.ifdef DEBUG
-    mov     qword ptr [dma_check_case], 1
-.endif
-
-    lea     R_AUX, [R_MT_ADDR + 8 * R_MT_INDEX]           # 1 cycle - calculate address mtrace
-    lea     R_AUX, [R_AUX + R_COUNT + MAX_DMA_MT_MARGIN]  # 1 cycle - calculate current mtrace bytes usage
-    sub     R_AUX, [trace_address_threshold]              # ~4 cycles - bytes over threshold (can be negative)
-    jc      .L_inputcpy_mtrace_continue                   # 2 cycles (predicted) - negative means space available
-
-    # check if bytes over threshold are usual for current situation on inside chunk
-    # R_STEP contain number the steps to end of chunk, we need number the steps consumed
-
-.ifdef DEBUG
-    mov     qword ptr [dma_check_case], 2
-    mov     [dma_check_step], R_STEP
-    mov     [dma_check_aux], R_AUX
-.endif
-
-    mov     R_AUX2, CHUNK_SIZE                     # 1 cycle - load chunk size constant
-    sub     R_AUX2, R_STEP                         # 1 cycle - calculate steps consumed in chunk
-    imul    R_AUX2, MAX_BYTES_MTRACE_STEP          # ~3 cycles - bytes expected for consumed steps
-    cmp     R_AUX2, R_AUX                          # 1 cycle - compare expected vs actual
-    jae     .L_inputcpy_mtrace_continue            # 2 cycles (predicted) - expected >= actual, ok
-
-
-    # at this point we need to increase trace, registers R_ENCODE, R_AUX no need to save.
-.ifdef DEBUG
-    mov     qword ptr [dma_check_case], 3
-    mov     R_AUX, [trace_address_threshold]
-    mov     [dma_check_threshold], R_AUX
-.endif
-
-    # mov     qword ptr [trace_resize_request], R_COUNT
-
-    push    R_COUNT                 # ~3 cycles - save general purpose registers
-    push    r8                      # ~3 cycles
-    push    r10                     # ~3 cycles
-    push    r11                     # ~3 cycles
-    push    R_SRC                   # ~3 cycles
-    push    R_DST                   # ~3 cycles
-
-    # IMPORTANT: inside call means unaligned to 16 bits
-
-    sub     rsp, 16*16 + 8          # 1 cycle - allocate stack space for 16 XMM registers
-
-    movaps  [rsp + 0*16], xmm0      # ~4 cycles - save XMM registers (aligned stores)
-    movaps  [rsp + 1*16], xmm1      # ~4 cycles
-    movaps  [rsp + 2*16], xmm2      # ~4 cycles
-    movaps  [rsp + 3*16], xmm3      # ~4 cycles
-    movaps  [rsp + 4*16], xmm4      # ~4 cycles
-    movaps  [rsp + 5*16], xmm5      # ~4 cycles
-    movaps  [rsp + 6*16], xmm6      # ~4 cycles
-    movaps  [rsp + 7*16], xmm7      # ~4 cycles
-    movaps  [rsp + 8*16], xmm8      # ~4 cycles
-    movaps  [rsp + 9*16], xmm9      # ~4 cycles
-    movaps  [rsp + 10*16], xmm10    # ~4 cycles
-    movaps  [rsp + 11*16], xmm11    # ~4 cycles
-    movaps  [rsp + 12*16], xmm12    # ~4 cycles
-    movaps  [rsp + 13*16], xmm13    # ~4 cycles
-    movaps  [rsp + 14*16], xmm14    # ~4 cycles
-    movaps  [rsp + 15*16], xmm15    # ~4 cycles
-
-    call    _realloc_trace          # ~5 cycles + function cost (~100-500 cycles)
-
-    movaps  xmm0, [rsp + 0*16]      # ~4 cycles - restore XMM registers (aligned loads)
-    movaps  xmm1, [rsp + 1*16]      # ~4 cycles
-    movaps  xmm2, [rsp + 2*16]      # ~4 cycles
-    movaps  xmm3, [rsp + 3*16]      # ~4 cycles
-    movaps  xmm4, [rsp + 4*16]      # ~4 cycles
-    movaps  xmm5, [rsp + 5*16]      # ~4 cycles
-    movaps  xmm6, [rsp + 6*16]      # ~4 cycles
-    movaps  xmm7, [rsp + 7*16]      # ~4 cycles
-    movaps  xmm8, [rsp + 8*16]      # ~4 cycles
-    movaps  xmm9, [rsp + 9*16]      # ~4 cycles
-    movaps  xmm10, [rsp + 10*16]    # ~4 cycles
-    movaps  xmm11, [rsp + 11*16]    # ~4 cycles
-    movaps  xmm12, [rsp + 12*16]    # ~4 cycles
-    movaps  xmm13, [rsp + 13*16]    # ~4 cycles
-    movaps  xmm14, [rsp + 14*16]    # ~4 cycles
-    movaps  xmm15, [rsp + 15*16]    # ~4 cycles
-    
-    add     rsp, 16*16 +8           # 1 cycle - deallocate stack space
-
-    pop     R_DST                   # ~3 cycles - restore general purpose registers
-    pop     R_SRC                   # ~3 cycles
-    pop     r11                     # ~3 cycles
-    pop     r10                     # ~3 cycles
-    pop     r8                      # ~3 cycles
-    pop     R_COUNT                 # ~3 cycles
-
-    jmp    .L_inputcpy_mtrace_continue
+# DIRECT CALL
+# RDI = DST
+# RSI = RESERVED(INPUT)
+# RDX = COUNT
+# RCX = TRACE
 
 direct_dma_inputcpy_mtrace_with_count_check:
 
@@ -205,24 +87,27 @@ direct_dma_inputcpy_mtrace_with_count_check:
     # Parameters already in correct registers: R_DST=dst, R_SRC=src, R_COUNT=count
     # Result will be returned in R_ENCODE (encoded value)
 
-    cmp     R_COUNT, MAX_DMA_BYTES_DIRECT_MTRACE # 1 cycle - check if count exceeds direct threshold
-    ja      .L_inputcpy_check_mtrace_available     # 2 cycles (not taken usually) - large count, check trace space
+    cmp     R_COUNT, MAX_DMA_BYTES_DIRECT_MTRACE  # 1 cycle - check if count exceeds direct threshold
+    ja      .L_inputcpy_check_dynamic_trace       # 2 cycles (not taken usually) - large count, check trace space
+    jmp     direct_dma_inputcpy_mtrace
 
-.L_inputcpy_mtrace_continue:
+.L_inputcpy_check_dynamic_trace:
+    call    check_dynamic_mtrace
+
 direct_dma_inputcpy_mtrace:
    
     # Call fast_dma_encode to calculate encoding
     # Parameters already in correct registers: R_DST=dst, R_SRC=src, R_COUNT=count
     # Result will be returned in R_ENCODE (encoded value)
 
-    call    fast_dma_encode_inputcpy  
+    FAST_DMA_ENCODE_NO_SRC    
     
     mov     [R_MT_ADDR + R_MT_INDEX * 8], R_ENCODE    # ~4 cycles - write encoded result to mem trace
     inc     R_MT_INDEX                                # 1 cycle - advance R_MT_INDEX (mem trace index)
         
 .L_pre_dst_to_mtrace:
     # If pre_count > 0, write aligned dst value to trace
-    test    R_ENCODE, PRE_COUNT_MASK   # 1 cycle - check if pre_count > 0
+    test    R_ENCODE, DMA_PRE_COUNT_MASK   # 1 cycle - check if pre_count > 0
     jz      .L_post_dst_to_mtrace      # 2 cycles (predicted taken)
 
     # Branch with pre_count > 0: save original dst value before it's overwritten
@@ -235,7 +120,7 @@ direct_dma_inputcpy_mtrace:
 .L_post_dst_to_mtrace:
 
     # If post_count > 0, write aligned (dst+count) value to trace
-    test    R_ENCODE, POST_COUNT_MASK            # 1 cycle - check if post_count > 0
+    test    R_ENCODE, DMA_POST_COUNT_MASK            # 1 cycle - check if post_count > 0
     jz      .L_input_to_mtrace                   # 2 cycles (predicted taken) - skip to input copy
 
     lea     R_AUX, [R_DST + R_COUNT - 1]         # 1 cycle - R_AUX = dst + count - 1 (last dst byte)
@@ -245,34 +130,29 @@ direct_dma_inputcpy_mtrace:
     inc     R_MT_INDEX                           # 1 cycle - advance trace index
     
 .L_input_to_mtrace:
-    # Copy input data to trace buffer
-    # Total qwords = loop_count (bits 0-31) + extra_src_reads (bits 48-50)
+    # Copy input data to trace buffer, always aligned.
+    # Total qwords = (count + 7)
 
-    mov     R_AUX2, R_ENCODE              # 1 cycle - R_AUX2 = encoded
-    shr     R_AUX2, LOOP_COUNT_RS         # 1 cycle - R_AUX2 = loop_count (bits 32-63)
+    lea     R_AUX2, [R_COUNT + 7]          # 1 cycle - R_AUX2 = count + 7
+    shr     R_AUX2, 3                      # 1 cycle - R_AUX2 = round_up(count/8)
     
-    mov     R_AUX, R_ENCODE               # 1 cycle - R_AUX = encoded
-    shr     R_AUX, EXTRA_SRC_READS_RS     # 1 cycle - shift extra_src_reads to position
-    and     R_AUX, 0x03                   # 1 cycle - R_AUX = extra_src_reads (bits 48-50)
-    add     R_AUX2, R_AUX                 # 1 cycle - R_AUX2 = total qwords to copy
-
     mov     R_AUX, qword ptr [fcall_ctx + FCALL_RESULT_GOT * 8]
-    lea     R_SRC, [fcall_ctx + rcx * 8 + FCALL_RESULT * 8 - 8]
-    add     qword ptr [fcall_ctx + FCALL_RESULT_GOT * 8], R_AUX2
+    lea     R_SRC, [fcall_ctx + R_AUX * 8 + FCALL_RESULT * 8 - 8]
 
-    mov     R_AUX, R_SRC
     push    R_DST                                # ~3 cycles - save dst pointer
     lea     R_DST, [R_MT_ADDR + R_MT_INDEX * 8]  # 1 cycle - R_DST = trace buffer destination
     add     R_MT_INDEX, R_AUX2                   # 1 cycle - advance trace index by qwords copied
     
+    push    R_COUNT
+    mov     R_COUNT, R_AUX2
     call    fast_memcpy64
     # rep movsq                         # ~1.5-2 cycles per qword (hardware optimized)
 
+    pop     R_COUNT
     pop     R_DST                     # ~3 cycles - restore dst pointer
-    mov     R_SRC, R_AUX              # 1 cycle - restore original src pointer    
     
     mov     R_AUX2, R_COUNT
-    call    fast_memcpy
+    jmp     fast_inputcpy
 .L_done:
     ret                                # ~5 cycles
 

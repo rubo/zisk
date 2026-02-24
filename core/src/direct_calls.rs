@@ -147,9 +147,9 @@ pub fn dma_direct_calls(
 
                     // Find how a0, a1, a2 are loaded (search from JALR position = i+1)
                     let jalr_idx = i + 1;
-                    let (a0_offset, a0_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A0);
-                    let (a1_offset, a1_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A1);
-                    let (a2_offset, a2_load) = find_reg_load(&riscv_instructions, jalr_idx, REG_A2);
+                    let (a0_offset, a0_load) = find_reg_load(riscv_instructions, jalr_idx, REG_A0);
+                    let (a1_offset, a1_load) = find_reg_load(riscv_instructions, jalr_idx, REG_A1);
+                    let (a2_offset, a2_load) = find_reg_load(riscv_instructions, jalr_idx, REG_A2);
 
                     // Check if any register load was not found
                     let has_missing = matches!(a0_load, RegLoadType::NotFound)
@@ -193,9 +193,9 @@ pub fn dma_direct_calls(
                 };
 
                 // Find how a0, a1, a2 are loaded
-                let (a0_offset, a0_load) = find_reg_load(&riscv_instructions, i, REG_A0);
-                let (a1_offset, a1_load) = find_reg_load(&riscv_instructions, i, REG_A1);
-                let (a2_offset, a2_load) = find_reg_load(&riscv_instructions, i, REG_A2);
+                let (a0_offset, a0_load) = find_reg_load(riscv_instructions, i, REG_A0);
+                let (a1_offset, a1_load) = find_reg_load(riscv_instructions, i, REG_A1);
+                let (a2_offset, a2_load) = find_reg_load(riscv_instructions, i, REG_A2);
 
                 // Check if any register load was not found
                 let has_missing = matches!(a0_load, RegLoadType::NotFound)

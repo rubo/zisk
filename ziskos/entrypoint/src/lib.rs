@@ -285,6 +285,6 @@ mod ziskos {
     core::arch::global_asm!(include_str!("dma/memcpy.s"));
     core::arch::global_asm!(include_str!("dma/memmove.s"));
     core::arch::global_asm!(include_str!("dma/memcmp.s"));
-    core::arch::global_asm!(include_str!("dma/inputcpy.s"));
+    //core::arch::global_asm!(include_str!("dma/inputcpy.s"));
     core::arch::global_asm!(include_str!("dma/memset.s"));
 }

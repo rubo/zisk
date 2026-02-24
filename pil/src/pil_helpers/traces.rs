@@ -16,7 +16,7 @@ use std::fmt;
 #[allow(dead_code)]
 type FieldExtension<F> = [F; 3];
 
-pub const PILOUT_HASH: &str = "1654b031412800684af604b3948bb3789b00f66cb4d0d88b1a980c98a3d2c8fe";
+pub const PILOUT_HASH: &str = "afb474f9c9b38252b8443eabb79061a3d02ed2fc237a247a09c9d26d3c420e6b";
 
 pub const MERKLE_TREE_ARITY: u64 = 4;
 
@@ -282,7 +282,7 @@ trace_row!(DmaPrePostMemCpyFixedRow<F> {
 pub type DmaPrePostMemCpyFixed<F> = GenericTrace<DmaPrePostMemCpyFixedRow<F>, 2097152, 0, 10>;
 
 trace_row!(DmaPrePostMemCpyTraceRow<F> {
- main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(3), is_post:bit, sel_memcpy:bit, selr:[bit; 7], dst_offset_gt_src_offset:bit, src64:ubit(29), src_offset:ubit(3), enabled_second_read:bit, rb:[u8; 16], pb:[u8; 8], sb:[bit; 8], bus_write_value:[u32; 2], write_value:[u32; 4],
+ main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(4), is_post:bit, sel_memcpy:bit, selr:[bit; 7], dst_offset_gt_src_offset:bit, src64:ubit(29), src_offset:ubit(3), enabled_second_read:bit, rb:[u8; 16], pb:[u8; 8], sb:[bit; 8], bus_write_value:[u32; 2], write_value:[u32; 4],
 });
 pub type DmaPrePostMemCpyTrace<F> = GenericTrace<DmaPrePostMemCpyTraceRow<F>, 2097152, 0, 10>;
 
@@ -296,7 +296,7 @@ trace_row!(DmaPrePostInputCpyFixedRow<F> {
 pub type DmaPrePostInputCpyFixed<F> = GenericTrace<DmaPrePostInputCpyFixedRow<F>, 2097152, 0, 11>;
 
 trace_row!(DmaPrePostInputCpyTraceRow<F> {
- main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(3), is_post:bit, sel_inputcpy:bit, rb:[u8; 8], pb:[u8; 8], sb:[bit; 8], bus_write_value:[u32; 2],
+ main_step:ubit(36), dst64:ubit(29), dst_offset:ubit(3), count:ubit(4), is_post:bit, sel_inputcpy:bit, rb:[u8; 8], pb:[u8; 8], sb:[bit; 8], bus_write_value:[u32; 2],
 });
 pub type DmaPrePostInputCpyTrace<F> = GenericTrace<DmaPrePostInputCpyTraceRow<F>, 2097152, 0, 11>;
 
@@ -860,12 +860,12 @@ pub const PACKED_INFO: &[(usize, usize, PackedInfoConst)] = &[
     (0, 10, PackedInfoConst {
         is_packed: true,
         num_packed_words: 8,
-        unpack_info: &[36, 29, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 29, 3, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 32, 32, 32, 32, 32, 32],
+        unpack_info: &[36, 29, 3, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 29, 3, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 32, 32, 32, 32, 32, 32],
     }),
     (0, 11, PackedInfoConst {
         is_packed: true,
         num_packed_words: 5,
-        unpack_info: &[36, 29, 3, 3, 1, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 32, 32],
+        unpack_info: &[36, 29, 3, 4, 1, 1, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 1, 1, 1, 1, 1, 32, 32],
     }),
     (0, 12, PackedInfoConst {
         is_packed: true,

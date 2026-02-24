@@ -141,38 +141,6 @@ impl<F: PrimeField64> DmaPrePostInputCpySM<F> {
         let table_row = DmaPrePostRom::get_row(dst_offset as usize, 0, count, false, false, false);
         // println!("PRE-POST-ROM [{table_row}] dst_offset: {dst_offset} src_offset: {src_offset} count: {count}");
         pre_post_table_mul[table_row] += 1;
-
-        // println!("DMA_PRE_POST: bytes={bytes:?} selr_value={selr_value} mask=0x{mask:016X}");
-        // println!(
-        //     "DMA_PRE_POST: read_value_01=0x{read_value_01:016X} read_value_23=0x{read_value_23:016X}"
-        // );
-        // println!("DMA_PRE_POST: write_value_xx=[0x{write_value_01:016X},0x{write_value_23:016X}] dst_offset={dst_offset} src_offset={src_offset}");
-        // println!(
-        //     "DMA_PRE_POST: selb={:?}",
-        //     [
-        //         ((mask & 0x0000_0000_0000_00FF) != 0) as u8,
-        //         ((mask & 0x0000_0000_0000_FF00) != 0) as u8,
-        //         ((mask & 0x0000_0000_00FF_0000) != 0) as u8,
-        //         ((mask & 0x0000_0000_FF00_0000) != 0) as u8,
-        //         ((mask & 0x0000_00FF_0000_0000) != 0) as u8,
-        //         ((mask & 0x0000_FF00_0000_0000) != 0) as u8,
-        //         ((mask & 0x00FF_0000_0000_0000) != 0) as u8,
-        //         ((mask & 0xFF00_0000_0000_0000) != 0) as u8
-        //     ]
-        // );
-        // println!(
-        //     "DMA_PRE_POST: selread={:?}",
-        //     [
-        //         (selr_value == 0) as u8,
-        //         (selr_value == 1) as u8,
-        //         (selr_value == 2) as u8,
-        //         (selr_value == 3) as u8,
-        //         (selr_value == 4) as u8,
-        //         (selr_value == 5) as u8,
-        //         (selr_value == 6) as u8,
-        //         (selr_value == 7) as u8
-        //     ]
-        // );
     }
 
     /// Processes a slice of operation data, updating the trace.

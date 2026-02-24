@@ -109,7 +109,7 @@ impl Dma64AlignedCollector {
         }
         // self.collect_counters.memcpy.should_process(rows)
         if let Some((skip, max_count)) = self.collect_counters.should_collect(rows as u64, op) {
-            self.rlog.log_collect(rows, data);
+            self.rlog.log_collect(rows as u32, data, skip, max_count);
             self.add_input(match op {
                 ZiskOp::DMA_XMEMSET => Dma64AlignedInput::from_memset(
                     data,

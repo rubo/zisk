@@ -2532,7 +2532,7 @@ fn opc_dma_memcpys(ctx: &mut InstContext, extended: bool) {
                 if extended { ctx.extended_arg as u64 } else { ctx.mem.read(EXTRA_PARAMS_ADDR, 8) };
             ctx.precompiled.input_data.clear();
 
-            #[cfg(feature = "debug_dma")]
+            #[cfg(feature = "log_dma_ops")]
             println!("opc_dma_memcpy 0x{dst:08X} 0x{src:08X} {count} GMR STEP:{}", ctx.step);
 
             let encoded = DmaInfo::encode_memcpy(dst, src, count as usize);

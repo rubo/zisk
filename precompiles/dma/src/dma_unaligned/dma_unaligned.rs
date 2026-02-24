@@ -214,7 +214,8 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             .iter()
             .map(|inputs| inputs.iter().map(|input| input.count as usize).sum::<usize>())
             .sum();
-        assert!(total_inputs <= num_rows);
+
+        assert!(total_inputs <= num_rows, "total_inputs({total_inputs}) > num_rows({num_rows})");
         assert!(total_inputs > 0);
 
         dma_trace("DmaUnaligned", total_inputs, num_rows);

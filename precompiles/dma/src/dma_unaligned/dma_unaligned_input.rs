@@ -96,7 +96,7 @@ impl DmaUnalignedInput {
         // Write header
         writeln!(
             file,
-            "{:>8}|{:>10}|{:>10}|{:>22}|{:>21}|{:>9}|{:>12}|{:>8}|{:>8}|{:>14}|{:>18}|src_values",
+            "{:>8}|{:>10}|{:>10}|{:>22}|{:>9}|{:>12}|{:>8}|{:>8}|{:>14}|{:>18}|src_values",
             "pos",
             "src",
             "dst",
@@ -115,7 +115,7 @@ impl DmaUnalignedInput {
                 input.src_values.iter().map(|v| format!("0x{:016X}", v)).collect();
             writeln!(
                 file,
-                "{:>8}|0x{:08X}|0x{:08X}|{:>22}|{:>21}|{:>9}|{:>12}|{:>8}|{:>8}|{:>14}|0x{:016X}|{}",
+                "{:>8}|0x{:08X}|0x{:08X}|{:>22}|{:>9}|{:>12}|{:>8}|{:>8}|{:>14}|0x{:016X}|{}",
                 pos,
                 input.src,
                 input.dst,

@@ -229,7 +229,7 @@ impl<F: PrimeField64> DmaPrePostSM<F> {
             } else {
                 0
             };
-            let is_negative = DmaInfo::is_memcmp_negative(input.encoded);
+            let is_negative = result != 0 && DmaInfo::is_memcmp_negative(input.encoded);
             let is_nz = result != 0;
             trace.set_memcmp_result_is_negative(is_negative);
             trace.set_memcmp_result_nz(is_nz);

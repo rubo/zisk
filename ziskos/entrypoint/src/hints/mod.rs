@@ -1,3 +1,4 @@
+mod blake2b;
 mod bls12_381;
 mod bn254;
 mod hint_buffer;
@@ -32,6 +33,7 @@ use std::thread::ThreadId;
 #[cfg(zisk_hints_single_thread)]
 use std::sync::Mutex;
 
+pub use blake2b::*;
 pub use bls12_381::*;
 pub use bn254::*;
 pub use keccak256::*;

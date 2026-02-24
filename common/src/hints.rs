@@ -92,6 +92,9 @@ pub const HINT_VERIFY_KZG_PROOF: u32 = 0x0600;
 // Keccak256 hint codes
 pub const HINT_KECCAK256: u32 = 0x0700;
 
+// Blake2b hint codes
+pub const HINT_BLAKE2B_COMPRESS: u32 = 0x0800;
+
 /// Control code variants for stream control.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]

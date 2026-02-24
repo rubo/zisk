@@ -133,7 +133,7 @@ impl ZiskProgramPK {
             if let Some(asm_resources) = &self.asm_resources {
                 asm_resources
                     .set_hints_stream_src(stream)
-                    .expect("Failed to set hints stream source");
+                    .map_err(|e| anyhow::anyhow!("Failed to set hints stream source: {}", e))?;
             } else {
                 return Err(anyhow::anyhow!(
                     "ASM resources not initialized, cannot register hints stream"

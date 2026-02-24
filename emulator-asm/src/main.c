@@ -483,6 +483,8 @@ uint64_t trace_total_mapped_size = 0; // Total mapped trace size
 
 void * trace_get_chunk_address (uint64_t chunk_id)
 {
+    assert(gen_method != RomHistogram || chunk_id == 0);
+
     if (chunk_id == 0)
     {
         return (void *)TRACE_ADDR;
@@ -495,6 +497,11 @@ void * trace_get_chunk_address (uint64_t chunk_id)
 
 uint64_t trace_get_chunk_size (uint64_t chunk_id)
 {
+    if (gen_method == RomHistogram) {
+        assert(chunk_id == 0);
+        return trace_size;
+    }
+
     if (chunk_id == 0)
     {
         return TRACE_INITIAL_SIZE;
@@ -4155,8 +4162,6 @@ void server_setup (void)
         gettimeofday(&stop_time, NULL);
         duration = TimeDiff(start_time, stop_time);
 #endif
-        printf("%s trace mapping on %p with %ld MB\n", log_name, pTrace, chunk_player_mt_size >> 20);
-        fflush(stdout);        
         if (pTrace == MAP_FAILED)
         {
             printf("ERROR: Failed calling mmap(MT) errno=%d=%s\n", errno, strerror(errno));

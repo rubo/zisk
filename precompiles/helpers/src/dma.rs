@@ -909,7 +909,7 @@ mod tests {
                 for src in 0..256 {
                     for count in 0..256 {
                         let encode = DmaInfo::calculate_encode(dst, src, count, neq, true)
-                            | DmaInfo::DMA_REQUIRES_DMA_MASK;
+                            | DmaInfo::DMA_REQUIRES_DMA_TEST_MASK;
                         let fast_encode = DmaInfo::encode_memcmp_neq(dst, src, count, neq);
                         assert_eq!(
                         encode,
@@ -921,59 +921,5 @@ mod tests {
                 }
             }
         }
-    }
-
-    #[test]
-    fn benchmark_fast_encode_vs_encode_memcpy() {
-        use std::time::Instant;
-
-        const ITERATIONS: usize = 10_000_000;
-        let mut checksum1 = DmaInfo::encode_memcpy(0, 0, 8);
-        let mut checksum2 = DmaInfo::encode_memcpy(0, 0, 8);
-
-        // Benchmark encode_memcpy (original)
-        let start = Instant::now();
-        for i in 0..ITERATIONS {
-            let dst = (i & 0xFF) as u64;
-            let src = ((i >> 8) & 0xFF) as u64;
-            let count = (i >> 16) & 0xFF;
-            checksum1 ^= DmaInfo::encode_memcpy(dst, src, count);
-        }
-        let duration_encode = start.elapsed();
-
-        // Benchmark fast_encode (table-based)
-        let start = Instant::now();
-        for i in 0..ITERATIONS {
-            let dst = (i & 0xFF) as u64;
-            let src = ((i >> 8) & 0xFF) as u64;
-            let count = (i >> 16) & 0xFF;
-            checksum2 ^= DmaInfo::encode_memcpy(dst, src, count);
-        }
-        let duration_fast = start.elapsed();
-
-        // Verify both produce same results
-        assert_eq!(checksum1, checksum2, "Checksums must match!");
-
-        // Print results
-        println!("\n═══════════════════════════════════════════════════════");
-        println!("  DMA Encoding Benchmark ({} iterations)", ITERATIONS);
-        println!("═══════════════════════════════════════════════════════");
-        println!(
-            "  encode_memcpy:  {:?} ({:.2} ns/op)",
-            duration_encode,
-            duration_encode.as_nanos() as f64 / ITERATIONS as f64
-        );
-        println!(
-            "  fast_encode:    {:?} ({:.2} ns/op)",
-            duration_fast,
-            duration_fast.as_nanos() as f64 / ITERATIONS as f64
-        );
-        println!("───────────────────────────────────────────────────────");
-        let speedup = duration_encode.as_nanos() as f64 / duration_fast.as_nanos() as f64;
-        println!("  Speedup:        {:.2}x faster", speedup);
-        println!("═══════════════════════════════════════════════════════\n");
-
-        // Assert that fast_encode is actually faster
-        assert!(duration_fast < duration_encode, "fast_encode should be faster than encode_memcpy");
     }
 }

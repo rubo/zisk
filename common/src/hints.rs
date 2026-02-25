@@ -264,6 +264,8 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_VERIFY_KZG_PROOF => Ok(Self::VerifyKzgProof),
             // Keccak256 Hint
             HINT_KECCAK256 => Ok(Self::Keccak256),
+            // Blake2b Hint
+            HINT_BLAKE2B_COMPRESS => Ok(Self::Blake2bCompress),
             _ => Err(anyhow::anyhow!("Invalid built-in hint code: {:#x}", value)),
         }
     }

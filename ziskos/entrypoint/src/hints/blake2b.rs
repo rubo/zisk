@@ -1,7 +1,4 @@
-use crate::hints::{
-    macros::{define_hint, register_hint_meta},
-    HINT_BUFFER,
-};
+use crate::hints::{macros::register_hint_meta, HINT_BUFFER};
 use zisk_common::HINT_BLAKE2B_COMPRESS;
 
 #[no_mangle]
@@ -17,7 +14,9 @@ pub unsafe extern "C" fn hint_blake2b_compress(
     }
 
     #[cfg(zisk_hints_single_thread)]
-    crate::hints::check_main_thread();
+    if !check_main_thread() {
+        return;
+    }
 
     let total_len = 8 + 64 + 128 + 16 + 8; // rounds + state + message + offset + final_block
 

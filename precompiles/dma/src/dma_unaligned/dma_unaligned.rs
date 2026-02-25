@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use fields::PrimeField64;
-use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator as _};
 
-use crate::DmaUnalignedInput;
+use crate::{dma_trace, DmaUnalignedInput};
 use pil_std_lib::Std;
 use precompiles_helpers::DmaInfo;
 use proofman_common::{AirInstance, FromTrace, ProofmanResult};
@@ -78,6 +77,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         air_values: &mut DmaUnalignedAirValues<F>,
     ) -> usize {
         let rows = input.count as usize;
+        let is_last_instance_input = rows >= trace.len();
         let initial_count = DmaInfo::get_loop_count(input.encoded) - input.skip as usize;
         let mut count = initial_count;
         let src_offset = DmaInfo::get_loop_src_offset(input.encoded);
@@ -85,16 +85,13 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         let mut src64 = (input.src >> 3) + input.skip;
 
         let mut src_values_index = 0;
+
         let mut seq_end = false;
         let mut next_value = 0;
-        // println!(
-        //     "DMA_UNALIGNED INPUT {input:?} count:{count} rows:{rows} dma_info:{}",
-        //     DmaInfo::to_string(input.encoded)
-        // );
         assert!(rows > 0);
         for (irow, row) in trace.iter_mut().enumerate().take(rows) {
             row.set_main_step(input.step);
-            row.set_is_mem_eq(false);
+            row.set_is_memeq(input.is_mem_eq);
             row.set_no_last_no_seq_end(count != 0);
             row.set_previous_seq_end(input.skip == 0 && irow == 0);
 
@@ -116,19 +113,9 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
 
             let value = input.src_values[src_values_index];
             src_values_index += 1;
-            let write_value = if count == 0 {
+            if count == 0 {
                 seq_end = true;
                 next_value = 0;
-                match src_offset {
-                    1 => value >> 8,
-                    2 => value >> 16,
-                    3 => value >> 24,
-                    4 => value >> 32,
-                    5 => value >> 40,
-                    6 => value >> 48,
-                    7 => value >> 56,
-                    _ => panic!("invalid src_offset {src_offset} on DmaUnaligned"),
-                }
             } else {
                 count -= 1;
                 if src_values_index >= input.src_values.len() {
@@ -140,16 +127,6 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
                     );
                 }
                 next_value = input.src_values[src_values_index];
-                match src_offset {
-                    1 => (value >> 8) | (next_value << 56),
-                    2 => (value >> 16) | (next_value << 48),
-                    3 => (value >> 24) | (next_value << 40),
-                    4 => (value >> 32) | (next_value << 32),
-                    5 => (value >> 40) | (next_value << 24),
-                    6 => (value >> 48) | (next_value << 16),
-                    7 => (value >> 56) | (next_value << 8),
-                    _ => panic!("invalid src_offset {src_offset} on DmaUnaligned"),
-                }
             };
 
             row.set_read_bytes(0, value as u8);
@@ -161,8 +138,8 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             row.set_read_bytes(6, (value >> 48) as u8);
             row.set_read_bytes(7, (value >> 56) as u8);
 
-            row.set_write_value(0, write_value as u32);
-            row.set_write_value(1, (write_value >> 32) as u32);
+            // row.set_write_value(0, write_value as u32);
+            // row.set_write_value(1, (write_value >> 32) as u32);
 
             let value = value as usize;
             local_dual_byte_table[value & 0xFFFF] += 1;
@@ -171,7 +148,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             local_dual_byte_table[(value >> 48) & 0xFFFF] += 1;
         }
 
-        if input.is_last_instance_input {
+        if is_last_instance_input {
             if seq_end {
                 air_values.segment_last_seq_end = F::ONE;
                 air_values.segment_last_src64 = F::ZERO;
@@ -182,7 +159,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
                 air_values.segment_last_offset = F::ZERO;
                 air_values.last_count_chunk[0] = F::ZERO;
                 air_values.last_count_chunk[1] = F::ZERO;
-                air_values.segment_last_is_mem_eq = F::ZERO;
+                air_values.segment_last_is_memeq = F::ZERO;
                 air_values.segment_next_bytes = [F::ZERO; 8];
             } else {
                 let last_row = rows - 1;
@@ -195,7 +172,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
                 let count = trace[last_row].get_count();
                 air_values.last_count_chunk[0] = F::from_u16(count as u16);
                 air_values.last_count_chunk[1] = F::from_u16((count >> 16) as u16);
-                air_values.segment_last_is_mem_eq = F::from_bool(trace[last_row].get_is_mem_eq());
+                air_values.segment_last_is_memeq = F::from_bool(trace[last_row].get_is_memeq());
                 for (index, byte) in air_values.segment_next_bytes.iter_mut().enumerate() {
                     *byte = F::from_u8((next_value >> (index * 8)) as u8);
                 }
@@ -211,35 +188,8 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
     /// * `input` - The operation data to process.
     #[inline(always)]
     pub fn process_empty_slice(&self, trace: &mut DmaUnalignedTraceRowType<F>) {
-        trace.set_main_step(0);
-        trace.set_is_mem_eq(false);
-        trace.set_no_last_no_seq_end(false);
-        trace.set_previous_seq_end(true);
-
-        trace.set_dst64(0);
-        trace.set_src64(0);
-
-        trace.set_offset_2(false);
-        trace.set_offset_3(false);
-        trace.set_offset_4(false);
-        trace.set_offset_5(false);
-        trace.set_offset_6(false);
-        trace.set_offset_7(false);
-
-        trace.set_count(0);
         trace.set_seq_end(true);
-
-        trace.set_read_bytes(0, 0);
-        trace.set_read_bytes(1, 0);
-        trace.set_read_bytes(2, 0);
-        trace.set_read_bytes(3, 0);
-        trace.set_read_bytes(4, 0);
-        trace.set_read_bytes(5, 0);
-        trace.set_read_bytes(6, 0);
-        trace.set_read_bytes(7, 0);
-
-        trace.set_write_value(0, 0);
-        trace.set_write_value(1, 0);
+        trace.set_previous_seq_end(true);
     }
 
     /// Computes the witness for a series of inputs and produces an `AirInstance`.
@@ -257,7 +207,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         is_last_segment: bool,
         trace_buffer: Vec<F>,
     ) -> ProofmanResult<AirInstance<F>> {
-        let mut trace = DmaUnalignedTraceType::<F>::new_from_vec(trace_buffer)?;
+        let mut trace = DmaUnalignedTraceType::<F>::new_from_vec_zeroes(trace_buffer)?;
         let num_rows = trace.num_rows();
 
         let total_inputs: usize = inputs
@@ -265,18 +215,15 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             .map(|inputs| inputs.iter().map(|input| input.count as usize).sum::<usize>())
             .sum();
 
-        assert!(total_inputs <= num_rows);
+        assert!(total_inputs <= num_rows, "total_inputs({total_inputs}) > num_rows({num_rows})");
         assert!(total_inputs > 0);
 
-        tracing::debug!(
-            "··· Creating DmaUnaligned instance [{total_inputs} / {num_rows} rows filled {:.2}%]",
-            total_inputs as f64 / num_rows as f64 * 100.0
-        );
+        dma_trace("DmaUnaligned", total_inputs, num_rows);
 
         timer_start_trace!(DMA_UNALIGNED_TRACE);
 
+        let flat_inputs = crate::flatten_and_reorder_inputs(inputs);
         // Split the dma_trace.buffer into slices matching each inner vector’s length.
-        let flat_inputs: Vec<_> = inputs.iter().flatten().collect();
         let trace_rows = trace.buffer.as_mut_slice();
 
         // TODO: add std method to used short table, no sense with instances around 2^22 use 64 bits, need more space.
@@ -293,8 +240,8 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             row_offset += rows_used;
         }
 
-        let padding_rows = num_rows - row_offset;
-        let last_count = if padding_rows == 0 && !trace_rows[num_rows - 1].get_seq_end() {
+        let padding_size = num_rows - row_offset;
+        let last_count = if padding_size == 0 && !trace_rows[num_rows - 1].get_seq_end() {
             trace_rows[num_rows - 1].get_count()
         } else {
             0
@@ -302,7 +249,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         self.std.range_check(self.range_16_bits_id, (last_count & 0xFFFF) as i64, 1);
         self.std.range_check(self.range_16_bits_id, ((last_count >> 16) & 0xFFFF) as i64, 1);
 
-        local_dual_byte_table[0] += (padding_rows * 4) as u64;
+        local_dual_byte_table[0] += (padding_size * 4) as u64;
         self.std.inc_virtual_rows_ranged(self.dual_range_byte_id, &local_dual_byte_table);
 
         air_values.segment_id = F::from_usize(segment_id.into());
@@ -315,7 +262,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             air_values.segment_previous_src64 = F::ZERO;
             air_values.segment_previous_main_step = F::ZERO;
             air_values.segment_previous_count = F::ZERO;
-            air_values.segment_previous_is_mem_eq = F::ZERO;
+            air_values.segment_previous_is_memeq = F::ZERO;
             air_values.segment_previous_offset = F::ZERO;
             air_values.segment_first_bytes = [F::ZERO; 8];
         } else {
@@ -324,7 +271,7 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
             air_values.segment_previous_src64 = F::from_u32(trace_rows[0].get_src64() - 1);
             air_values.segment_previous_main_step = F::from_u64(trace_rows[0].get_main_step());
             air_values.segment_previous_count = F::from_u32(trace_rows[0].get_count() + 1);
-            air_values.segment_previous_is_mem_eq = F::from_bool(trace_rows[0].get_is_mem_eq());
+            air_values.segment_previous_is_memeq = F::from_bool(trace_rows[0].get_is_memeq());
             air_values.segment_previous_offset =
                 F::from_u8(DmaInfo::get_loop_src_offset(first_input.encoded));
             for (index, byte) in air_values.segment_first_bytes.iter_mut().enumerate() {
@@ -333,32 +280,18 @@ impl<F: PrimeField64> DmaUnalignedSM<F> {
         }
 
         // padding
-        if padding_rows > 0 {
-            air_values.padding_rows = F::from_u32(padding_rows as u32);
-            self.process_empty_slice(&mut trace_rows[row_offset]);
-            let empty_row = trace_rows[row_offset];
-            trace_rows[row_offset + 1..].par_iter_mut().for_each(|row| {
-                *row = empty_row;
-            });
+        if padding_size > 0 {
+            air_values.padding_size = F::from_u32(padding_size as u32);
+            for row in trace_rows.iter_mut().take(num_rows).skip(row_offset) {
+                self.process_empty_slice(row);
+            }
             air_values.segment_last_seq_end = F::ONE;
             air_values.segment_last_src64 = F::ZERO;
             air_values.segment_last_dst64 = F::ZERO;
             air_values.segment_last_main_step = F::ZERO;
             air_values.segment_last_count = F::ZERO;
-            air_values.segment_last_is_mem_eq = F::ZERO;
+            air_values.segment_last_is_memeq = F::ZERO;
             air_values.segment_next_bytes = [F::ZERO; 8];
-        } else {
-            trace[num_rows - 1].set_no_last_no_seq_end(false);
-        }
-        #[cfg(feature = "debug_dma")]
-        {
-            println!("TRACE DmaUnalignedSM @{segment_id} [0] {:?}", trace[0]);
-            println!(
-                "TRACE DmaUnalignedSM @{segment_id} [{}] {:?}",
-                num_rows - 1,
-                trace[num_rows - 1]
-            );
-            println!("TRACE DmaUnalignedSM AIR_VALUES {:?}", air_values);
         }
         timer_stop_and_log_trace!(DMA_UNALIGNED_TRACE);
         let from_trace = FromTrace::new(&mut trace).with_air_values(&mut air_values);

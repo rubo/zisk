@@ -79,6 +79,17 @@ pub struct ZiskVerifyConstraints {
 
 impl ZiskVerifyConstraints {
     pub fn run(&mut self) -> Result<()> {
+        // panic::set_hook(Box::new(|panic_info| {
+        //     eprintln!("\x1B[31mPANIC DETECTED");
+        //     eprintln!("{} at {:?}", panic_info, panic_info.location());
+
+        //     // Backtrace
+        //     let bt = std::backtrace::Backtrace::force_capture();
+        //     eprintln!("Backtrace:\n{}", bt);
+
+        //     std::process::exit(101);
+        // }));
+
         // Check if the deprecated alias was used
         if std::env::args().any(|arg| arg == "--input") {
             eprintln!("{}", "Warning: --input is deprecated, use --inputs instead".yellow().bold());

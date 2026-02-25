@@ -22,8 +22,9 @@ getrandom = { version = "0.2", features = ["custom"] }
 cfg-if = "1.0"
 tiny-keccak = { version = "2.0.0", features = ["keccak"] }
 serde = { workspace = true, features = ["derive"] }
-
 bincode = { workspace = true }
+zisk-definitions = { path = "../../definitions" }
+
 sha2 = { workspace = true }
 fields = { git = "https://github.com/0xPolygonHermez/pil2-proofman.git", branch = "pre-develop-0.16.0", features = [
     "verify",
@@ -41,8 +42,9 @@ tokio = { workspace = true, optional = true}
 ctor = { version = "0.2", optional = true }
 
 [features]
-default = ["user-hints"]
+default = ["user-hints", "inputcpy"]
 user-hints = ["dep:zisk-common", "dep:bytes", "dep:paste", "dep:once_cell", "dep:ctor", "dep:anyhow", "dep:tokio"]
+inputcpy = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

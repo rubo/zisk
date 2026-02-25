@@ -48,6 +48,7 @@ members = [
     "distributed/crates/worker",
     "sdk",
     "ziskbuild",
+	"definitions",
 ]
 
 resolver = "2"
@@ -100,6 +101,7 @@ zisk-sdk = { path = "sdk" }
 zisk-build = { path = "ziskbuild" }
 precompiles-hints = { path = "precompiles/hints" }
 zisk-verifier = { path = "verifier" }
+zisk-definitions = { path = "definitions" }
 
 # Distributed crates
 zisk-distributed-common = { path = "distributed/crates/common" }

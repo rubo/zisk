@@ -6,8 +6,8 @@
         .p2align        4
         .type   memcmp,@function
 memcmp:
-        csrs    0x814, a2  # Marker: Write count (a2) to CSR 0x814
-        add	a0,a0,a1
+        csrs    0x814, a1  # Marker: Write count (a2) to CSR 0x814
+        add	a0,a0,a2        
         ret
                
         .size memcmp, .-memcmp

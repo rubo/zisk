@@ -300,6 +300,7 @@ dependencies = [
  "mem-common",
  "mem-planner-cpp",
  "named-sem",
+ "proofman-common",
  "rayon",
  "thiserror 2.0.18",
  "tracing",
@@ -2989,6 +2990,7 @@ dependencies = [
  "pil-std-lib",
  "precompiles-common",
  "precompiles-helpers",
+ "proofman",
  "proofman-common",
  "proofman-macros",
  "proofman-util",
@@ -5950,8 +5952,13 @@ dependencies = [
  "serde",
  "sha2",
  "tiny-keccak",
+ "zisk-definitions",
  "ziskos-hints",
 ]
+
+[[package]]
+name = "zisk-definitions"
+version = "0.16.0"
 
 [[package]]
 name = "zisk-distributed-common"
@@ -6126,6 +6133,7 @@ dependencies = [
  "object",
  "proofman-common",
  "rayon",
+ "regex",
  "riscv",
  "sm-arith",
  "sm-binary",
@@ -6163,6 +6171,7 @@ dependencies = [
  "tiny-keccak",
  "tokio",
  "zisk-common",
+ "zisk-definitions",
 ]
 
 [[package]]

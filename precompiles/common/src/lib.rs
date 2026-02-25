@@ -145,9 +145,9 @@ impl MemProcessor for MemCounterProcessor<'_> {
 }
 
 impl MemBusHelpers {
-    /// Generates an aligned memory load operation.
+    /// Generates an aligned memory read operation.
     /// The address must be 8-byte aligned.
-    pub fn mem_aligned_load<P: MemProcessor>(
+    pub fn mem_aligned_read<P: MemProcessor>(
         addr: u32,
         step: u64,
         mem_value: u64,
@@ -211,7 +211,7 @@ impl MemBusHelpers {
 
     /// Generates multiple aligned memory load operations from a slice of values.
     /// The address must be 8-byte aligned.
-    pub fn mem_aligned_load_from_slice<P: MemProcessor>(
+    pub fn mem_aligned_read_from_slice<P: MemProcessor>(
         addr: u32,
         step: u64,
         values: &[u64],
@@ -226,6 +226,31 @@ impl MemBusHelpers {
             mem_processor.process_mem_data(&data);
         }
     }
+
+    /// Generates multiple aligned memory double load operations from a slice of values. This function
+    /// is useful for memcmp when are aligned because the words must be the same. At same time do dst
+    /// and src read. The address must be 8-byte aligned.
+    pub fn mem_double_aligned_read_from_slice<P: MemProcessor>(
+        dst: u32,
+        src: u32,
+        step: u64,
+        values: &[u64],
+        mem_processor: &mut P,
+    ) {
+        assert!(dst % 8 == 0);
+        assert!(src % 8 == 0);
+        let mut dst = dst as u64;
+        let mut src = src as u64;
+        let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 2;
+        for value in values.iter() {
+            let mut data: [u64; 7] = [MEMORY_LOAD_OP, dst, mem_step, 8, *value, 0, 0];
+            mem_processor.process_mem_data(&data);
+            data[1] = src;
+            mem_processor.process_mem_data(&data);
+            dst += 8;
+            src += 8;
+        }
+    }
     /// Generates multiple aligned memory write operations from a slice of values.
     /// The address must be 8-byte aligned.
     pub fn mem_aligned_write_from_slice<P: MemProcessor>(
@@ -237,6 +262,23 @@ impl MemBusHelpers {
         assert!(addr % 8 == 0);
         let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 3;
         for (i, &value) in values.iter().enumerate() {
+            let data: [u64; 7] =
+                [MEMORY_STORE_OP, (addr as usize + i * 8) as u64, mem_step, 8, 0, 0, value];
+            mem_processor.process_mem_data(&data);
+        }
+    }
+    /// Generates multiple aligned memory write operations with same fill pattern
+    /// The address must be 8-byte aligned.
+    pub fn mem_aligned_write_pattern<P: MemProcessor>(
+        addr: u32,
+        step: u64,
+        value: u64,
+        count64: usize,
+        mem_processor: &mut P,
+    ) {
+        assert!(addr % 8 == 0);
+        let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 3;
+        for i in 0..count64 {
             let data: [u64; 7] =
                 [MEMORY_STORE_OP, (addr as usize + i * 8) as u64, mem_step, 8, 0, 0, value];
 
@@ -274,6 +316,47 @@ impl MemBusHelpers {
 
             mem_processor.process_mem_data(&data);
         }
+    }
+
+    /// Generates aligned memory reads from an unaligned read slice using the specified source offset.
+    /// This function is useful for memcmp, because at same time read src and dst like memcpy but only
+    /// with reads. The number of dst reads generated is `values.len() - 1` because the last value is not
+    /// enough to create a full 8-byte dst read. The address must be 8-byte aligned.
+    pub fn mem_aligned_read_from_read_unaligned_slice<P: MemProcessor>(
+        dst: u32,
+        src: u32,
+        step: u64,
+        src_offset: u8,
+        values: &[u64],
+        mem_processor: &mut P,
+    ) {
+        assert!(dst % 8 == 0);
+        assert!(src % 8 == 0);
+        let mut dst = dst as u64;
+        let mut src = src as u64;
+        let mem_step = MEM_STEP_BASE + MAX_MEM_OPS_BY_MAIN_STEP * step + 2;
+        let write_count = values.len() - 1;
+        for i in 0..write_count {
+            let dst_value = match src_offset {
+                1 => (values[i] >> 8) | (values[i + 1] << 56),
+                2 => (values[i] >> 16) | (values[i + 1] << 48),
+                3 => (values[i] >> 24) | (values[i + 1] << 40),
+                4 => (values[i] >> 32) | (values[i + 1] << 32),
+                5 => (values[i] >> 40) | (values[i + 1] << 24),
+                6 => (values[i] >> 48) | (values[i + 1] << 16),
+                7 => (values[i] >> 56) | (values[i + 1] << 8),
+                _ => panic!("invalid src_offset {src_offset} on DmaUnaligned"),
+            };
+            let mut data: [u64; 7] = [MEMORY_LOAD_OP, dst, mem_step, 8, dst_value, 0, 0];
+            mem_processor.process_mem_data(&data);
+            data[1] = src;
+            data[4] = values[i];
+            mem_processor.process_mem_data(&data);
+            dst += 8;
+            src += 8;
+        }
+        let data: [u64; 7] = [MEMORY_LOAD_OP, src, mem_step, 8, values[write_count], 0, 0];
+        mem_processor.process_mem_data(&data);
     }
 
     /// Returns the memory read step for the given step number.

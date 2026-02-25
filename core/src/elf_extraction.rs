@@ -5,7 +5,7 @@ use elf::{
     endian::AnyEndian,
     ElfBytes,
 };
-use std::error::Error;
+use std::{collections::HashMap, error::Error, fs, path::Path};
 
 use crate::{is_elf_file, RAM_ADDR, RAM_SIZE};
 
@@ -163,6 +163,37 @@ pub fn merge_adjacent_ro_sections(sections: &[DataSection]) -> Vec<DataSection> 
     merged.push(current);
 
     merged
+}
+
+/// Get addresses for a list of symbols from an ELF file
+pub fn get_symbol_addresses(
+    elf_path: &Path,
+    symbol_names: &[&str],
+) -> Result<HashMap<String, u64>, Box<dyn Error>> {
+    let file_data = fs::read(elf_path)?;
+    get_symbol_addresses_from_bytes(&file_data, symbol_names)
+}
+
+/// Get addresses for a list of symbols from ELF bytes
+pub fn get_symbol_addresses_from_bytes(
+    file_data: &[u8],
+    symbol_names: &[&str],
+) -> Result<HashMap<String, u64>, Box<dyn Error>> {
+    let elf = ElfBytes::<AnyEndian>::minimal_parse(file_data)?;
+    let mut result = HashMap::new();
+    let names_set: std::collections::HashSet<&str> = symbol_names.iter().copied().collect();
+
+    if let Some((symtab, strtab)) = elf.symbol_table()? {
+        for sym in symtab {
+            if let Ok(name) = strtab.get(sym.st_name as usize) {
+                if names_set.contains(name) {
+                    result.insert(name.to_string(), sym.st_value);
+                }
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]

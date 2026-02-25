@@ -2,6 +2,7 @@ use libc::{
     c_uint, close, mmap, munmap, shm_open, shm_unlink, MAP_FAILED, MAP_SHARED, PROT_READ, S_IRUSR,
     S_IWUSR,
 };
+use proofman_common::format_bytes;
 use std::{
     ffi::CString,
     fmt::Debug,
@@ -10,13 +11,12 @@ use std::{
     ptr,
     sync::atomic::{fence, Ordering},
 };
-use tracing::debug;
+use tracing::info;
 use zisk_common::io::{ZiskIO, ZiskStdin};
 
+use crate::{AsmInputHeader, SharedMemoryWriter};
 use anyhow::anyhow;
 use anyhow::Result;
-
-use crate::{AsmInputHeader, SharedMemoryWriter};
 
 pub enum AsmSharedMemoryMode {
     ReadOnly,
@@ -216,7 +216,12 @@ impl<H: AsmShmemHeader> AsmSharedMemory<H> {
             return Ok(false);
         }
 
-        debug!("Remapping shared memory {} to new size: {}", self.shmem_name, read_mapped_size);
+        info!(
+            "Remapping shared memory {}: {} => {}",
+            self.shmem_name,
+            format_bytes(self.mapped_size as f64),
+            format_bytes(read_mapped_size as f64)
+        );
 
         let offset = (*current_read_ptr as usize).wrapping_sub(self.mapped_ptr as usize);
 

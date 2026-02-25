@@ -1,3 +1,5 @@
+TRACE_TARGET=NONE
+
 # Debug build flags
 ifeq ($(dbg),1)
 	# CFLAGS = -O0 -g -D DEBUG -no-pie -ggdb -fno-inline
@@ -8,10 +10,33 @@ else
 	ASMFLAGS = --noexecstack
 endif
 
+ifeq ($(TRACE_TARGET),MT)
+    CFLAGS += -DTRACE_TARGET_MT
+    ASMFLAGS += --defsym TRACE_TARGET=1
+else ifeq ($(TRACE_TARGET),MO)
+    CFLAGS += -DTRACE_TARGET_MO
+    ASMFLAGS += --defsym TRACE_TARGET=7
+else ifeq ($(TRACE_TARGET),RH)
+    CFLAGS += -DTRACE_TARGET_RH
+    ASMFLAGS += --defsym TRACE_TARGET=2
+endif
+
 # Default EMU_PATH and OUT_PATH
 EMU_PATH ?= src/emu.asm
 OUT_PATH ?= build/ziskemuasm
-DMA_OBJS = build/dma/fast_dma_encode.o build/dma/memcpy_fast.o build/dma/direct_memcpy_mtrace.o build/dma/direct_memcpy_mops.o 
+# build/dma/memcpy_fast.o 
+DMA_OBJS = build/dma/fast_dma_encode.o \
+		   build/dma/direct_memcpy_mops.o build/dma/direct_memcpy_mtrace.o \
+		   build/dma/direct_inputcpy_mops.o build/dma/direct_inputcpy_mtrace.o \
+		   build/dma/direct_memcmp_mops.o build/dma/direct_memcmp_mtrace.o \
+		   build/dma/direct_memset_mops.o build/dma/direct_memset_mtrace.o \
+		   build/dma/fast_memcmp.o \
+		   build/dma/fast_memcpy64.o \
+		   build/dma/fast_memcpy.o \
+		   build/dma/fast_memset.o \
+		   build/dma/fast_inputcpy.o \
+		   build/dma/memcpy_fast.o \
+		   build/dma/check_dynamic_mtrace.o 
 
 # Ensure the output directory exists
 OUT_DIR := $(dir $(OUT_PATH))

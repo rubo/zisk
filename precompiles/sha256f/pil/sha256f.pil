@@ -11,7 +11,7 @@ require "opids.pil"
 
 // Note: We use little endian representation.
 
-airtemplate Sha256f(const int N = 2**22, const int operation_bus_id = OPERATION_BUS_ID) {
+airtemplate Sha256f(const int N = 2**22) {
     /*
            ROW     a[0..32]      e[0..32]        w[0..32]             STAGE
         |  0   | 0bD₁D₂..D₃₂ | 0bH₁H₂..H₃₂ | XXXXXXXXXXXXXXXX |      LOAD STATE      |
@@ -250,7 +250,7 @@ airtemplate Sha256f(const int N = 2**22, const int operation_bus_id = OPERATION_
 
     // --> Constraints to make sure that this coprocessor is called from the main processor
 
-    lookup_proves(operation_bus_id, [OP_SHA256F, 0, 0, step_addr'(ADDR_OP), 0, 0, 0, 0, step_addr'(STEP_MAIN)], mul: in_use_clk_0);
+    proves_operation(op: OP_SHA256F, b: [step_addr'(ADDR_OP), 0], main_step: step_addr'(STEP_MAIN), mul: in_use_clk_0);
 
     function pack(const expr a[]): expr {
         const int len = length(a);

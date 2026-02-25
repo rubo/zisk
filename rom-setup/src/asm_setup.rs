@@ -249,10 +249,10 @@ pub fn generate_assembly(
     let emulator_asm_path =
         emulator_asm_path.to_str().context("Failed to convert emulator-asm path to string")?;
 
-    for (file, gen_method) in [
-        (bin_mt_file, AsmGenerationMethod::AsmMinimalTraces),
-        (bin_rh_file, AsmGenerationMethod::AsmRomHistogram),
-        (bin_mo_file, AsmGenerationMethod::AsmMemOp),
+    for (file, gen_method, trace_target) in [
+        (bin_mt_file, AsmGenerationMethod::AsmMinimalTraces, "MT"),
+        (bin_rh_file, AsmGenerationMethod::AsmRomHistogram, "RH"),
+        (bin_mo_file, AsmGenerationMethod::AsmMemOp, "MO"),
     ] {
         let asm_file = file.with_extension("asm");
         // Convert the ELF file to Zisk format and generates an assembly file
@@ -281,6 +281,7 @@ pub fn generate_assembly(
         let status = Command::new("make")
             .arg(format!("EMU_PATH={}", asm_file_str))
             .arg(format!("OUT_PATH={}", out_file_str))
+            .arg(format!("TRACE_TARGET={trace_target}"))
             .current_dir(emulator_asm_path)
             .stdout(if verbose { Stdio::inherit() } else { Stdio::null() })
             .stderr(if verbose { Stdio::inherit() } else { Stdio::null() })

@@ -4,9 +4,13 @@ cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
         use crate::{
-            ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param,
+            ziskos_fcall, ziskos_fcall_param,
             zisklib::{FCALL_BLS12_381_FP2_INV_ID, FCALL_BLS12_381_FP2_SQRT_ID}
         };
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
     } else {
         use crate::zisklib::fcalls_impl::bls12_381::{bls12_381_fp2_inv, bls12_381_fp2_sqrt_13};
     }
@@ -45,20 +49,30 @@ pub fn fcall_bls12_381_fp2_inv(
     {
         ziskos_fcall_param!(p_value, 12);
         ziskos_fcall!(FCALL_BLS12_381_FP2_INV_ID);
-        [
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-        ]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+            ]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut res: MaybeUninit<[u64; 12]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(res, 96);
+            unsafe { res.assume_init() }
+        }
     }
 }
 
@@ -94,20 +108,30 @@ pub fn fcall_bls12_381_fp2_sqrt(
     {
         ziskos_fcall_param!(p_value, 16);
         ziskos_fcall!(FCALL_BLS12_381_FP2_SQRT_ID);
-        [
-            ziskos_fcall_get(), // results[0] - indicates if a sqrt exists (1) or not (0)
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-        ]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [
+                ziskos_fcall_get(), // results[0] - indicates if a sqrt exists (1) or not (0)
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+            ]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut res: MaybeUninit<[u64; 13]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(res, 104);
+            unsafe { res.assume_init() }
+        }
     }
 }

@@ -28,8 +28,16 @@ use std::collections::{BTreeMap, HashMap};
 use zisk_common::{BusDeviceMetrics, ChunkId, ComponentBuilder, Instance, InstanceCtx, Plan};
 use zisk_pil::ADD_256_AIR_IDS;
 use zisk_pil::DMA_64_ALIGNED_AIR_IDS;
+use zisk_pil::DMA_64_ALIGNED_INPUT_CPY_AIR_IDS;
+use zisk_pil::DMA_64_ALIGNED_MEM_AIR_IDS;
+use zisk_pil::DMA_64_ALIGNED_MEM_CPY_AIR_IDS;
+use zisk_pil::DMA_64_ALIGNED_MEM_SET_AIR_IDS;
 use zisk_pil::DMA_AIR_IDS;
+use zisk_pil::DMA_INPUT_CPY_AIR_IDS;
+use zisk_pil::DMA_MEM_CPY_AIR_IDS;
 use zisk_pil::DMA_PRE_POST_AIR_IDS;
+use zisk_pil::DMA_PRE_POST_INPUT_CPY_AIR_IDS;
+use zisk_pil::DMA_PRE_POST_MEM_CPY_AIR_IDS;
 use zisk_pil::DMA_UNALIGNED_AIR_IDS;
 use zisk_pil::{
     ARITH_AIR_IDS, ARITH_EQ_384_AIR_IDS, ARITH_EQ_AIR_IDS, BINARY_ADD_AIR_IDS, BINARY_AIR_IDS,
@@ -482,13 +490,21 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                             add256_collectors.push((*global_idx, add256_collector));
                         }
                         // DMA AIRS
-                        air_id if air_id == DMA_AIR_IDS[0] => {
+                        air_id
+                            if air_id == DMA_AIR_IDS[0]
+                                || air_id == DMA_MEM_CPY_AIR_IDS[0]
+                                || air_id == DMA_INPUT_CPY_AIR_IDS[0] =>
+                        {
                             let dma_instance =
                                 secn_instance.as_any().downcast_ref::<DmaInstance<F>>().unwrap();
                             let dma_collector = dma_instance.build_dma_collector(ChunkId(chunk_id));
                             dma_collectors.push((*global_idx, dma_collector));
                         }
-                        air_id if air_id == DMA_PRE_POST_AIR_IDS[0] => {
+                        air_id
+                            if air_id == DMA_PRE_POST_AIR_IDS[0]
+                                || air_id == DMA_PRE_POST_MEM_CPY_AIR_IDS[0]
+                                || air_id == DMA_PRE_POST_INPUT_CPY_AIR_IDS[0] =>
+                        {
                             let dma_pre_post_instance = secn_instance
                                 .as_any()
                                 .downcast_ref::<DmaPrePostInstance<F>>()
@@ -497,7 +513,13 @@ impl<F: PrimeField64> StaticSMBundle<F> {
                                 dma_pre_post_instance.build_dma_collector(ChunkId(chunk_id));
                             dma_pre_post_collectors.push((*global_idx, dma_pre_post_collector));
                         }
-                        air_id if air_id == DMA_64_ALIGNED_AIR_IDS[0] => {
+                        air_id
+                            if air_id == DMA_64_ALIGNED_AIR_IDS[0]
+                                || air_id == DMA_64_ALIGNED_MEM_CPY_AIR_IDS[0]
+                                || air_id == DMA_64_ALIGNED_INPUT_CPY_AIR_IDS[0]
+                                || air_id == DMA_64_ALIGNED_MEM_SET_AIR_IDS[0]
+                                || air_id == DMA_64_ALIGNED_MEM_AIR_IDS[0] =>
+                        {
                             let dma_64_aligned_instance = secn_instance
                                 .as_any()
                                 .downcast_ref::<Dma64AlignedInstance<F>>()

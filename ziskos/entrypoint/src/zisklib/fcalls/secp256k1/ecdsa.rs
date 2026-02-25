@@ -3,7 +3,11 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param, zisklib::FCALL_SECP256K1_ECDSA_VERIFY_ID};
+        use crate::{ziskos_fcall, ziskos_fcall_param, zisklib::FCALL_SECP256K1_ECDSA_VERIFY_ID};
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
     }
 }
 
@@ -75,15 +79,25 @@ pub fn fcall_secp256k1_ecdsa_verify(
         ziskos_fcall_param!(r_value, 4);
         ziskos_fcall_param!(s_value, 4);
         ziskos_fcall!(FCALL_SECP256K1_ECDSA_VERIFY_ID);
-        [
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-        ]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+            ]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut res: MaybeUninit<[u64; 8]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(res, 64);
+            unsafe { res.assume_init() }
+        }
     }
 }

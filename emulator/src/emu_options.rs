@@ -2,7 +2,7 @@
 
 use clap::Parser;
 use std::fmt;
-use zisk_core::{DEFAULT_MAX_STEPS, DEFAULT_MAX_STEPS_STR};
+use zisk_core::{DEFAULT_MAX_STEPS, DEFAULT_MAX_STEPS_STR, MAX_INPUT_SIZE};
 
 pub const ZISK_VERSION_MESSAGE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
@@ -80,6 +80,10 @@ pub struct EmuOptions {
     /// Requires options: -S -X
     #[clap(short = 'T', long, value_name = "TOP_ROI", default_value = "25")]
     pub top_roi: usize,
+    /// Set the number of top frequent instructions (histogram)
+    /// Requires options: -X
+    #[clap(short = 'H', long, value_name = "TOP_HISTOGRAM", default_value = "0")]
+    pub top_histogram: usize,
     /// Set the number of top caller functions to show for each top ROI.
     /// Requires options: -S -X -D
     #[clap(short = 'C', long, value_name = "ROI_CALLERS", default_value = "10")]
@@ -96,6 +100,35 @@ pub struct EmuOptions {
     /// Requires option: -X
     #[clap(long, value_name = "COVERAGE", default_value = "false")]
     pub coverage: bool,
+    /// Filter symbols using regular expression to mark as special ROI.
+    /// Requires option: -S
+    #[clap(long, value_name = "ROI_FILTER")]
+    pub roi_filter: Option<String>,
+    /// Track function calls to filtered symbols, specifying number of parameters to log.
+    /// Requires options: -S --roi-filter
+    #[clap(long, value_name = "TRACK_CALLS", default_value = "0")]
+    pub track_calls: usize,
+    /// Separator for tracked call parameters in output files.
+    /// Requires option: --track-calls
+    #[clap(long, value_name = "TRACK_SEPARATOR", default_value = ";")]
+    pub track_separator: String,
+    /// Output directory path for tracked call files.
+    /// Requires option: --track-calls
+    #[clap(long, value_name = "TRACK_OUTPUT_PATH", default_value = ".")]
+    pub track_output_path: String,
+    /// Disable thousands separator in statistics reports.
+    #[clap(long, value_name = "NO_THOUSANDS_SEP", default_value = "false")]
+    pub no_thousands_sep: bool,
+    /// Consider only filtered ROIs when calculating top ROI statistics.
+    /// Requires options: -S -X --roi-filter
+    #[clap(long, value_name = "TOP_ROI_FILTER", default_value = "false")]
+    pub top_roi_filter: bool,
+    /// Generate disassembly file with execution counts (objdump-like format).
+    /// Requires options: -S -X
+    #[clap(long, value_name = "DISASM_FILE")]
+    pub disasm: Option<String>,
+    #[clap(long, value_name = "MAX_INPUT_MEM", default_value = "134217728")] // 128 MiB
+    pub max_input_mem: u64,
 }
 
 impl Default for EmuOptions {
@@ -125,7 +158,16 @@ impl Default for EmuOptions {
             top_roi_detail: false,
             legacy_stats: false,
             coverage: false,
+            top_histogram: 0,
             main_name: "main".to_string(),
+            roi_filter: None,
+            track_calls: 0,
+            track_separator: ";".to_string(),
+            track_output_path: ".".to_string(),
+            no_thousands_sep: false,
+            top_roi_filter: false,
+            disasm: None,
+            max_input_mem: MAX_INPUT_SIZE, // 128 MiB
         }
     }
 }
@@ -154,6 +196,15 @@ impl fmt::Display for EmuOptions {
         writeln!(f, "TOP_ROI: {:?}", self.top_roi)?;
         writeln!(f, "ROI_CALLERS: {:?}", self.roi_callers)?;
         writeln!(f, "TOP_ROI_DETAIL: {:?}", self.top_roi_detail)?;
+        writeln!(f, "TOP_HISTOGRAM: {:?}", self.top_histogram)?;
+        writeln!(f, "ROI_FILTER: {:?}", self.roi_filter)?;
+        writeln!(f, "TRACK_CALLS: {:?}", self.track_calls)?;
+        writeln!(f, "TRACK_SEPARATOR: {:?}", self.track_separator)?;
+        writeln!(f, "TRACK_OUTPUT_PATH: {:?}", self.track_output_path)?;
+        writeln!(f, "NO_THOUSANDS_SEP: {:?}", self.no_thousands_sep)?;
+        writeln!(f, "TOP_ROI_FILTER: {:?}", self.top_roi_filter)?;
+        writeln!(f, "DISASM: {:?}", self.disasm)?;
+        writeln!(f, "MAX_INPUT_MEM: {:?}", self.max_input_mem)?;
         Ok(())
     }
 }

@@ -4,9 +4,9 @@
 use std::path::Path;
 
 use crate::{
-    zisk_ops::ZiskOp, AsmGenerationMethod, ZiskInst, ZiskRom, EXTRA_PARAMS, FLOAT_LIB_ROM_ADDR,
-    FREE_INPUT_ADDR, M64, P2_32, ROM_ADDR, ROM_ADDR_MAX, ROM_ENTRY, SRC_C, SRC_IMM, SRC_IND,
-    SRC_MEM, SRC_REG, SRC_STEP, STORE_IND, STORE_MEM, STORE_NONE, STORE_REG,
+    zisk_ops::ZiskOp, AsmGenerationMethod, ZiskInst, ZiskRom, EXTRA_PARAMS_ADDR,
+    FLOAT_LIB_ROM_ADDR, FREE_INPUT_ADDR, M64, P2_32, ROM_ADDR, ROM_ADDR_MAX, ROM_ENTRY, SRC_C,
+    SRC_IMM, SRC_IND, SRC_MEM, SRC_REG, SRC_STEP, STORE_IND, STORE_MEM, STORE_NONE, STORE_REG,
 };
 
 // Regs rax, rcx, rdx, rdi, rsi, rsp, and r8-r11 are caller-save, not saved across function calls.
@@ -54,6 +54,7 @@ const REG_CHUNK_PLAYER_ADDRESS: &str = "rbp"; // Used only in chunk player
 const TRACE_ADDR_NUMBER: u64 = 0xd0000000 + 0x20;
 
 // Fcall params and result lengths
+// NOTE: if these parameters are update, review dma_constants.inc
 const FCALL_PARAMS_LENGTH: u64 = 386;
 const FCALL_RESULT_LENGTH: u64 = 8193;
 
@@ -7252,12 +7253,6 @@ impl ZiskRom2Asm {
                         *code += &format!("\tmov {}, rax {}\n", REG_C, ctx.comment_str("c = rax"));
                         Self::pop_internal_registers_except_c_and_flag(ctx, code, false);
                     }
-                    *code += &format!(
-                        "\tmov {}, {} {}\n",
-                        REG_FLAG,
-                        REG_C,
-                        ctx.comment_str("flag = rax")
-                    );
 
                     // this precompiles store the result in minimal trace
                     if ctx.minimal_trace() || ctx.zip() || ctx.mem_reads() {
@@ -7271,10 +7266,9 @@ impl ZiskRom2Asm {
 
                 // Set result
                 ctx.c.is_saved = true;
-                ctx.flag_is_always_zero = false;
+                ctx.flag_is_always_zero = true;
             }
-            ZiskOp::DmaMemCpy => {
-                assert_eq!(inst.store, STORE_NONE);
+            ZiskOp::DmaMemCpy | ZiskOp::DmaXMemCpy => {
                 // Use the memory address as the first and unique parameter
                 *code += &ctx.full_line_comment("DmaMemCpy".to_string());
 
@@ -7288,12 +7282,22 @@ impl ZiskRom2Asm {
                     ctx.b.string_value,
                     ctx.comment_str("rsi = b = source")
                 );
-                *code += &format!(
-                    "\tmov rdx, 0x{:08x} {}\n",
-                    EXTRA_PARAMS,
-                    ctx.comment_str("rdx = @EXTERN_PARAM")
-                );
-                *code += &format!("\tmov rdx, [rdx] {}\n", ctx.comment_str("rdx = [EXTERN_PARAM]"));
+                if inst.op == ZiskOp::DMA_MEMCPY {
+                    *code += &format!(
+                        "\tmov rdx, 0x{:08x} {}\n",
+                        EXTRA_PARAMS_ADDR,
+                        ctx.comment_str("rdx = @EXTERN_PARAM")
+                    );
+                    *code +=
+                        &format!("\tmov rdx, [rdx] {}\n", ctx.comment_str("rdx = [EXTERN_PARAM]"));
+                } else {
+                    // DMA_XMEMCPY (take count from extended static param)
+                    *code += &format!(
+                        "\tmov rdx, {} {}\n",
+                        inst.jmp_offset1,
+                        ctx.comment(format!("rdx = {}", inst.jmp_offset1))
+                    );
+                }
 
                 assert_eq!(REG_MEM_READS_ADDRESS, "r12");
                 assert_eq!(REG_MEM_READS_SIZE, "r13");
@@ -7320,12 +7324,165 @@ impl ZiskRom2Asm {
                 }
 
                 // Set result
-                *code += &format!("\txor {}, {} {}\n", REG_C, REG_C, ctx.comment_str("c = 0"));
+                *code += &format!("\tmov {}, rax {}\n", REG_C, ctx.comment_str("c = rax"));
                 ctx.c.is_saved = true;
                 ctx.flag_is_always_zero = true;
             }
-            ZiskOp::DmaMemCmp => {
-                unimplemented!();
+            ZiskOp::DmaMemCmp | ZiskOp::DmaXMemCmp => {
+                // Use the memory address as the first and unique parameter
+                *code += &ctx.full_line_comment("DmaMemCmp".to_string());
+
+                *code += &format!(
+                    "\tmov rdi, {} {}\n",
+                    ctx.a.string_value,
+                    ctx.comment_str("rdi = a = destination")
+                );
+                *code += &format!(
+                    "\tmov rsi, {} {}\n",
+                    ctx.b.string_value,
+                    ctx.comment_str("rsi = b = source")
+                );
+                if inst.op == ZiskOp::DMA_MEMCMP {
+                    *code += &format!(
+                        "\tmov rdx, 0x{:08x} {}\n",
+                        EXTRA_PARAMS_ADDR,
+                        ctx.comment_str("rdx = @EXTERN_PARAM")
+                    );
+                    *code +=
+                        &format!("\tmov rdx, [rdx] {}\n", ctx.comment_str("rdx = [EXTERN_PARAM]"));
+                } else {
+                    // DMA_XMEMCMP (take count from extended static param)
+                    *code += &format!(
+                        "\tmov rdx, {} {}\n",
+                        inst.jmp_offset1,
+                        ctx.comment(format!("rdx = {}", inst.jmp_offset1))
+                    );
+                }
+
+                assert_eq!(REG_MEM_READS_ADDRESS, "r12");
+                assert_eq!(REG_MEM_READS_SIZE, "r13");
+
+                match ctx.mode {
+                    AsmGenerationMethod::AsmMinimalTraces => {
+                        // the number of mem_reads of trace used by memcpy could be
+                        // large, need to control the count of each operation, and
+                        // if it's necessary call to increase minimal trace
+                        *code += "\tcall direct_dma_memcmp_mtrace\n";
+                    }
+                    AsmGenerationMethod::AsmRomHistogram => {
+                        // ROM hasn't a variable trace, only multiplicities
+                        *code += "\tcall fast_memcmp\n";
+                    }
+                    AsmGenerationMethod::AsmMemOp => {
+                        // the maximum number of mops of memcpy is limited because in case of range
+                        // of address only send one address as block. The maximum number of mops
+                        // generated by memcmp is 6, means that no need check size.
+                        //   2 pre-reads + 2 src-reads + 1 src-loop + 1 read block = 6 mops
+                        *code += "\tcall direct_dma_memcmp_mops\n";
+                    }
+                    _ => unimplemented!("dma_memcmp not implemented for method {:?}", ctx.mode),
+                }
+
+                // Set result
+                *code += &format!(
+                    "\tmov {}, rax {}\n",
+                    REG_C,
+                    ctx.comment_str("c = rax (result memcmp)")
+                );
+                ctx.c.is_saved = true;
+                ctx.flag_is_always_zero = true;
+            }
+            ZiskOp::DmaInputCpy => {
+                // Use the memory address as the first and unique parameter
+                *code += &ctx.full_line_comment("DmaInputCpy".to_string());
+
+                *code += &format!(
+                    "\tmov rdi, {} {}\n",
+                    ctx.a.string_value,
+                    ctx.comment_str("rdi = a = destination")
+                );
+                *code += &format!(
+                    "\tmov rdx, {} {}\n",
+                    ctx.b.string_value,
+                    ctx.comment_str("rdx = b = count")
+                );
+
+                assert_eq!(REG_MEM_READS_ADDRESS, "r12");
+                assert_eq!(REG_MEM_READS_SIZE, "r13");
+
+                match ctx.mode {
+                    AsmGenerationMethod::AsmMinimalTraces => {
+                        // the number of mem_reads of trace used by memcpy could be
+                        // large, need to control the count of each operation, and
+                        // if it's necessary call to increase minimal trace
+                        *code += "\tcall direct_dma_inputcpy_mtrace_with_count_check\n";
+                    }
+                    AsmGenerationMethod::AsmRomHistogram => {
+                        // ROM hasn't a variable trace, only multiplicities
+                        *code += "\tcall fast_inputcpy\n";
+                    }
+                    AsmGenerationMethod::AsmMemOp => {
+                        // the maximum number of mops of memcpy is limited because in case of range
+                        // of address only send one address as block. The maximum number of mops
+                        // generated by memcpy is 6, means that no need check size.
+                        //   2 pre-reads + 2 src-reads + 1 src-loop + 1 write block = 6 mops
+                        *code += "\tcall direct_dma_inputcpy_mops\n";
+                    }
+                    _ => unimplemented!("dma_inputcpy not implemented for method {:?}", ctx.mode),
+                }
+
+                // Set result
+                *code += &format!("\tmov {}, rax {}\n", REG_C, ctx.comment_str("c = rax"));
+                ctx.c.is_saved = true;
+                ctx.flag_is_always_zero = true;
+            }
+            ZiskOp::DmaXMemSet => {
+                // Use the memory address as the first and unique parameter
+                *code += &ctx.full_line_comment("DmaXMemSet".to_string());
+
+                *code += &format!(
+                    "\tmov rdi, {} {}\n",
+                    ctx.a.string_value,
+                    ctx.comment_str("rdi = a = destination")
+                );
+                *code += &format!(
+                    "\tmov rdx, {} {}\n",
+                    ctx.b.string_value,
+                    ctx.comment_str("rdx = b = source")
+                );
+                *code += &format!(
+                    "\tmov rsi, {} {}\n",
+                    inst.jmp_offset1,
+                    ctx.comment(format!("rsi = {}", inst.jmp_offset1))
+                );
+                assert_eq!(REG_MEM_READS_ADDRESS, "r12");
+                assert_eq!(REG_MEM_READS_SIZE, "r13");
+
+                match ctx.mode {
+                    AsmGenerationMethod::AsmMinimalTraces => {
+                        // the number of mem_reads of trace used by memcpy could be
+                        // large, need to control the count of each operation, and
+                        // if it's necessary call to increase minimal trace
+                        *code += "\tcall direct_dma_xmemset_mtrace\n";
+                    }
+                    AsmGenerationMethod::AsmRomHistogram => {
+                        // ROM hasn't a variable trace, only multiplicities
+                        *code += "\tcall fast_memset\n";
+                    }
+                    AsmGenerationMethod::AsmMemOp => {
+                        // the maximum number of mops of memcpy is limited because in case of range
+                        // of address only send one address as block. The maximum number of mops
+                        // generated by memcpy is 6, means that no need check size.
+                        //   2 pre-reads + 2 src-reads + 1 src-loop + 1 write block = 6 mops
+                        *code += "\tcall direct_dma_xmemset_mops\n";
+                    }
+                    _ => unimplemented!("dma_memset not implemented for method {:?}", ctx.mode),
+                }
+
+                // Set result
+                *code += &format!("\tmov {}, rax {}\n", REG_C, ctx.comment_str("c = rax"));
+                ctx.c.is_saved = true;
+                ctx.flag_is_always_zero = true;
             }
             ZiskOp::Dma64Aligned => {
                 unimplemented!("Internal opcode Dma64Aligned");
@@ -7338,9 +7495,6 @@ impl ZiskRom2Asm {
             }
             ZiskOp::DmaPost => {
                 unimplemented!("Internal opcode DmaPost");
-            }
-            ZiskOp::DmaCmpByte => {
-                unimplemented!("Internal opcode DmaCmpByte");
             }
         }
     }

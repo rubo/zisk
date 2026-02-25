@@ -1,3 +1,8 @@
+// #pragma arg -I pil,../pil2-proofman/pil2-components/lib/std/pil,state-machines,precompiles 
+// #pragma arg -o pil/zisk.pilout 
+// #pragma arg -O fixed-to-file 
+// #pragma arg -u tmp/fixed
+
 require "std_direct.pil"
 
 require "operations.pil"
@@ -24,6 +29,7 @@ require "dma/pil/dma.pil"
 require "dma/pil/dma_rom.pil"
 require "dma/pil/dma_pre_post.pil"
 require "dma/pil/dma_pre_post_table.pil"
+require "dma/pil/dma_byte_cmp_table.pil"
 require "dma/pil/dma_64_aligned.pil"
 require "dma/pil/dma_unaligned.pil"
 require "poseidon2/pil/poseidon2.pil"
@@ -39,8 +45,17 @@ enable_rom_data * (1 - enable_rom_data);
 proofval enable_dma_64_aligned;
 enable_dma_64_aligned * (1 - enable_dma_64_aligned);
 
-proofval enable_dma_64_aligned_input;
-enable_dma_64_aligned_input * (1 - enable_dma_64_aligned_input);
+proofval enable_dma_64_aligned_inputcpy;
+enable_dma_64_aligned_inputcpy * (1 - enable_dma_64_aligned_inputcpy);
+
+proofval enable_dma_64_aligned_mem;
+enable_dma_64_aligned_mem * (1 - enable_dma_64_aligned_mem);
+
+proofval enable_dma_64_aligned_memcpy;
+enable_dma_64_aligned_memcpy * (1 - enable_dma_64_aligned_memcpy);
+
+proofval enable_dma_64_aligned_memset;
+enable_dma_64_aligned_memset * (1 - enable_dma_64_aligned_memset);
 
 proofval enable_dma_unaligned;
 enable_dma_unaligned * (1 - enable_dma_unaligned);
@@ -65,11 +80,23 @@ airgroup Zisk {
     virtual DualRange(id: DUAL_RANGE_BYTE_ID, min1: 0, max1: P2_8-1, min2: 0, max2: P2_8-1) alias DualByte;
 
     Dma();
-    virtual DmaRom();
-    Dma64Aligned(enable: enable_dma_64_aligned);
-    // Dma64Aligned(enable: enable_dma_64_aligned_input, src_is_free_input: 1) alias Dma64AlignedInput;
-    DmaUnaligned(enable: enable_dma_unaligned);
+    Dma(enable: E_DMA_MEMCPY) alias DmaMemCpy;
+    Dma(enable: E_DMA_INPUTCPY) alias DmaInputCpy;
+
+    Dma64Aligned(enable_flag: enable_dma_64_aligned);
+    Dma64Aligned(enable: E_DMA_INPUTCPY, enable_flag: enable_dma_64_aligned_inputcpy) alias Dma64AlignedInputCpy;
+    Dma64Aligned(enable: E_DMA_MEMSET, enable_flag: enable_dma_64_aligned_memset, op_x_row: 8) alias Dma64AlignedMemSet;
+    Dma64Aligned(enable: E_DMA_MEMCPY|E_DMA_MEMCMP|E_DMA_MEMSET, enable_flag: enable_dma_64_aligned_mem) alias Dma64AlignedMem;
+    Dma64Aligned(enable: E_DMA_MEMCPY, enable_flag: enable_dma_64_aligned_memcpy, op_x_row: 8) alias Dma64AlignedMemCpy;
+
+    DmaUnaligned(enable_flag: enable_dma_unaligned);
+
     DmaPrePost();
+    DmaPrePost(enable: E_DMA_MEMCPY) alias DmaPrePostMemCpy;
+    DmaPrePost(enable: E_DMA_INPUTCPY) alias DmaPrePostInputCpy;
+
+    virtual DmaByteCmpTable();
+    virtual DmaRom();
     virtual DmaPrePostTable();
     // Main Program
     Main(N: 2**22);
@@ -119,6 +146,6 @@ airgroup Zisk {
 
     // Public Inputs
     for (int i = 0; i < PUBLIC_INPUTS_64_BITS; i++) {
-        direct_global_update_proves(OPERATION_BUS_ID, [OP_PUBOUT, i, 0, inputs[i*2], inputs[i*2 + 1], inputs[i*2], inputs[i*2 + 1], 0, 0]);
+        direct_global_update_proves(OPERATION_BUS_ID, [OP_PUBOUT, i, 0, inputs[i*2], inputs[i*2 + 1], inputs[i*2], inputs[i*2 + 1]], surname: PIOP_SURNAME_DYNAMIC);
     }
 }

@@ -45,5 +45,5 @@ pub extern "C" fn syscall_add256(
         cout
     }
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
-    ziskos_syscall_ret_u64!(0x811, params)
+    ziskos_syscall_ret_u64!(zisk_definitions::SYSCALL_ADD256_ID, params)
 }

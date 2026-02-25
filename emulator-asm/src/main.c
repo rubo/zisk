@@ -57,24 +57,47 @@ extern uint64_t MEM_CHUNK_START_STEP; // Step at which the current chunk started
 #define ROM_SIZE (uint64_t)0x08000000 // 128MB
 #define INPUT_ADDR (uint64_t)0x90000000
 #define MAX_INPUT_SIZE (uint64_t)0x08000000 // 128MB
-#define RAM_ADDR (uint64_t)0xa0000000
+
+#define RAM_ADDR (uint64_t)0xA0000000
 #define RAM_SIZE (uint64_t)0x20000000 // 512MB
 #define SYS_ADDR RAM_ADDR
 #define SYS_SIZE (uint64_t)0x10000
 #define OUTPUT_ADDR (SYS_ADDR + SYS_SIZE)
 
-// Trace address space configuration.  There is an initial trace size that is mapped at the
-// beginning of the trace address space, and that is used for the first execution.
-// When more trace space is needed, new chunks of a delta size are mapped, until reaching the
-// maximum trace size.  Trace space only grows, it never shrinks, to avoid the overhead of
-// unmapping and remapping memory, and to allow the client to access the full trace until the end of
-// execution, even if the trace size is increased during execution.
+#ifdef TRACE_TARGET_MO
+    #define TRACE_INITIAL_SIZE (uint64_t)0x180000000 /* 6GB */
+    #define TRACE_DELTA_SIZE   (uint64_t)0x080000000 /* 2GB */
+#elif defined(TRACE_TARGET_RH)
+    #define TRACE_INITIAL_SIZE (uint64_t)0x004000000 /* 64MB */
+    #define TRACE_DELTA_SIZE   (uint64_t)0x004000000 /* 64MB */
+#else 
+    #define TRACE_INITIAL_SIZE (uint64_t)0x180000000 /* 6GB */
+    #define TRACE_DELTA_SIZE   (uint64_t)0x080000000 /* 2GB */
+#endif
+
 #define TRACE_ADDR         (uint64_t)0xd0000000
-#define TRACE_INITIAL_SIZE (uint64_t)0x180000000 // 6GB
-#define TRACE_DELTA_SIZE   (uint64_t)0x080000000 // 2GB
 #define TRACE_MAX_SIZE     (uint64_t)0x1000000000 // 64GB
 #define TRACE_NUMBER_OF_CHUNKS (((TRACE_MAX_SIZE - TRACE_INITIAL_SIZE) / TRACE_DELTA_SIZE) + 1)
 #define TRACE_SIZE_GRANULARITY (1014*1014) // ROM histogram trace size is round up to a multiple of this granularity
+
+// Worst case: every chunk instruction is a keccak operation, with an input data of 256 bytes
+
+// #if defined(TRACE_TARGET_MO)
+//     #define MAX_MTRACE_REGS_ACCESS_SIZE (3 * 8)
+//     #define MAX_BYTES_DIRECT_MTRACE 80 // PRE/POST = ((1 PRE + 2 SRC + 1 WR DST) * 2 + BLOCK_READ + BLOCK_WRITE) * 8
+//     #define MAX_BYTES_MTRACE_STEP (MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE)
+//     #define MAX_CHUNK_TRACE_SIZE (CHUNK_SIZE * MAX_BYTES_MTRACE_STEP)
+// #elif defined(TRACE_TARGET_RH)
+//     #define MAX_CHUNK_TRACE_SIZE 0
+// #else 
+//     #define MAX_MTRACE_REGS_ACCESS_SIZE ((2 + 2 + 3) * 8)
+//     #define MAX_TRACE_CHUNK_INFO ((44*8) + 32)
+//     #define MAX_BYTES_DIRECT_MTRACE 256
+//     #define MAX_BYTES_MTRACE_STEP (MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE)
+//     #define MAX_CHUNK_TRACE_SIZE ((CHUNK_SIZE * MAX_BYTES_MTRACE_STEP) + MAX_TRACE_CHUNK_INFO)
+// #endif
+// uint64_t trace_resize_request = 0;
+// uint64_t trace_address_threshold = TRACE_ADDR + INITIAL_TRACE_SIZE - MAX_CHUNK_TRACE_SIZE;
 
 // Control input and output shared memory configuration.
 // Control input is used to tell the assembly code how many precompile result u64 fields have been
@@ -134,6 +157,7 @@ extern uint64_t MEM_CHUNK_START_STEP; // Step at which the current chunk started
 // destination registers and 3 memory addresses (e.g. for a keccak operation with 3 memory operands),
 //  which are the maximum number of registers and memory addresses that can be accessed by a chunk
 // instruction, according to the ZisK assembly code generation configuration.
+
 #define MAX_MTRACE_REGS_ACCESS_SIZE ((2 + 2 + 3) * 8)
 #define MAX_TRACE_CHUNK_INFO ((44*8) + 32)
 #define MAX_BYTES_DIRECT_MTRACE 256
@@ -270,6 +294,7 @@ uint64_t trace_address_threshold = TRACE_ADDR + TRACE_INITIAL_SIZE - MAX_CHUNK_T
 
 int map_locked_flag = MAP_LOCKED;
 
+
 /**************/
 /* TRACE SIZE */
 /**************/
@@ -282,9 +307,13 @@ uint64_t trace_used_size = 0;
 void set_trace_size (uint64_t new_trace_size)
 {
     // Update trace global variables
+    // printf("%s trace resize (trace_resize_request: %ld):  %ld MB => %ld MB\n", log_name, trace_resize_request, trace_size >> 20, new_trace_size >> 20);
+    
+    // trace_resize_request = 0;
+
     trace_size = new_trace_size;
     trace_address_threshold = TRACE_ADDR + trace_size - MAX_CHUNK_TRACE_SIZE;
-    pOutputTrace[2] = trace_size;
+    pOutputTrace[2] = trace_size;    
 }
 
 /**************/
@@ -308,7 +337,6 @@ void set_chunk_size (uint64_t new_chunk_size)
     trace_address_threshold = TRACE_ADDR + trace_size - MAX_CHUNK_TRACE_SIZE;
 }
 
-// Forward declarations of functions implemented later in the code
 void parse_arguments(int argc, char *argv[]);
 uint64_t TimeDiff(const struct timeval startTime, const struct timeval endTime);
 void configure (void);
@@ -455,6 +483,8 @@ uint64_t trace_total_mapped_size = 0; // Total mapped trace size
 
 void * trace_get_chunk_address (uint64_t chunk_id)
 {
+    assert(gen_method != RomHistogram || chunk_id == 0);
+
     if (chunk_id == 0)
     {
         return (void *)TRACE_ADDR;
@@ -467,6 +497,11 @@ void * trace_get_chunk_address (uint64_t chunk_id)
 
 uint64_t trace_get_chunk_size (uint64_t chunk_id)
 {
+    if (gen_method == RomHistogram) {
+        assert(chunk_id == 0);
+        return trace_size;
+    }
+
     if (chunk_id == 0)
     {
         return TRACE_INITIAL_SIZE;

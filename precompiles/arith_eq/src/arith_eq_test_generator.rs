@@ -16,7 +16,7 @@ fn main() {
     let mut code = String::new();
     code += "#![no_main]\n";
     code += "ziskos::entrypoint!(main);\n\n";
-    code += "use ziskos::syscalls::*;\n\n";
+    code += "use zisk_definitions::*;\n\n";
     code += "fn main() {\n";
     code += "\tlet mut a: [u64;4] = [0,0,0,0];\n";
     code += "\tlet mut b: [u64;4] = [0,0,0,0];\n";

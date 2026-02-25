@@ -3,7 +3,11 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param, zisklib::FCALL_SECP256K1_FN_INV_ID};
+        use crate::{ziskos_fcall, ziskos_fcall_param, zisklib::FCALL_SECP256K1_FN_INV_ID};
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
     } else {
         use lib_c::secp256k1_fn_inv_c;
     }
@@ -44,7 +48,16 @@ pub fn fcall_secp256k1_fn_inv(
     {
         ziskos_fcall_param!(p_value, 4);
         ziskos_fcall!(FCALL_SECP256K1_FN_INV_ID);
-        [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            let mut res: core::mem::MaybeUninit<[u64; 4]> = core::mem::MaybeUninit::uninit();
+            ziskos_inputcpy!(res, 32);
+            unsafe { res.assume_init() }
+        }
     }
 }
 

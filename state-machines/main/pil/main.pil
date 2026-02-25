@@ -12,7 +12,6 @@ const int MAX_RANGE = (1 << 24) - 1;
 const int REG_BASE_ADDR = 0xA000_0000;
 
 airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0, 
-                 const int operation_bus_id = OPERATION_BUS_ID,
                  const int REGS_IN_MAIN_FROM = 1, const int REGS_IN_MAIN_TO = 31) {
 
     const int REGS_IN_MAIN = REGS_IN_MAIN_TO - REGS_IN_MAIN_FROM + 1;
@@ -112,7 +111,7 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
     } else {
         col witness bits(32) air.a_imm1;
     }
-    col witness bits(1) op_with_step;          // Selector to include step on operation bus
+    col witness bits(1) is_precompiled;          // Selector to include step on operation bus
 
     // Source B
 
@@ -156,9 +155,11 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
         col witness bits(64, signed) air.inc_sp;
     }
 
-
+    // branch jump if flag = 1, jump to pc + jmp_offset1
+    //             if set_pc = 1, jump to c[0] + jmp_offset1
     col witness bits(64, signed) jmp_offset1;
 
+    // default jump if flag = 0, jump to pc + jmp_offset2
     col witness bits(64, signed) jmp_offset2;
 
     col witness bits(1) m32;
@@ -333,10 +334,6 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
     range_check(expression: b_mem_step - b_reg_prev_mem_step - 1, min: 0, max: MAX_RANGE, sel: b_src_reg);
     range_check(expression: store_mem_step - store_reg_prev_mem_step - 1 , min: 0, max: MAX_RANGE, sel: store_reg);
 
-    // Sent to bus the external operation
-
-    lookup_assumes(operation_bus_id, [op, a[0], (1 - m32) * a[1], b[0], (1 - m32) * b[1], ...c, flag, STEP * op_with_step], sel: is_external_op);
-
     const expr a_src_c;
     const expr b_src_c;
 
@@ -360,6 +357,21 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
         b_imm[1] = b_imm1;
     }
 
+    // Sent to bus the external operation
+
+    // Precompiles are generated throw transpilation because them not exists directly in RISCV
+    
+    // The flag m32 is used to avoid send "garbage" values to bus, to simplify the other state
+    // state machines and to increase the hits to FROPS (frequent operations).
+
+    assumes_operation(op: , 
+                      a: [a[0], (1 - m32) * a[1]], 
+                      b: [b[0], (1 - m32) * b[1]], 
+                      c: , 
+                      flag:, 
+                      main_step: STEP * is_precompiled, 
+                      extended_arg: jmp_offset1 * is_precompiled,
+                      sel: is_external_op);
 
     for (int index = 0; index < RC; ++index) {
         const expr previous_c = SEGMENT_L1 * (segment_previous_c[index] - 'c[index]) + 'c[index];
@@ -454,7 +466,7 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
 
     a_src_imm * (1 - a_src_imm) === 0;
     a_src_mem * (1 - a_src_mem) === 0;
-    op_with_step * (1 - op_with_step) === 0;
+    is_precompiled * (1 - is_precompiled) === 0;
     b_src_imm * (1 - b_src_imm) === 0;
     b_src_mem * (1 - b_src_mem) === 0;
     is_external_op * (1 - is_external_op) === 0;
@@ -468,7 +480,7 @@ airtemplate Main(int N = 2**21, int RC = 2, int stack_enabled = 0,
     b_src_reg * (1 - b_src_reg) === 0;
     store_reg * (1 - store_reg) === 0;
 
-    const expr rom_flags = 1 + 2 * a_src_imm + 4 * a_src_mem + 8 * op_with_step + 16 * b_src_imm
+    const expr rom_flags = 1 + 2 * a_src_imm + 4 * a_src_mem + 8 * is_precompiled + 16 * b_src_imm
                            + 32 * b_src_mem + 64 * is_external_op + 128 * store_pc + 256 * store_mem
                            + 512 * store_ind + 1024 * set_pc + 2048 * m32 + 4096 * b_src_ind
                            + 8192 * a_src_reg + 16384 * b_src_reg + 32768 * store_reg;

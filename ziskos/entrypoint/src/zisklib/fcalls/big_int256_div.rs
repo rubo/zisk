@@ -3,8 +3,12 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param};
+        use crate::{ziskos_fcall, ziskos_fcall_param};
         use super::FCALL_BIG_INT256_DIV_ID;
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
     } else {
         use crate::zisklib::fcalls_impl::big_int256_div::big_int256_div;
     }
@@ -46,9 +50,23 @@ pub fn fcall_bigint256_div(
         ziskos_fcall_param!(a_value, 4);
         ziskos_fcall_param!(b_value, 4);
         ziskos_fcall!(FCALL_BIG_INT256_DIV_ID);
-        (
-            [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()],
-            [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()],
-        )
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            (
+                [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()],
+                [ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get(), ziskos_fcall_get()],
+            )
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            // TODO: generate an [u64;8] and after return 2 slides
+            let mut quotient: MaybeUninit<[u64; 4]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(quotient, 32);
+
+            let mut remainder: MaybeUninit<[u64; 4]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(remainder, 32);
+            (unsafe { quotient.assume_init() }, unsafe { remainder.assume_init() })
+        }
     }
 }

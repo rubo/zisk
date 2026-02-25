@@ -1,7 +1,8 @@
-use crate::hints::{HINT_BUFFER, macros::{define_hint, register_hint_meta}};
-use zisk_common::{
-    HINT_BLAKE2B_COMPRESS,
+use crate::hints::{
+    macros::{define_hint, register_hint_meta},
+    HINT_BUFFER,
 };
+use zisk_common::HINT_BLAKE2B_COMPRESS;
 
 #[no_mangle]
 pub unsafe extern "C" fn hint_blake2b_compress(
@@ -10,7 +11,6 @@ pub unsafe extern "C" fn hint_blake2b_compress(
     message: *const u64,
     offset: *const u64,
     final_block: u8,
-    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     if !HINT_BUFFER.is_enabled() {
         return;

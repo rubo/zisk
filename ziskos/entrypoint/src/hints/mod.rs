@@ -29,9 +29,9 @@ use tokio::sync::oneshot;
 use zisk_common::io::{StreamWrite, UnixSocketStreamWriter};
 
 #[cfg(zisk_hints_single_thread)]
-use std::thread::ThreadId;
-#[cfg(zisk_hints_single_thread)]
 use std::sync::Mutex;
+#[cfg(zisk_hints_single_thread)]
+use std::thread::ThreadId;
 
 pub use blake2b::*;
 pub use bls12_381::*;

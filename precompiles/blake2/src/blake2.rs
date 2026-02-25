@@ -7,11 +7,10 @@ use rayon::prelude::*;
 use pil_std_lib::Std;
 use proofman_common::{AirInstance, FromTrace, ProofmanResult};
 use proofman_util::{timer_start_trace, timer_stop_and_log_trace};
-#[cfg(feature = "packed")]
-use zisk_pil::{Blake2brTracePacked, Blake2brTraceRowPacked};
 #[cfg(not(feature = "packed"))]
 use zisk_pil::{Blake2brTrace, Blake2brTraceRow};
-
+#[cfg(feature = "packed")]
+use zisk_pil::{Blake2brTracePacked, Blake2brTraceRowPacked};
 #[cfg(feature = "packed")]
 type Blake2TraceRowType<F> = Blake2brTraceRowPacked<F>;
 #[cfg(feature = "packed")]

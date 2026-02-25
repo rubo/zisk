@@ -188,6 +188,10 @@ pub enum BuiltInHint {
     // Keccak256 hint types.
     /// Compute Keccak-256 hash.
     Keccak256 = HINT_KECCAK256,
+
+    // Blake2b hint types.
+    /// Blake2b compression function.
+    Blake2bCompress = HINT_BLAKE2B_COMPRESS,
 }
 
 impl Display for BuiltInHint {
@@ -220,6 +224,8 @@ impl Display for BuiltInHint {
             BuiltInHint::VerifyKzgProof => "VERIFY_KZG_PROOF",
             // Keccak256 Hint
             BuiltInHint::Keccak256 => "KECCAK256",
+            // Blake2b Hint
+            BuiltInHint::Blake2bCompress => "BLAKE2B_COMPRESS",
         };
 
         write!(f, "{} ({:#x})", name, *self as u32)
@@ -343,6 +349,9 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::VerifyKzgProof) => HINT_VERIFY_KZG_PROOF,
             // Keccak256 Hint
             HintCode::BuiltIn(BuiltInHint::Keccak256) => HINT_KECCAK256,
+
+            // Blake2b Hint
+            HintCode::BuiltIn(BuiltInHint::Blake2bCompress) => HINT_BLAKE2B_COMPRESS,
 
             // Custom Hints
             HintCode::Custom(code) => code,

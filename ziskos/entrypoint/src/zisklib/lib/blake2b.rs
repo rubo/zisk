@@ -12,7 +12,7 @@ const IV: [u64; 8] = [
     0x5BE0CD19137E2179,
 ];
 
-fn blake2b_compress(
+pub fn blake2b_compress(
     rounds: u32,
     h: &mut [u64; 8],
     m: &[u64; 16],

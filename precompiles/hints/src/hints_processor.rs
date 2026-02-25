@@ -17,6 +17,7 @@ use zisk_common::{
     BuiltInHint, CtrlHint, HintCode, PartialPrecompileHint, PrecompileHint,
     PrecompileHintParseResult,
 };
+use ziskos_hints::handlers::blake2b::blake2b_compress_hint;
 use ziskos_hints::handlers::bls381::{
     bls12_381_fp2_to_g2_hint, bls12_381_fp_to_g1_hint, bls12_381_g1_add_hint,
     bls12_381_g1_msm_hint, bls12_381_g2_add_hint, bls12_381_g2_msm_hint,
@@ -701,6 +702,9 @@ impl HintsProcessor {
 
             // Keccak256 Hint Codes
             BuiltInHint::Keccak256 => keccak256_hint(&data, data_len_bytes),
+
+            // Blake2b Hint Codes
+            BuiltInHint::Blake2bCompress => blake2b_compress_hint(&data),
         }
     }
 

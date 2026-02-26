@@ -12,7 +12,7 @@ pub unsafe extern "C" fn hint_custom(
     }
 
     #[cfg(zisk_hints_single_thread)]
-    if crate::hints::check_main_thread() {
+    if !crate::hints::check_main_thread() {
         return;
     }
 

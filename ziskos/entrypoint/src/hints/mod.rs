@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 use std::{ffi::CStr, os::raw::c_char};
 use std::{
     io::{self, BufWriter, Write},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 use tokio::sync::oneshot;
 use zisk_common::io::{StreamWrite, UnixSocketStreamWriter};
@@ -37,6 +37,7 @@ use std::thread::ThreadId;
 pub use blake2b::*;
 pub use bls12_381::*;
 pub use bn254::*;
+pub use custom::*;
 pub use keccak256::*;
 pub use kzg::*;
 pub use modexp::*;
@@ -109,9 +110,6 @@ pub fn init_hints() {
 
     // Write HINT_START
     HINT_BUFFER.write_hint_start();
-
-    // Write HINT_START
-    HINT_BUFFER.write_hint_start();
 }
 
 pub fn init_hints_file(hints_file_path: PathBuf, ready: Option<oneshot::Sender<()>>) -> Result<()> {
@@ -159,8 +157,12 @@ pub fn init_hints_socket(
 
     Ok(())
 }
-pub fn close_hints() -> io::Result<()> {
-    *MAIN_TID.lock().unwrap() = None;
+
+pub fn close_hints() -> Result<()> {
+    #[cfg(zisk_hints_single_thread)]
+    {
+        *MAIN_TID.lock().unwrap() = None;
+    }
 
     // Write HINT_END
     HINT_BUFFER.write_hint_end();

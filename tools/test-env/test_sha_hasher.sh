@@ -2,7 +2,7 @@
 
 source "./utils.sh"
 
-PROJECT_NAME="guest"
+PROJECT_NAME="sha-hasher"
 EXPECTED_OUTPUT="4fcbc136|2ce46a82|2248a8eb|785f0c7e|9dca7861|7267cace|d028d7e5|f6a2309c|000003e8|deadbeef"
 
 main() {

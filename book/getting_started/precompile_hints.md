@@ -308,17 +308,19 @@ pub fn init_hints_file(hints_file_path: PathBuf, ready: Option<oneshot::Sender<(
 This function stores the generated hints in the file specified by the `hints_file_path` parameter.
 
 ```rust
-pub fn init_hints_socket(socket_path: PathBuf, ready: Option<oneshot::Sender<()>>) -> io::Result<()>
+pub fn init_hints_socket(socket_path: PathBuf, debug_file: Option<PathBuf>, ready: Option<oneshot::Sender<()>>) -> Result<()>
 ```
 
 This function sends the hints through the Unix socket specified by the `socket_path` parameter.
 
 The optional `ready` parameter can be used for synchronization with the host when the guest program is executed in a separate thread to generate hints in parallel. It signals `ready` when the hints generation is ready to start writing hints through the Unix socket.
 
+The optional `debug_file` parameter can be used to store, in the specified file, a copy of the hints sent through the socket. This file can later be used for debugging purposes.
+
 To close hints generation you must call:
 
 ```rust
-pub fn close_hints() -> io::Result<()>
+pub fn close_hints() -> Result<()>
 ```
 
 You should call these functions only when the guest is compiled for the native target used for hints generation. This can be achieved by placing the code under the following configuration flag:
@@ -388,7 +390,7 @@ Using threads or iterating over non-deterministically ordered data structures ma
 To extend the built-in precompile hints, you can generate custom hints for new precompiles. The first step is to register the new hint in the `HintsProcessor`, as explained in section [Custom Hint Handlers](#4-custom-hint-handlers). Once the precompile hint is registered, you can generate hints for it from the guest program using the following FFI function:
 
 ```rust
-fn hint_custom(hint_id: u32, data_ptr: *const u8, data_len: usize);
+fn hint_custom(hint_id: u32, data_ptr: *const u8, data_len: usize, is_result: u8);
 ```
 
 and following the same guidelines described for the built-in FFI hint helper functions.

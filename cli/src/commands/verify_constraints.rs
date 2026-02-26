@@ -1,4 +1,4 @@
-use crate::ux::{print_banner, print_banner_field};
+use crate::ux::{print_banner, print_banner_command, print_banner_field};
 use anyhow::Result;
 
 use clap::Parser;
@@ -63,6 +63,9 @@ pub struct ZiskVerifyConstraints {
     #[clap(short = 'u', long, conflicts_with = "emulator")]
     pub unlock_mapped_memory: bool,
 
+    #[clap(short = 'n', long, default_value_t = false)]
+    pub no_auto_setup: bool,
+
     /// Verbosity (-v, -vv)
     #[arg(short = 'v', long, action = clap::ArgAction::Count, help = "Increase verbosity level")]
     pub verbose: u8, // Using u8 to hold the number of `-v`
@@ -76,6 +79,17 @@ pub struct ZiskVerifyConstraints {
 
 impl ZiskVerifyConstraints {
     pub fn run(&mut self) -> Result<()> {
+        // panic::set_hook(Box::new(|panic_info| {
+        //     eprintln!("\x1B[31mPANIC DETECTED");
+        //     eprintln!("{} at {:?}", panic_info, panic_info.location());
+
+        //     // Backtrace
+        //     let bt = std::backtrace::Backtrace::force_capture();
+        //     eprintln!("Backtrace:\n{}", bt);
+
+        //     std::process::exit(101);
+        // }));
+
         // Check if the deprecated alias was used
         if std::env::args().any(|arg| arg == "--input") {
             eprintln!("{}", "Warning: --input is deprecated, use --inputs instead".yellow().bold());
@@ -83,9 +97,12 @@ impl ZiskVerifyConstraints {
 
         print_banner();
 
-        if let Some(inputs) = &self.inputs {
-            print_banner_field("Input", inputs);
-        }
+        print_banner_command("Verify Constraints");
+
+        print_banner_field("Elf", self.elf.display());
+
+        let inputs_str = self.inputs.clone().unwrap_or_else(|| "None".dimmed().to_string());
+        print_banner_field("Input", inputs_str);
 
         if let Some(hints) = &self.hints {
             print_banner_field("Prec. Hints", hints);
@@ -142,9 +159,9 @@ impl ZiskVerifyConstraints {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, false)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
-        prover.verify_constraints_debug(stdin, self.debug.clone())
+        prover.verify_constraints_debug(&pk, stdin, self.debug.clone())
     }
 
     pub fn run_asm(
@@ -159,17 +176,18 @@ impl ZiskVerifyConstraints {
             .verbose(self.verbose)
             .shared_tables(self.shared_tables)
             .asm_path_opt(self.asm.clone())
+            .no_auto_setup(self.no_auto_setup)
             .base_port_opt(self.port)
             .unlock_mapped_memory(self.unlock_mapped_memory)
             .print_command_info()
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         if let Some(hints_stream) = hints_stream {
-            prover.set_hints_stream(hints_stream)?;
+            pk.register_hints_stream(hints_stream)?;
         }
-        prover.verify_constraints_debug(stdin, self.debug.clone())
+        prover.verify_constraints_debug(&pk, stdin, self.debug.clone())
     }
 }

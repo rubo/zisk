@@ -54,6 +54,7 @@ mpi = { workspace = true }
 default = []
 disable_distributed = ["zisk-sdk/disable_distributed"]
 diagnostic = ["zisk-sdk/diagnostic"]
+custom_rust_llvm = []
 gpu = ["zisk-sdk/gpu"]
 packed = ["zisk-sdk/packed"]
 stats = []

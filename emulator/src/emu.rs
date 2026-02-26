@@ -93,9 +93,9 @@ impl<'a> Emu<'a> {
         emu
     }
 
-    pub fn create_emu_context(&mut self, inputs: Vec<u8>) -> EmuContext {
+    pub fn create_emu_context(&mut self, inputs: Vec<u8>, options: &EmuOptions) -> EmuContext {
         // Initialize an empty instance
-        let mut ctx = EmuContext::new(inputs);
+        let mut ctx = EmuContext::new(inputs, options);
 
         // Create a new read section for every RO data entry of the rom
         for i in 0..self.rom.ro_data.len() {
@@ -1534,14 +1534,26 @@ impl<'a> Emu<'a> {
         callback: Option<impl Fn(EmuTrace)>,
     ) {
         // Context, where the state of the execution is stored and modified at every execution step
-        self.ctx = self.create_emu_context(inputs.clone());
+        self.ctx = self.create_emu_context(inputs.clone(), options);
 
         let mut elf = ElfSymbolReader::new();
         if options.read_symbols {
             if let Some(elf_file) = &options.elf {
                 println!("Loading symbols from ELF file: {elf_file}");
+
+                // Set ROI filter if provided
+                if let Some(roi_filter) = &options.roi_filter {
+                    match elf.set_roi_filter(roi_filter) {
+                        Ok(_) => println!("ROI filter applied: {}", roi_filter),
+                        Err(e) => eprintln!("Invalid ROI filter regex '{}': {}", roi_filter, e),
+                    }
+                }
+
                 elf.load_from_file(elf_file).unwrap();
                 let mut count = 0;
+                let mut roi_count = 0;
+
+                // First pass: add all ROIs
                 for symbol in elf.functions() {
                     count += 1;
                     self.ctx.stats.add_roi(
@@ -1550,7 +1562,46 @@ impl<'a> Emu<'a> {
                         &symbol.name,
                     );
                 }
-                println!("Loaded {} function symbols", count);
+
+                // Second pass: mark selected ROIs for tracking
+                for symbol in elf.functions() {
+                    if symbol.is_selected_roi {
+                        roi_count += 1;
+                        println!("  [Selected ROI] {}", symbol.name);
+                        self.ctx
+                            .stats
+                            .mark_roi_as_selected(symbol.address as u32, options.track_calls);
+                    }
+                }
+
+                println!(
+                    "Loaded {} function symbols ({} marked as selected ROI)",
+                    count, roi_count
+                );
+
+                // Setup call tracking if requested
+                if options.track_calls > 0 {
+                    if roi_count > 0 {
+                        println!(
+                            "Call tracking enabled for {} ROI function(s) (tracking {} parameters)",
+                            roi_count, options.track_calls
+                        );
+                        println!("Output path: {}", options.track_output_path);
+                        println!("Separator: '{}'", options.track_separator);
+
+                        // Initialize tracking files
+                        if let Err(e) = self
+                            .ctx
+                            .stats
+                            .init_roi_tracking(&options.track_output_path, &options.track_separator)
+                        {
+                            eprintln!("Error initializing ROI tracking: {}", e);
+                        }
+                    } else {
+                        eprintln!("Warning: --track-calls specified but no ROI symbols found");
+                    }
+                }
+
                 count = 0;
                 for (id, tag) in elf.profile_tags() {
                     count += 1;
@@ -1561,11 +1612,18 @@ impl<'a> Emu<'a> {
                 self.ctx.stats.set_roi_callers(options.roi_callers);
                 self.ctx.stats.set_top_roi_detail(options.top_roi_detail);
                 self.ctx.stats.set_main_name(options.main_name.clone());
+                self.ctx.stats.set_use_thousands_sep(!options.no_thousands_sep);
+                self.ctx.stats.set_top_rois_filter(options.top_roi_filter);
             }
         }
         if options.coverage && !options.stats {
             panic!("Coverage feature needs at least stats option");
         }
+        if options.top_histogram > 0 && !options.stats {
+            panic!("Top Histogram feature needs at least stats option");
+        }
+
+        self.ctx.stats.set_top_histogram(options.top_histogram);
         self.ctx.stats.set_coverage(options.coverage);
 
         self.ctx.stats.set_legacy_stats(options.legacy_stats);
@@ -1716,6 +1774,32 @@ impl<'a> Emu<'a> {
             if let Some(store_op_output_file) = &options.store_op_output {
                 self.ctx.stats.flush_op_data_to_file(store_op_output_file).unwrap();
             }
+
+            // Generate disassembly if requested
+            if let Some(disasm_file) = &options.disasm {
+                println!("Writing disassembly to: {}", disasm_file);
+                // Try to load symbols if not already loaded
+                let symbols = if options.read_symbols {
+                    if let Some(elf_file) = &options.elf {
+                        let mut elf = ElfSymbolReader::new();
+                        if let Some(roi_filter) = &options.roi_filter {
+                            let _ = elf.set_roi_filter(roi_filter);
+                        }
+                        elf.load_from_file(elf_file).ok();
+                        Some(elf)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                if let Err(e) = self.ctx.stats.write_disassembly(self.rom, disasm_file, symbols) {
+                    eprintln!("Error writing disassembly: {}", e);
+                } else {
+                    println!("Disassembly written successfully");
+                }
+            }
         }
     }
 
@@ -1727,7 +1811,7 @@ impl<'a> Emu<'a> {
         par_options: &ParEmuOptions,
     ) -> Vec<EmuTrace> {
         // Context, where the state of the execution is stored and modified at every execution step
-        self.ctx = self.create_emu_context(inputs);
+        self.ctx = self.create_emu_context(inputs, options);
 
         // Init pc to the rom entry address
         self.ctx.trace.start_state.pc = ROM_ENTRY;
@@ -1837,7 +1921,7 @@ impl<'a> Emu<'a> {
         let instruction = self.rom.get_instruction(self.ctx.inst_ctx.pc);
 
         let pc = self.ctx.inst_ctx.pc;
-        //println!("PCLOG={}", instruction.to_text());
+        // println!("PCLOG={}", instruction.to_text());
 
         // Build the 'a' register value  based on the source specified by the current instruction
         self.source_a(instruction);
@@ -1846,6 +1930,11 @@ impl<'a> Emu<'a> {
         self.source_b(instruction);
 
         // Call the operation
+        if instruction.input_size > 0 {
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
+        }
         (instruction.func)(&mut self.ctx.inst_ctx);
 
         // Retrieve statistics data
@@ -1971,6 +2060,9 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         // Call the operation
@@ -2028,6 +2120,13 @@ impl<'a> Emu<'a> {
         // Build the 'b' register value  based on the source specified by the current instruction
         self.source_b(instruction);
 
+        // If this is a precompiled, prepare extended argument
+        if instruction.input_size > 0 {
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
+        }
+
         // Call the operation
         (instruction.func)(&mut self.ctx.inst_ctx);
 
@@ -2057,16 +2156,11 @@ impl<'a> Emu<'a> {
         data_bus: &mut DB,
     ) -> bool {
         let instruction = self.rom.get_instruction(self.ctx.inst_ctx.pc);
-
         #[cfg(feature = "minimal_trace_index_debug")]
         println!(
             "MINIMAL_TRACE step_emu_trace            {} {}",
             self.ctx.inst_ctx.step, mem_reads_index
         );
-        // println!(
-        //     "DEBUG_TRACE {:09} 0x{:08x} {:?}",
-        //     self.ctx.inst_ctx.step, self.ctx.inst_ctx.pc, self.ctx.inst_ctx.regs
-        // );
 
         self.source_a_mem_reads_consume_databus(instruction, mem_reads, mem_reads_index, data_bus);
         self.source_b_mem_reads_consume_databus(instruction, mem_reads, mem_reads_index, data_bus);
@@ -2074,7 +2168,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
-
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             // round_up => (size + 7) >> 3
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
@@ -2082,6 +2176,8 @@ impl<'a> Emu<'a> {
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2149,7 +2245,7 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
-
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             // round_up => (size + 7) >> 3
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
@@ -2157,6 +2253,8 @@ impl<'a> Emu<'a> {
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2289,12 +2387,15 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
                 let mem_read = mem_reads[*mem_reads_index];
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2380,12 +2481,15 @@ impl<'a> Emu<'a> {
         if instruction.input_size > 0 {
             self.ctx.inst_ctx.precompiled.input_data.clear();
             self.ctx.inst_ctx.precompiled.output_data.clear();
+            self.ctx.inst_ctx.extended_arg = instruction.jmp_offset1;
             let number_of_mem_reads = (instruction.input_size + 7) >> 3;
             for _ in 0..number_of_mem_reads {
                 let mem_read = mem_reads[*mem_reads_index];
                 *mem_reads_index += 1;
                 self.ctx.inst_ctx.precompiled.input_data.push(mem_read);
             }
+        } else {
+            self.ctx.inst_ctx.extended_arg = 0;
         }
 
         self.ctx.inst_ctx.data_ext_len = 0;
@@ -2486,7 +2590,7 @@ impl<'a> Emu<'a> {
         // trace.set_a_src_sp(inst.a_src == SRC_SP),
         // #[cfg(feature = "sp")]
         // trace.set_a_use_sp_imm1(inst.a_use_sp_imm1),
-        trace.set_op_with_step(inst.op_with_step);
+        trace.set_is_precompiled(inst.is_precompiled);
         trace.set_b_src_imm(inst.b_src == SRC_IMM);
         trace.set_b_src_mem(inst.b_src == SRC_MEM);
         trace.set_b_src_reg(inst.b_src == SRC_REG);

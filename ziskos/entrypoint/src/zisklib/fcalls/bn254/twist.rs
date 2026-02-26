@@ -4,10 +4,14 @@ cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
         use crate::{
-            ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param,
+            ziskos_fcall, ziskos_fcall_param,
             zisklib::{FCALL_BN254_TWIST_ADD_LINE_COEFFS_ID, FCALL_BN254_TWIST_DBL_LINE_COEFFS_ID}
         };
-        } else {
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
+    } else {
         use crate::zisklib::fcalls_impl::bn254::{bn254_twist_add_line_coeffs, bn254_twist_dbl_line_coeffs};
     }
 
@@ -47,28 +51,40 @@ pub fn fcall_bn254_twist_add_line_coeffs(
         ziskos_fcall_param!(p1_value, 16);
         ziskos_fcall_param!(p2_value, 16);
         ziskos_fcall!(FCALL_BN254_TWIST_ADD_LINE_COEFFS_ID);
-        (
-            [
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-            ],
-            [
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-            ],
-        )
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            (
+                [
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                ],
+                [
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                ],
+            )
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut lambda: MaybeUninit<[u64; 8]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(lambda, 8 * 8);
+            let mut mu: MaybeUninit<[u64; 8]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(mu, 8 * 8);
+            unsafe { (lambda.assume_init(), mu.assume_init()) }
+        }
     }
 }
 
@@ -102,27 +118,39 @@ pub fn fcall_bn254_twist_dbl_line_coeffs(
     {
         ziskos_fcall_param!(p_value, 16);
         ziskos_fcall!(FCALL_BN254_TWIST_DBL_LINE_COEFFS_ID);
-        (
-            [
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-            ],
-            [
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-                ziskos_fcall_get(),
-            ],
-        )
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            (
+                [
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                ],
+                [
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                    ziskos_fcall_get(),
+                ],
+            )
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut lambda: MaybeUninit<[u64; 8]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(lambda, 8 * 8);
+            let mut mu: MaybeUninit<[u64; 8]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(mu, 8 * 8);
+            unsafe { (lambda.assume_init(), mu.assume_init()) }
+        }
     }
 }

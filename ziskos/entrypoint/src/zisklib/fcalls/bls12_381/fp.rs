@@ -4,9 +4,13 @@ cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
         use crate::{
-            ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param,
+            ziskos_fcall, ziskos_fcall_param,
             zisklib::{FCALL_BLS12_381_FP_INV_ID, FCALL_BLS12_381_FP_SQRT_ID}
         };
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
     } else {
         use crate::zisklib::fcalls_impl::bls12_381::{bls12_381_fp_inv, bls12_381_fp_sqrt};
     }
@@ -44,14 +48,24 @@ pub fn fcall_bls12_381_fp_inv(
     {
         ziskos_fcall_param!(p_value, 8);
         ziskos_fcall!(FCALL_BLS12_381_FP_INV_ID);
-        [
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-        ]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+            ]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut result: MaybeUninit<[u64; 6]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(result, 48);
+            unsafe { result.assume_init() }
+        }
     }
 }
 
@@ -88,14 +102,24 @@ pub fn fcall_bls12_381_fp_sqrt(
     {
         ziskos_fcall_param!(p_value, 8);
         ziskos_fcall!(FCALL_BLS12_381_FP_SQRT_ID);
-        [
-            ziskos_fcall_get(), // results[0] - indicates if a sqrt exists (1) or not (0)
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-        ]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [
+                ziskos_fcall_get(), // results[0] - indicates if a sqrt exists (1) or not (0)
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+            ]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut result: MaybeUninit<[u64; 7]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(result, 56);
+            unsafe { result.assume_init() }
+        }
     }
 }

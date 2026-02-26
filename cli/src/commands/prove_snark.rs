@@ -5,7 +5,7 @@ use colored::Colorize;
 use fields::Goldilocks;
 use std::path::PathBuf;
 
-use crate::ux::print_banner;
+use crate::ux::{print_banner, print_banner_command, print_banner_field};
 use proofman::SnarkWrapper;
 use zisk_sdk::ZiskProofWithPublicValues;
 
@@ -37,10 +37,11 @@ pub struct ZiskProveSnark {
 
 impl ZiskProveSnark {
     pub fn run(&self) -> Result<()> {
-        println!("{} ProveSnark", format!("{: >12}", "Command").bright_green().bold());
-        println!();
-
         print_banner();
+
+        print_banner_command("Prove SNARK");
+
+        print_banner_field("Elf", self.elf.display());
 
         let zisk_proof = ZiskProofWithPublicValues::load(&self.proof).map_err(|e| {
             anyhow::anyhow!(
@@ -55,11 +56,8 @@ impl ZiskProveSnark {
 
         let proof = zisk_proof.get_vadcop_final_proof()?;
 
-        let snark_proof = snark_wrapper.generate_final_snark_proof(
-            &proof,
-            Some(self.output_dir.clone()),
-            None,
-        )?;
+        let snark_proof =
+            snark_wrapper.generate_final_snark_proof(&proof, Some(self.output_dir.clone()))?;
         snark_proof.save(self.output_dir.join("final_snark_proof.bin")).map_err(|e| {
             anyhow::anyhow!(
                 "Failed to save final SNARK proof to output dir {}: {}",

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use zisk_sdk::{ProverClient, elf_path, ZiskStdin, ZiskIO, ElfBinaryFromFile};
+use zisk_sdk::{elf_path, ElfBinaryFromFile, ProverClient, ZiskIO, ZiskStdin};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Output {
@@ -27,11 +27,11 @@ fn main() -> Result<()> {
     let client = ProverClient::builder().emu().verify_constraints().build().unwrap();
 
     println!("Setting up program...");
-    client.setup(&elf)?;
+    let (pk, _vkey) = client.setup(&elf)?;
     println!("Setup completed successfully");
 
     println!("Verifying constraints (no proof generation)...");
-    let result = client.verify_constraints(stdin.clone())?;
+    let result = client.verify_constraints(&pk, stdin.clone())?;
 
     println!("\u{2713} VerifyConstraints completed successfully!");
     println!("Cycles: {}", result.get_execution_steps());

@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+use crate::ux::print_banner_field;
 use crate::{commands::get_proving_key, ux::print_banner};
 use colored::Colorize;
 use fields::Goldilocks;
@@ -24,10 +25,6 @@ pub struct ZiskRomSetup {
     #[clap(short = 'k', long)]
     pub proving_key: Option<PathBuf>,
 
-    /// Setup folder path
-    #[clap(short = 'z', long)]
-    pub zisk_path: Option<PathBuf>,
-
     /// Output dir path
     #[clap(short = 'o', long)]
     pub output_dir: Option<PathBuf>,
@@ -44,15 +41,19 @@ impl ZiskRomSetup {
     pub fn run(&self) -> Result<()> {
         setup_logger(self.verbose.into());
 
-        tracing::info!(
-            "{}",
-            format!("{} Rom Setup", format!("{: >12}", "Command").bright_green().bold())
-        );
-        tracing::info!("");
-
         print_banner();
 
+        print_banner_field("Command", "Rom Setup");
+        print_banner_field("Elf", self.elf.display());
+        if self.hints {
+            print_banner_field("Hints", "Enabled".yellow());
+        }
+
         let proving_key = get_proving_key(self.proving_key.as_ref());
+
+        print_banner_field("Proving Key", proving_key.display());
+
+        println!();
 
         let mpi_ctx = Arc::new(MpiCtx::new());
         let mut pctx = ProofCtx::create_ctx(proving_key, false, self.verbose.into(), mpi_ctx)?;
@@ -78,7 +79,7 @@ impl ZiskRomSetup {
         let elf = ElfBinaryFromFile::new(&self.elf, self.hints)?;
         rom_merkle_setup::<Goldilocks>(&pctx, &elf, &self.output_dir)?;
 
-        gen_assembly(&self.elf, &self.zisk_path, &self.output_dir, self.hints, self.verbose > 0)?;
+        gen_assembly(&self.elf, &self.output_dir, self.hints, self.verbose > 0)?;
 
         println!();
         tracing::info!("{}", "ROM setup successfully completed".bright_green().bold());

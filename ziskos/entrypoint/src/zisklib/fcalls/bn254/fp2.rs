@@ -3,7 +3,11 @@ use cfg_if::cfg_if;
 cfg_if! {
     if #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))] {
         use core::arch::asm;
-        use crate::{ziskos_fcall, ziskos_fcall_get, ziskos_fcall_param, zisklib::FCALL_BN254_FP2_INV_ID};
+        use crate::{ziskos_fcall, ziskos_fcall_param, zisklib::FCALL_BN254_FP2_INV_ID};
+        #[cfg(not(feature = "inputcpy"))]
+        use crate::ziskos_fcall_get;
+        #[cfg(feature = "inputcpy")]
+        use crate::ziskos_inputcpy;
     } else {
         use crate::zisklib::fcalls_impl::bn254::bn254_fp2_inv;
     }
@@ -41,15 +45,25 @@ pub fn fcall_bn254_fp2_inv(
     {
         ziskos_fcall_param!(p_value, 8);
         ziskos_fcall!(FCALL_BN254_FP2_INV_ID);
-        [
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-            ziskos_fcall_get(),
-        ]
+        #[cfg(not(feature = "inputcpy"))]
+        {
+            [
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+                ziskos_fcall_get(),
+            ]
+        }
+        #[cfg(feature = "inputcpy")]
+        {
+            use core::mem::MaybeUninit;
+            let mut result: MaybeUninit<[u64; 8]> = MaybeUninit::uninit();
+            ziskos_inputcpy!(result, 8 * 8);
+            unsafe { result.assume_init() }
+        }
     }
 }

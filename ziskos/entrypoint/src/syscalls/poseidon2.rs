@@ -28,7 +28,7 @@ pub unsafe extern "C" fn syscall_poseidon2(
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
-    ziskos_syscall!(0x812, state);
+    ziskos_syscall!(zisk_definitions::SYSCALL_POSEIDON2_ID, state);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
         // Get a mutable reference to the state

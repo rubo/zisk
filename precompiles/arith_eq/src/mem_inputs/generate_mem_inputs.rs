@@ -24,7 +24,7 @@ pub fn generate_mem_inputs<P: MemProcessor>(
     let params_offset = OPERATION_PRECOMPILED_BUS_DATA_SIZE + config.indirect_params;
 
     for iparam in 0..config.indirect_params {
-        MemBusHelpers::mem_aligned_load(
+        MemBusHelpers::mem_aligned_read(
             addr_main + iparam as u32 * 8,
             step_main,
             data[OPERATION_PRECOMPILED_BUS_DATA_SIZE + iparam],

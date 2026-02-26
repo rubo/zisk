@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use zisk_sdk::{ZiskStdin, ZiskIO, ElfBinary, ProverClient, include_elf};
+use zisk_sdk::{include_elf, ElfBinary, ProverClient, ZiskIO, ZiskStdin};
 
 pub const ELF: ElfBinary = include_elf!("sha-hasher-guest");
 
@@ -25,12 +25,12 @@ fn main() -> Result<()> {
     let client = ProverClient::builder().asm().base_port(54321).build().unwrap();
 
     println!("Setting up program...");
-    client.setup(&ELF)?;
+    let (pk, _) = client.setup(&ELF)?;
     println!("Setup completed successfully");
 
     // Execute the program using the `ProverClient.execute` method, without generating a proof.
     println!("Executing program (no proof generation)...");
-    let result = client.execute(stdin.clone())?;
+    let result = client.execute(&pk, stdin.clone())?;
 
     println!("\u{2713} Execution completed successfully!");
     println!("Cycles: {}", result.get_execution_steps());

@@ -110,6 +110,7 @@ impl AsmRunnerMT {
         const MAX_BYTES_MTRACE_STEP: usize = MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE;
         const MAX_TRACE_CHUNK_INFO: usize = (44 * 8) + 32; // 384 bytes
 
+        let __stats = _stats.clone();
         let threshold_bytes = (chunk_size as usize * MAX_BYTES_MTRACE_STEP) + MAX_TRACE_CHUNK_INFO;
         let mut threshold = unsafe {
             preloaded
@@ -129,6 +130,12 @@ impl AsmRunnerMT {
 
                     // Synchronize with memory changes from the C++ side
                     fence(Ordering::Acquire);
+
+                    // Check if we need to remap the shared memory
+                    // preloaded
+                    //     .output_shmem
+                    //     .check_size_changed(&mut data_ptr)
+                    //     .context("Failed to check and remap shared memory for MT trace")?;
 
                     // Check if we need to map additional shared memory files.
                     if data_ptr >= threshold

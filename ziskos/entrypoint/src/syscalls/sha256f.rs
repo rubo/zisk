@@ -40,7 +40,7 @@ pub extern "C" fn syscall_sha256_f(
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
-    ziskos_syscall!(0x805, params);
+    ziskos_syscall!(zisk_definitions::SYSCALL_SHA256F_ID, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
         sha256f(params.state, params.input);

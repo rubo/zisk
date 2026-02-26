@@ -35,6 +35,7 @@ memmap2 = "0.9.8"
 num-format = "0.4"
 symbolic-demangle = { version = "12.16", features = ["rust", "cpp"] }
 symbolic-common = "12.16"
+regex = "1.11.1"
 
 [build-dependencies]
 vergen-git2 = { workspace = true }

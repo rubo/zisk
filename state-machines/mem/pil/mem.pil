@@ -80,7 +80,7 @@ const int MAX_RANGE_CHECK_CHUNK = 2**16;
 
 airtemplate Mem(const int N = 2**21, const int id = MEMORY_ID, const int RC = 2, const int bytes = 8,
                 const int base_address = 0, const int size_mb = 128, int immutable = 0,
-                const int free_input_mem = 0, const expr enable_flag = 1, const int use_predefined_ranges = 0, 
+                const int free_input_mem = 0, const expr enable_flag = 1, 
                 const int large_mem = 0, const int dual_mem = 0, const int continuous_addresses = 0) {
 
     col fixed SEGMENT_L1 = [1,0...];
@@ -149,8 +149,8 @@ airtemplate Mem(const int N = 2**21, const int id = MEMORY_ID, const int RC = 2,
             value[index] = value_word[index*2] +  MAX_RANGE_CHECK_CHUNK * value_word[index*2 + 1];
 
             // how value is a free-input, must be checked that it's 32-bit well formed value
-            range_check(value_word[index*2], 0, MAX_RANGE_CHECK_CHUNK - 1, predefined: use_predefined_ranges);
-            range_check(value_word[index*2+1], 0, MAX_RANGE_CHECK_CHUNK - 1, predefined: use_predefined_ranges);
+            range_check(value_word[index*2], 0, MAX_RANGE_CHECK_CHUNK - 1);
+            range_check(value_word[index*2+1], 0, MAX_RANGE_CHECK_CHUNK - 1);
         }
     } else {
         col witness bits(32) air.value[RC];

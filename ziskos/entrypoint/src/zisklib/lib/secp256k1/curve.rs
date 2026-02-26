@@ -475,13 +475,23 @@ pub fn secp256k1_triple_scalar_mul_with_g(
         hints,
     );
 
-    let mut gpq = SyscallPoint256 { x: gp.x, y: gp.y };
-    let gpq_is_infinity = secp256k1_add_non_infinity_points(
-        &mut gpq,
-        &q,
-        #[cfg(feature = "hints")]
-        hints,
-    );
+    let (gpq, gpq_is_infinity) = if gp_is_infinity {
+        // G + P = 𝒪, so G + P + Q = Q
+        (SyscallPoint256 { x: q.x, y: q.y }, false)
+    } else if pq_is_infinity {
+        // P + Q = 𝒪, so G + P + Q = G
+        (G_POINT256, false)
+    } else {
+        // Normal case: add Q to (G + P)
+        let mut gpq_temp = SyscallPoint256 { x: gp.x, y: gp.y };
+        let is_inf = secp256k1_add_non_infinity_points(
+            &mut gpq_temp,
+            &q,
+            #[cfg(feature = "hints")]
+            hints,
+        );
+        (gpq_temp, is_inf)
+    };
 
     if is_one(r) && is_one(s) && is_one(t) {
         // Return g + p + q

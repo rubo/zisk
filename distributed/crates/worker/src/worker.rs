@@ -4,22 +4,20 @@ use cargo_zisk::commands::get_proving_key;
 use precompiles_hints::HintsProcessor;
 use proofman::{AggProofs, ContributionsInfo};
 use rom_setup::{get_elf_data_hash, DEFAULT_CACHE_PATH};
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 use zisk_common::io::{StreamProcessor, StreamSource, ZiskStdin};
-use zisk_common::reinterpret_vec;
 use zisk_common::ElfBinaryFromFile;
 use zisk_distributed_common::{AggregationParams, DataCtx, InputSourceDto, JobPhase, WorkerState};
 use zisk_distributed_common::{ComputeCapacity, JobId, WorkerId};
-use zisk_distributed_common::{HintsSourceDto, StreamDataDto, StreamMessageKind, StreamPayloadDto};
-use zisk_sdk::{Asm, Emu, ProverClient, ZiskBackend, ZiskProver};
+use zisk_distributed_common::{HintsSourceDto, StreamDataDto, StreamMessageKind};
+use zisk_sdk::{Asm, Emu, ProverClient, ZiskBackend, ZiskProgramPK, ZiskProver};
+
+use crate::stream_ordering::StreamOrderingActor;
 
 use proofman::ExecutionInfo;
-use proofman::ProofInfo;
 use proofman::ProvePhaseInputs;
 use proofman_common::ParamsGPU;
 use proofman_common::ProofOptions;
@@ -246,8 +244,9 @@ pub struct Worker<T: ZiskBackend + 'static> {
     prover: Arc<ZiskProver<T>>,
     prover_config: ProverConfig,
 
-    stream_buffers: HashMap<JobId, (u32, HashMap<u32, Vec<u8>>)>, // (job_id, (next_seq, (seq_number, data)))
-    hints_processor: Option<HintsProcessor>,
+    stream_actor: Option<StreamOrderingActor>,
+    pk: Arc<ZiskProgramPK>,
+    hints_processor: Option<Arc<HintsProcessor>>,
 }
 
 impl<T: ZiskBackend + 'static> Worker<T> {
@@ -269,7 +268,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         );
 
         let elf = ElfBinaryFromFile::new(&prover_config.elf, prover_config.hints)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         Ok(Worker::<Emu> {
             _worker_id: worker_id,
@@ -279,7 +278,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             current_computation: None,
             prover,
             prover_config,
-            stream_buffers: HashMap::new(),
+            pk: Arc::new(pk),
+            stream_actor: None,
             hints_processor: None,
         })
     }
@@ -305,7 +305,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         );
 
         let elf = ElfBinaryFromFile::new(&prover_config.elf, prover_config.hints)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         Ok(Worker::<Asm> {
             _worker_id: worker_id,
@@ -315,7 +315,8 @@ impl<T: ZiskBackend + 'static> Worker<T> {
             current_computation: None,
             prover,
             prover_config,
-            stream_buffers: HashMap::new(),
+            pk: Arc::new(pk),
+            stream_actor: None,
             hints_processor: None,
         })
     }
@@ -364,6 +365,14 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         if let Some(handle) = self.current_computation.take() {
             handle.abort();
         }
+
+        // Drop the actor on a blocking thread: closes the channel, which signals the ordering
+        // thread to exit, without blocking the Tokio runtime worker thread.
+        if let Some(stream_actor) = self.stream_actor.take() {
+            tokio::task::spawn_blocking(move || {
+                drop(stream_actor);
+            });
+        }
     }
 
     pub fn new_job(
@@ -398,31 +407,26 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         tx: mpsc::UnboundedSender<ComputationResult>,
     ) -> Result<JoinHandle<()>> {
         self.partial_contribution_mpi_broadcast(&job).await?;
-        Ok(self.partial_contribution(job, tx).await)
+        Ok(self.partial_contribution(job, tx))
     }
 
     pub async fn partial_contribution_mpi_broadcast(&self, job: &Mutex<JobContext>) -> Result<()> {
-        let job = job.lock().await;
-        let job_id = job.job_id.clone();
+        let mut serialized = {
+            let job = job.lock().await;
 
-        let proof_info = ProofInfo::new(
-            None,
-            job.total_compute_units as usize,
-            job.allocation.clone(),
-            job.rank_id as usize,
-        );
-        let phase_inputs = proofman::ProvePhaseInputs::Contributions(proof_info);
+            let phase_inputs = ProvePhaseInputs::Contributions();
 
-        let options = self.get_proof_options(false);
+            let options = self.get_proof_options(false);
 
-        let mut serialized = borsh::to_vec(&(
-            JobPhase::Contributions,
-            job_id,
-            phase_inputs,
-            options,
-            job.data_ctx.input_source.clone(),
-        ))
-        .unwrap();
+            borsh::to_vec(&(
+                JobPhase::Contributions,
+                job.job_id.clone(),
+                phase_inputs,
+                options,
+                job.data_ctx.input_source.clone(),
+            ))
+            .unwrap()
+        };
 
         self.prover.mpi_broadcast(&mut serialized)?;
         Ok(())
@@ -435,7 +439,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         tx: mpsc::UnboundedSender<ComputationResult>,
     ) -> Result<JoinHandle<()>> {
         self.prove_mpi_broadcast(&job, challenges.clone()).await?;
-        Ok(self.prove(job, challenges, tx).await)
+        Ok(self.prove(job, challenges, tx))
     }
 
     pub async fn prove_mpi_broadcast(
@@ -443,71 +447,63 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         job: &Mutex<JobContext>,
         challenges: Vec<ContributionsInfo>,
     ) -> Result<()> {
-        let job = job.lock().await;
-        let job_id = job.job_id.clone();
+        let mut serialized = {
+            let job = job.lock().await;
+            let job_id = job.job_id.clone();
 
-        let phase_inputs = proofman::ProvePhaseInputs::Internal(challenges);
+            let phase_inputs = proofman::ProvePhaseInputs::Internal(challenges);
 
-        let options = self.get_proof_options(false);
+            let options = self.get_proof_options(false);
 
-        let mut serialized =
-            borsh::to_vec(&(JobPhase::Prove, job_id, phase_inputs, options)).unwrap();
+            borsh::to_vec(&(JobPhase::Prove, job_id, phase_inputs, options)).unwrap()
+        };
 
         self.prover.mpi_broadcast(&mut serialized)?;
         Ok(())
     }
 
-    pub async fn handle_aggregate(
+    pub fn handle_aggregate(
         &self,
         job: Arc<Mutex<JobContext>>,
         agg_params: AggregationParams,
         tx: mpsc::UnboundedSender<ComputationResult>,
     ) -> JoinHandle<()> {
-        self.aggregate(job, agg_params, tx).await
+        self.aggregate(job, agg_params, tx)
     }
 
-    pub async fn partial_contribution(
+    pub fn partial_contribution(
         &self,
         job: Arc<Mutex<JobContext>>,
         tx: mpsc::UnboundedSender<ComputationResult>,
     ) -> JoinHandle<()> {
         let prover = self.prover.clone();
-
+        let pk = self.pk.clone();
         let options = self.get_proof_options(false);
 
-        tokio::spawn(async move {
-            let guard = job.lock().await;
+        tokio::task::spawn_blocking(move || {
+            let guard = job.blocking_lock();
             let job_id = guard.job_id.clone();
 
             info!("Computing Contribution for {job_id}");
 
-            let proof_info = ProofInfo::new(
-                None,
-                guard.total_compute_units as usize,
-                guard.allocation.clone(),
-                guard.rank_id as usize,
-            );
-
-            let phase_inputs = proofman::ProvePhaseInputs::Contributions(proof_info);
-
+            let phase_inputs = proofman::ProvePhaseInputs::Contributions();
             let inputs_source = guard.data_ctx.input_source.clone();
             let hints_source = guard.data_ctx.hints_source.clone();
-
             drop(guard);
 
             let result = Self::execute_contribution_task(
                 job_id.clone(),
-                prover.as_ref(),
+                &prover,
                 phase_inputs,
                 inputs_source,
                 hints_source,
+                &pk,
                 options,
-            )
-            .await;
+            );
 
-            let mut guard = job.lock().await;
-
+            let mut guard = job.blocking_lock();
             guard.executed_steps = prover.executed_steps();
+            drop(guard);
 
             let execution_info =
                 prover.get_execution_info().unwrap_or_else(|_| ExecutionInfo::default());
@@ -532,46 +528,41 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         })
     }
 
-    pub async fn execute_contribution_task(
+    pub fn execute_contribution_task(
         job_id: JobId,
         prover: &ZiskProver<T>,
         phase_inputs: ProvePhaseInputs,
         input_source: InputSourceDto,
         hints_source: HintsSourceDto,
+        pk: &ZiskProgramPK,
         options: ProofOptions,
     ) -> Result<Vec<ContributionsInfo>> {
         let phase = proofman::ProvePhase::Contributions;
 
-        match input_source {
-            InputSourceDto::InputPath(inputs_uri) => {
-                let stdin = ZiskStdin::from_file(inputs_uri)?;
-
-                prover.set_stdin(stdin)?;
-            }
-            InputSourceDto::InputData(input_data) => {
-                let stdin = ZiskStdin::from_vec(input_data);
-                prover.set_stdin(stdin)?;
-            }
-            InputSourceDto::InputNull => {
-                let stdin = ZiskStdin::null();
-                prover.set_stdin(stdin)?;
-            }
-        }
+        let stdin = match input_source {
+            InputSourceDto::InputPath(inputs_uri) => ZiskStdin::from_file(inputs_uri)?,
+            InputSourceDto::InputData(input_data) => ZiskStdin::from_vec(input_data),
+            InputSourceDto::InputNull => ZiskStdin::null(),
+        };
 
         match hints_source {
             HintsSourceDto::HintsPath(hints_uri) => {
                 let hints_stream = StreamSource::from_uri(hints_uri)?;
-                prover.set_hints_stream(hints_stream)?;
+                pk.register_hints_stream(hints_stream)?;
             }
             HintsSourceDto::HintsStream(_hints_uri) => {
-                // For HintsStream, the worker will receive hint data via stream_data messages
-                // The hints will be processed by the hints_processor in process_stream_data
+                // For HintsStream, the worker will receive hint data via StreamData gRPC messages
+                // routed through the stream ordering actor into the hints processor.
                 // No need to set hints_stream on prover for this case
             }
             HintsSourceDto::HintsNull => {
                 // No hints to set
             }
         }
+
+        prover.set_stdin(stdin)?;
+
+        prover.register_program(pk)?;
 
         let challenge = match prover.prove_phase(phase_inputs, options, phase) {
             Ok(proofman::ProvePhaseResult::Contributions(challenge)) => {
@@ -593,149 +584,100 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         Ok(challenge)
     }
 
-    pub async fn process_stream_data(&mut self, stream_data: StreamDataDto) -> Result<()> {
-        let job_id = stream_data.job_id;
-        let stream_type = stream_data.stream_type;
+    /// Routes an incoming `StreamData` message to the per-job ordering actor.
+    ///
+    /// - `Start`: initialises the `HintsProcessor` (if needed), resets it, and spawns the actor.
+    /// - `Data` / `End`: enqueues the message into the actor's channel — O(1), non-blocking.
+    ///
+    /// The actor thread owns the reorder buffer and calls `process_hints` in sequence order.
+    pub async fn route_stream_data(&mut self, stream_data: StreamDataDto) -> Result<()> {
+        match &stream_data.stream_type {
+            StreamMessageKind::Start => {
+                let job_id = stream_data.job_id.clone();
 
-        if self.hints_processor.is_none() {
-            let base_port = self.prover_config.asm_port;
-            let local_rank = self.prover.local_rank();
-            let unlock_mapped_memory = self.prover_config.unlock_mapped_memory;
-            let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)?;
-            let processor = HintsProcessor::builder(hints_shmem)
-                .build()
-                .map_err(|e| anyhow::anyhow!("Failed to initialize hints processor: {}", e))?;
+                self.ensure_hints_processor().await?;
 
-            let worker_idx = self
-                .current_job
-                .as_ref()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Received stream data for job {}, but no current job is set",
-                        job_id
-                    )
-                })?
-                .lock()
-                .await
-                .rank_id as usize;
+                let hints_processor = self.hints_processor.as_ref().unwrap();
 
-            processor.set_has_rom_sm(worker_idx == 0);
-            self.hints_processor = Some(processor);
-        }
-
-        // Check the existence of stream buffer based on stream type
-        if stream_type == StreamMessageKind::Start {
-            // Check if buffer already exists
-            match self.stream_buffers.entry(job_id.clone()) {
-                Entry::Occupied(_) => {
-                    return Err(anyhow::anyhow!("Received duplicate START for job {}", job_id));
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert((1, HashMap::new()));
-                }
-            }
-
-            // Reset hints processor state for the new stream/job
-            // This is crucial for consecutive proofs to work correctly
-            if let Some(ref mut hints_processor) = self.hints_processor {
                 hints_processor.reset();
+
+                let hints_processor = Arc::clone(hints_processor);
+
+                // Replace any existing actor (handles reconnect / job restart)
+                self.stream_actor = Some(StreamOrderingActor::new(hints_processor, job_id));
             }
-
-            println!(
-                "Stream START received for job {}, initialized buffer and reset hints processor",
-                job_id
-            );
-            return Ok(());
-        } else if stream_type == StreamMessageKind::End {
-            // Ensure buffer exists
-            if !self.stream_buffers.contains_key(&job_id) {
-                return Err(anyhow::anyhow!(
-                    "Received {:?} without START for job {}",
-                    stream_type,
-                    job_id,
-                ));
-            }
-
-            // Clean up the stream buffer for this job
-            self.stream_buffers.remove(&job_id);
-
-            println!("Stream END received for job {}, cleaned up buffer", job_id);
-            return Ok(());
+            StreamMessageKind::Data | StreamMessageKind::End => match &self.stream_actor {
+                Some(actor) => actor.send(stream_data)?,
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Received stream {:?} without a prior Start for job {}",
+                        stream_data.stream_type,
+                        stream_data.job_id
+                    ));
+                }
+            },
         }
-        println!(
-            "Received stream data for job {}, stream type {:?}, processing...",
-            job_id, stream_type
-        );
-        let element = self.stream_buffers.get_mut(&job_id).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Received stream data without START for job {} stream type {:?}",
-                job_id,
-                stream_type
-            )
-        })?;
+        Ok(())
+    }
 
-        let next_seq = &mut element.0;
-        let stream_buffer = &mut element.1;
+    pub fn is_first_partition(&self) -> Result<bool> {
+        self.prover.is_first_partition()
+    }
 
-        let StreamPayloadDto { sequence_number: current_seq, mut payload } =
-            stream_data.stream_payload.ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Missing stream payload for job {} stream type {:?}",
-                    job_id,
-                    stream_type
-                )
-            })?;
+    pub fn set_partition(
+        &self,
+        total_compute_units: usize,
+        allocation: Vec<u32>,
+        worker_idx: usize,
+    ) -> Result<()> {
+        self.prover.set_partition(total_compute_units, allocation, worker_idx)
+    }
 
-        // Check if this is the expected sequence number
-        // If not, buffer it for later processing
-        if current_seq != *next_seq {
-            println!(
-                "Received out-of-order stream data for job {}, expected seq {}, got seq {}, buffering",
-                job_id, *next_seq, current_seq
-            );
-            stream_buffer.insert(current_seq, payload);
+    /// Lazily initialises the `HintsProcessor` using configuration from the current job.
+    async fn ensure_hints_processor(&mut self) -> Result<()> {
+        if self.hints_processor.is_some() {
             return Ok(());
         }
 
-        // Process the current payload (which has the expected sequence number)
-        // and increment next_seq to expect the following sequence
-        *next_seq += 1;
+        let base_port = self.prover_config.asm_port;
+        let local_rank = self.prover.local_rank();
+        let unlock_mapped_memory = self.prover_config.unlock_mapped_memory;
 
-        // Check if we have any buffered subsequent payloads waiting
-        // If so, append them to the current payload in order
-        while let Some(buffered_data) = stream_buffer.remove(next_seq) {
-            payload.extend(buffered_data);
-            *next_seq += 1;
-        }
+        // HintsShmem::new and HintsProcessor::build perform OS-level shared-memory operations;
+        // run them on the blocking thread pool to avoid stalling Tokio workers.
+        let processor = tokio::task::spawn_blocking(move || -> Result<HintsProcessor> {
+            let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)?;
+            HintsProcessor::builder(hints_shmem)
+                .build()
+                .map_err(|e| anyhow::anyhow!("Failed to initialize hints processor: {}", e))
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("hints processor init panicked: {e}"))??;
 
-        // Process the hints
-        let payload = reinterpret_vec(payload)?;
-        self.hints_processor.as_mut().unwrap().process_hints(&payload, current_seq == 1)?;
+        processor.set_has_rom_sm(self.prover.is_first_partition()?);
+
+        self.hints_processor = Some(Arc::new(processor));
 
         Ok(())
     }
 
-    pub async fn prove(
+    pub fn prove(
         &self,
         job: Arc<Mutex<JobContext>>,
         challenges: Vec<ContributionsInfo>,
         tx: mpsc::UnboundedSender<ComputationResult>,
     ) -> JoinHandle<()> {
         let prover = self.prover.clone();
-
         let options = self.get_proof_options(false);
 
-        tokio::spawn(async move {
-            let job = job.lock().await;
-            let job_id = job.job_id.clone();
+        tokio::task::spawn_blocking(move || {
+            let job_id = job.blocking_lock().job_id.clone();
 
             info!("Computing Prove for {job_id}");
 
             let phase_inputs = proofman::ProvePhaseInputs::Internal(challenges);
+            let result = Self::execute_prove_task(job_id.clone(), &prover, phase_inputs, options);
 
-            let result =
-                Self::execute_prove_task(job_id.clone(), prover.as_ref(), phase_inputs, options)
-                    .await;
             match result {
                 Ok(data) => {
                     let _ = tx.send(ComputationResult::Proofs {
@@ -756,7 +698,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         })
     }
 
-    pub async fn execute_prove_task(
+    pub fn execute_prove_task(
         job_id: JobId,
         prover: &ZiskProver<T>,
         phase_inputs: ProvePhaseInputs,
@@ -785,19 +727,20 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         Ok(proof)
     }
 
-    pub async fn aggregate(
+    pub fn aggregate(
         &self,
         job: Arc<Mutex<JobContext>>,
         agg_params: AggregationParams,
         tx: mpsc::UnboundedSender<ComputationResult>,
     ) -> JoinHandle<()> {
         let prover = self.prover.clone();
-
         let options = self.get_proof_options(agg_params.compressed);
 
-        tokio::spawn(async move {
-            let job = job.lock().await;
-            let job_id = job.job_id.clone();
+        tokio::task::spawn_blocking(move || {
+            let (job_id, executed_steps) = {
+                let guard = job.blocking_lock();
+                (guard.job_id.clone(), guard.executed_steps)
+            };
 
             info!("Starting aggregation step for {job_id}");
 
@@ -827,7 +770,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                         job_id,
                         success: true,
                         result: Ok(Some(proof)),
-                        executed_steps: job.executed_steps,
+                        executed_steps,
                     });
                 }
                 Err(error) => {
@@ -836,7 +779,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                         job_id,
                         success: false,
                         result: Err(error),
-                        executed_steps: job.executed_steps,
+                        executed_steps,
                     });
                 }
             }
@@ -881,13 +824,13 @@ impl<T: ZiskBackend + 'static> Worker<T> {
 
                 let result = Self::execute_contribution_task(
                     job_id,
-                    self.prover.as_ref(),
+                    &self.prover,
                     phase_inputs,
                     input_source_dto,
                     hints_source_dto,
+                    &self.pk,
                     options,
-                )
-                .await;
+                );
                 if let Err(e) = result {
                     error!("Error during Contributions MPI broadcast execution: {}. Waiting for new job...", e);
                 }
@@ -896,9 +839,7 @@ impl<T: ZiskBackend + 'static> Worker<T> {
                 let (job_id, phase_inputs, options): (JobId, ProvePhaseInputs, ProofOptions) =
                     borsh::from_slice(&bytes[1..]).unwrap();
 
-                let result =
-                    Self::execute_prove_task(job_id, self.prover.as_ref(), phase_inputs, options)
-                        .await;
+                let result = Self::execute_prove_task(job_id, &self.prover, phase_inputs, options);
                 if let Err(e) = result {
                     error!(
                         "Error during Prove MPI broadcast execution: {}. Waiting for new job...",

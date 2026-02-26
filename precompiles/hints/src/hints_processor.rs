@@ -17,6 +17,7 @@ use zisk_common::{
     BuiltInHint, CtrlHint, HintCode, PartialPrecompileHint, PrecompileHint,
     PrecompileHintParseResult,
 };
+use ziskos_hints::handlers::blake2b::blake2b_compress_hint;
 use ziskos_hints::handlers::bls381::{
     bls12_381_fp2_to_g2_hint, bls12_381_fp_to_g1_hint, bls12_381_g1_add_hint,
     bls12_381_g1_msm_hint, bls12_381_g2_add_hint, bls12_381_g2_msm_hint,
@@ -473,27 +474,29 @@ impl HintsProcessor {
         // Check generation first to detect stale workers (before processing)
         let current_gen = state.generation.load(Ordering::SeqCst);
         if generation != current_gen {
-            // Worker belongs to old generation; ignore
             return;
         }
 
-        // println!("Processing Hint => {:?}:", hint);
-
-        // Check if we should stop due to error - but still need to fill the slot
-        let result = if state.error_flag.load(Ordering::Acquire) {
-            Err(anyhow::anyhow!("Processing stopped due to error"))
-        } else {
-            // Process the hint
-            Self::dispatch_hint(hint, custom_handlers)
-        };
-
-        // println!(
-        //     "Hint result: {:x?} bytes",
-        //     match &result {
-        //         Ok(data) => format!("{:?}", data),
-        //         Err(e) => format!("Err({})", e),
-        //     }
-        // );
+        // Catch panics to prevent permanently-stuck None slots in the buffer.
+        // If dispatch_hint panics, Rayon catches it silently but the slot would
+        // stay None forever, blocking the drainer from making progress.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if state.error_flag.load(Ordering::Acquire) {
+                Err(anyhow::anyhow!("Processing stopped due to error"))
+            } else {
+                Self::dispatch_hint(hint, custom_handlers)
+            }
+        }))
+        .unwrap_or_else(|panic_info| {
+            let msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic".to_string()
+            };
+            Err(anyhow::anyhow!("Worker panicked processing hint: {}", msg))
+        });
 
         // Store result - MUST fill slot even if error occurred
         let mut queue = state.queue.lock().unwrap();
@@ -501,32 +504,38 @@ impl HintsProcessor {
         // Check generation again in case reset happened during processing
         let current_gen = state.generation.load(Ordering::SeqCst);
         if generation != current_gen {
-            // Worker belongs to old generation; buffer was cleared and repopulated
-            // Our seq_id is from the old session and doesn't correspond to current slots
             return;
         }
 
         // Calculate offset in buffer; handle drained slots
         if seq_id < queue.next_drain_seq {
-            // This result belongs to a previous stream/session; ignore
             return;
         }
         let offset = seq_id - queue.next_drain_seq;
 
         // Check if slot exists - if not, drainer already processed and removed it
         if offset >= queue.buffer.len() {
-            // Slot was already drained; safe to drop this result
             return;
         }
 
         // Fill the slot to allow drainer to proceed (critical for ordering)
         queue.buffer[offset] = Some(result);
 
-        // Release lock before notifying
-        drop(queue);
+        // Only wake the drainer when we filled the FRONT slot (offset == 0).
+        // The drainer can only make progress when buffer[0] is ready; waking it
+        // for any other slot causes it to re-check, find nothing drainable, and
+        // go back to sleep — pure overhead (O(N) context switches for N hints).
+        // When offset > 0, the drainer will reach this slot naturally during its
+        // current drain cycle after the front slots are consumed.
+        // Notify WHILE holding the lock to prevent a missed-wakeup race: the
+        // drainer cannot enter condvar.wait() while we hold the lock, so this
+        // notification cannot be lost.
+        if offset == 0 {
+            state.drain_signal.notify_all();
+        }
 
-        // Notify drainer thread (use notify_all to wake any waiting threads)
-        state.drain_signal.notify_all();
+        // Release lock after notifying
+        drop(queue);
     }
 
     /// Drainer thread that waits for hints to complete and drains ready results from queue.
@@ -693,6 +702,9 @@ impl HintsProcessor {
 
             // Keccak256 Hint Codes
             BuiltInHint::Keccak256 => keccak256_hint(&data, data_len_bytes),
+
+            // Blake2b Hint Codes
+            BuiltInHint::Blake2bCompress => blake2b_compress_hint(&data),
         }
     }
 

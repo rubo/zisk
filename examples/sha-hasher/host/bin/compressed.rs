@@ -1,5 +1,5 @@
 use anyhow::Result;
-use zisk_sdk::{ZiskStdin, ZiskIO, ElfBinary, ProofOpts, ProverClient, include_elf};
+use zisk_sdk::{include_elf, ElfBinary, ProofOpts, ProverClient, ZiskIO, ZiskStdin};
 
 pub const ELF: ElfBinary = include_elf!("sha-hasher-guest");
 
@@ -14,15 +14,15 @@ fn main() -> Result<()> {
 
     // Create a `ProverClient` method.
     println!("Building prover client...");
-    let client = ProverClient::builder().asm().base_port(54321).build().unwrap();
+    let client = ProverClient::builder().build().unwrap();
 
     println!("Setting up program...");
-    let vkey = client.setup(&ELF)?;
+    let (pk, vkey) = client.setup(&ELF)?;
     println!("Setup completed successfully");
 
     println!("Generating Vadcop proof...");
     let proof_opts = ProofOpts::default().minimal_memory();
-    let vadcop_result = client.prove(stdin).with_proof_options(proof_opts).run()?;
+    let vadcop_result = client.prove(&pk, stdin).with_proof_options(proof_opts).run()?;
     println!("Vadcop proof generated in {:?}", vadcop_result.get_duration());
 
     println!("Compressing proof (this may take a while)...");
@@ -30,7 +30,7 @@ fn main() -> Result<()> {
         client.compress(vadcop_result.get_proof(), vadcop_result.get_publics(), &vkey)?;
 
     // Alternatively, you can also call `compressed()` on the `ProverClient.prove` method to generate a compressed proof directly.
-    // let result = client.prove(stdin).with_proof_options(proof_opts).compressed().run()?;
+    // let result = client.prove(&pk, stdin).with_proof_options(proof_opts).compressed().run()?;
 
     println!("Verifying compressed proof...");
     client.verify(

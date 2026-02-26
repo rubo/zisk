@@ -7,7 +7,10 @@ use anyhow::{Context, Result};
 use proofman_common::VerboseMode;
 use zisk_sdk::setup_logger;
 
-use crate::{commands::get_home_zisk_path, ux::print_banner};
+use crate::{
+    commands::get_home_zisk_path,
+    ux::{print_banner, print_banner_command},
+};
 
 /// Deletes the default zisk setup folder
 #[derive(Parser, Debug)]
@@ -19,11 +22,7 @@ impl ZiskClean {
         setup_logger(VerboseMode::Info);
 
         print_banner();
-        tracing::info!(
-            "{}",
-            format!("{} Clean", format!("{: >12}", "Command").bright_green().bold())
-        );
-        tracing::info!("");
+        print_banner_command("Clean");
 
         let home_zisk_path = get_home_zisk_path();
         let cache_zisk_path = home_zisk_path.join("cache");

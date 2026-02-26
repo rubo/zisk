@@ -45,6 +45,7 @@ impl fmt::Display for AsmService {
 
 const ASM_SERVICE_BASE_PORT: u16 = 23115;
 
+#[derive(Debug, Clone)]
 pub struct AsmServices {
     world_rank: i32,
     local_rank: i32,
@@ -207,7 +208,7 @@ impl AsmServices {
 
             unsafe {
                 command.pre_exec(|| {
-                    // Ignore failure silently (matches nice behavior)
+                    // Ignore failure silently
                     libc::setpriority(libc::PRIO_PROCESS, 0, -5);
                     Ok(())
                 });
@@ -248,6 +249,11 @@ impl AsmServices {
         let rank_offset = local_rank as u16 * Self::SERVICES.len() as u16;
 
         base_port.unwrap_or(ASM_SERVICE_BASE_PORT) + rank_offset
+    }
+
+    pub fn port_base_offset(base_port: Option<u16>, n_processes: i32, n_setups: u64) -> u16 {
+        let setups_offset = n_setups as u16 * (n_processes as u16 * Self::SERVICES.len() as u16);
+        base_port.unwrap_or(ASM_SERVICE_BASE_PORT) + setups_offset
     }
 
     pub fn send_status_request(&self, service: &AsmService) -> Result<PingResponse> {

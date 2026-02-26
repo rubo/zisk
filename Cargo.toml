@@ -26,7 +26,6 @@ members = [
     "state-machines/mem",
     "state-machines/mem-cpp",
     "state-machines/rom",
-    "witness-computation",
     "ziskos/entrypoint",
     "ziskos-hints",
     "precompiles/arith_eq",
@@ -35,6 +34,7 @@ members = [
     "precompiles/hints",
     "precompiles/keccakf",
     "precompiles/sha256f",
+    "precompiles/blake2",
     "precompiles/big_int",
     "precompiles/dma",
     "lib-c",
@@ -49,6 +49,7 @@ members = [
     "distributed/crates/worker",
     "sdk",
     "ziskbuild",
+	"definitions",
 ]
 
 resolver = "2"
@@ -72,6 +73,7 @@ ziskemu = { path = "emulator" }
 asm-runner = { path = "emulator-asm/asm-runner" }
 executor = { path = "executor" }
 lib-c = { path = "lib-c" }
+lib-float = { path = "lib-float" }
 zisk-pil = { path = "pil" }
 precomp-arith-eq = { path = "precompiles/arith_eq" }
 precomp-arith-eq-384 = { path = "precompiles/arith_eq_384" }
@@ -79,6 +81,7 @@ precompiles-common = { path = "precompiles/common" }
 precompiles-helpers = { path = "precompiles/helpers" }
 precomp-keccakf = { path = "precompiles/keccakf" }
 precomp-sha256f = { path = "precompiles/sha256f" }
+precomp-blake2 = { path = "precompiles/blake2" }
 precomp-poseidon2 = { path = "precompiles/poseidon2" }
 precomp-big-int = { path = "precompiles/big_int" }
 precomp-dma = { path = "precompiles/dma" }
@@ -92,7 +95,6 @@ sm-frequent-ops = { path = "state-machines/frequent-ops" }
 mem-common = { path = "state-machines/mem-common" }
 mem-planner-cpp = { path = "state-machines/mem-cpp" }
 sm-rom = { path = "state-machines/rom" }
-zisk-witness = { path = "witness-computation" }
 ziskclib = { path = "ziskclib" }
 ziskos = { path = "ziskos/entrypoint" }
 ziskos-hints = { path = "ziskos-hints" }
@@ -101,6 +103,7 @@ zisk-sdk = { path = "sdk" }
 zisk-build = { path = "ziskbuild" }
 precompiles-hints = { path = "precompiles/hints" }
 zisk-verifier = { path = "verifier" }
+zisk-definitions = { path = "definitions" }
 
 # Distributed crates
 zisk-distributed-common = { path = "distributed/crates/common" }

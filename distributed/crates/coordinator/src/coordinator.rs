@@ -1414,13 +1414,47 @@ impl Coordinator {
         } else {
             // Standard mode: aggregate challenges from all participating workers
             // Each worker contributes their portion of the overall challenge space
-            let challenges: Vec<Vec<ContributionsInfo>> = phase1_results
-                .values()
-                .map(|results| match &results.data {
-                    JobResultData::Challenges(values) => values.challenges.clone(),
-                    _ => unreachable!("Expected Challenges data in Phase1 results"),
-                })
-                .collect();
+            let (challenges, execution_info): (Vec<Vec<ContributionsInfo>>, Vec<ExecutionInfo>) =
+                phase1_results
+                    .values()
+                    .map(|results| match &results.data {
+                        JobResultData::Challenges(values) => {
+                            (values.challenges.clone(), values.execution_info.clone())
+                        }
+                        _ => unreachable!("Expected Challenges data in Phase1 results"),
+                    })
+                    .unzip();
+
+            let first = execution_info.first().ok_or_else(|| {
+                CoordinatorError::Internal(format!("No execution info found in job {}", job.job_id))
+            })?;
+
+            let mut mismatched_workers = Vec::new();
+
+            for (worker_idx, info) in execution_info.iter().enumerate() {
+                if info.publics != first.publics || info.proof_values != first.proof_values {
+                    mismatched_workers.push((worker_idx, info));
+                }
+            }
+
+            if !mismatched_workers.is_empty() {
+                // Format detailed mismatch report
+                let mismatch_report: Vec<String> = mismatched_workers
+                    .iter()
+                    .map(|(idx, info)| {
+                        format!(
+                            "Worker {} differs: publics={:?}, proof_values={:?}",
+                            idx, info.publics, info.proof_values
+                        )
+                    })
+                    .collect();
+
+                return Err(CoordinatorError::Internal(format!(
+                    "ExecutionInfo mismatch in job {}:\n{}",
+                    job.job_id,
+                    mismatch_report.join("\n")
+                )));
+            }
 
             // Flatten all worker contributions into unified challenge vector
             // Maintains worker indexing and airgroup assignments for proper coordination

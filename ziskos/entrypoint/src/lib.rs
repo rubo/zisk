@@ -4,7 +4,10 @@
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 use core::arch::asm;
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+mod dma;
+#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 mod fcall;
+
 mod profile;
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 pub use fcall::*;
@@ -281,5 +284,7 @@ mod ziskos {
     }
     core::arch::global_asm!(include_str!("dma/memcpy.s"));
     core::arch::global_asm!(include_str!("dma/memmove.s"));
-    // core::arch::global_asm!(include_str!("dma/memcmp.s"));
+    core::arch::global_asm!(include_str!("dma/memcmp.s"));
+    //core::arch::global_asm!(include_str!("dma/inputcpy.s"));
+    core::arch::global_asm!(include_str!("dma/memset.s"));
 }

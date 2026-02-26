@@ -28,6 +28,7 @@ tracing = { workspace = true }
 itertools = { workspace = true }
 rayon = { workspace = true }
 pil-std-lib = { workspace = true }
+precompiles-hints = { workspace = true }
 anyhow = { workspace = true }
 crossbeam = "0.8.4"
 
@@ -35,6 +36,7 @@ precompiles-common = { workspace = true }
 precomp-keccakf = { workspace = true }
 precomp-sha256f = { workspace = true }
 precomp-poseidon2 = { workspace = true }
+precomp-blake2 = { workspace = true }
 precomp-arith-eq = { workspace = true }
 precomp-arith-eq-384 = { workspace = true }
 precomp-big-int = { workspace = true }

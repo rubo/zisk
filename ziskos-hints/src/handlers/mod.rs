@@ -1,3 +1,4 @@
+pub mod blake2b;
 pub mod bls381;
 pub mod bn254;
 pub mod keccak256;

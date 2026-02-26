@@ -13,49 +13,99 @@
 #include <unistd.h>
 #include <assert.h>
 #include <semaphore.h>
-#include "../../lib-c/c/src/ec/ec.hpp"
-#include "../../lib-c/c/src/fcall/fcall.hpp"
-#include "../../lib-c/c/src/arith256/arith256.hpp"
-#include "emu.hpp"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netinet/tcp.h>
 #include <sys/file.h>
 #include <time.h>
-//#include <bits/local_lim.h>
+#include "emu.hpp"
 
-// Assembly-provided functions
+/**************************/
+/* Assembly-provided code */
+/**************************/
+
+// This is the emulator assembly code start function, which will execute the code in the ROM until
+// it ends, and generate the trace in the output trace memory.
+// It is called from C to start the execution of the assembly code.
 void emulator_start(void);
+
+// These functions are implemented in assembly and provide access to configuration parameters used
+// to generate the assembly code, and that in some cases must match the C main program configuration
 uint64_t get_max_bios_pc(void);
 uint64_t get_max_program_pc(void);
-uint64_t get_gen_method(void);
+uint64_t get_gen_method(void); // Must match the C main program provided argument
 uint64_t get_precompile_results(void);
 
+// These variables are updated by the assembly code to provide information about the execution
+// status and trace generation, accessed by C to generate the response to the client
+extern uint64_t MEM_STEP; // Current step, i.e. number of executed instructions, updated by assembly at every step or at the end of every chunk, depending on the generation method
+extern uint64_t MEM_END; // Indicates the end of execution
+extern uint64_t MEM_ERROR; // Indicates an error during execution
+extern uint64_t MEM_TRACE_ADDRESS; // Address of the trace memory
+extern uint64_t MEM_CHUNK_ADDRESS; // Address of the current chunk
+extern uint64_t MEM_CHUNK_START_STEP; // Step at which the current chunk started
+
+/***************/
+/* Definitions */
+/***************/
+
 // Address map
+// There definitions must match the ZisK rust code ones at core/src/mem.rs used to generate the
+// assembly code, and that are used by the assembly code to access memory and generate the trace
 #define ROM_ADDR (uint64_t)0x80000000
 #define ROM_SIZE (uint64_t)0x08000000 // 128MB
-
 #define INPUT_ADDR (uint64_t)0x90000000
 #define MAX_INPUT_SIZE (uint64_t)0x08000000 // 128MB
 
-#define RAM_ADDR (uint64_t)0xa0000000
+#define RAM_ADDR (uint64_t)0xA0000000
 #define RAM_SIZE (uint64_t)0x20000000 // 512MB
 #define SYS_ADDR RAM_ADDR
 #define SYS_SIZE (uint64_t)0x10000
 #define OUTPUT_ADDR (SYS_ADDR + SYS_SIZE)
 
+#ifdef TRACE_TARGET_MO
+    #define TRACE_INITIAL_SIZE (uint64_t)0x180000000 /* 6GB */
+    #define TRACE_DELTA_SIZE   (uint64_t)0x080000000 /* 2GB */
+#elif defined(TRACE_TARGET_RH)
+    #define TRACE_INITIAL_SIZE (uint64_t)0x004000000 /* 64MB */
+    #define TRACE_DELTA_SIZE   (uint64_t)0x004000000 /* 64MB */
+#else 
+    #define TRACE_INITIAL_SIZE (uint64_t)0x180000000 /* 6GB */
+    #define TRACE_DELTA_SIZE   (uint64_t)0x080000000 /* 2GB */
+#endif
+
 #define TRACE_ADDR         (uint64_t)0xd0000000
-#define TRACE_INITIAL_SIZE (uint64_t)0x180000000 // 6GB
-#define TRACE_DELTA_SIZE   (uint64_t)0x080000000 // 2GB
 #define TRACE_MAX_SIZE     (uint64_t)0x1000000000 // 64GB
 #define TRACE_NUMBER_OF_CHUNKS (((TRACE_MAX_SIZE - TRACE_INITIAL_SIZE) / TRACE_DELTA_SIZE) + 1)
+#define TRACE_SIZE_GRANULARITY (1014*1014) // ROM histogram trace size is round up to a multiple of this granularity
 
-uint64_t initial_trace_size = TRACE_INITIAL_SIZE;
-uint64_t trace_address = TRACE_ADDR;
-uint64_t trace_size = TRACE_INITIAL_SIZE;
-uint64_t trace_used_size = 0;
+// Worst case: every chunk instruction is a keccak operation, with an input data of 256 bytes
 
+// #if defined(TRACE_TARGET_MO)
+//     #define MAX_MTRACE_REGS_ACCESS_SIZE (3 * 8)
+//     #define MAX_BYTES_DIRECT_MTRACE 80 // PRE/POST = ((1 PRE + 2 SRC + 1 WR DST) * 2 + BLOCK_READ + BLOCK_WRITE) * 8
+//     #define MAX_BYTES_MTRACE_STEP (MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE)
+//     #define MAX_CHUNK_TRACE_SIZE (CHUNK_SIZE * MAX_BYTES_MTRACE_STEP)
+// #elif defined(TRACE_TARGET_RH)
+//     #define MAX_CHUNK_TRACE_SIZE 0
+// #else 
+//     #define MAX_MTRACE_REGS_ACCESS_SIZE ((2 + 2 + 3) * 8)
+//     #define MAX_TRACE_CHUNK_INFO ((44*8) + 32)
+//     #define MAX_BYTES_DIRECT_MTRACE 256
+//     #define MAX_BYTES_MTRACE_STEP (MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE)
+//     #define MAX_CHUNK_TRACE_SIZE ((CHUNK_SIZE * MAX_BYTES_MTRACE_STEP) + MAX_TRACE_CHUNK_INFO)
+// #endif
+// uint64_t trace_resize_request = 0;
+// uint64_t trace_address_threshold = TRACE_ADDR + INITIAL_TRACE_SIZE - MAX_CHUNK_TRACE_SIZE;
+
+// Control input and output shared memory configuration.
+// Control input is used to tell the assembly code how many precompile result u64 fields have been
+// written by the client.  Control output is used to tell the client how many precompile result u64
+// fields have been read by the assembly code, so the client can know when it can write new
+// precompile results.  Assembly code waits when the number of read fields is not lower than the
+// number of written fields, and client waits when the number of written fields would exceed the
+// number of read fields plus the available precompile shared memory size, which is a circular buffer
 #define CONTROL_INPUT_ADDR (uint64_t)0x70000000
 #define CONTROL_INPUT_SIZE (uint64_t)0x1000 // 4kB
 #define CONTROL_OUTPUT_ADDR (uint64_t)0x70001000
@@ -63,16 +113,13 @@ uint64_t trace_used_size = 0;
 #define CONTROL_RETRY_DELAY_US 1000 // 1ms
 #define CONTROL_NUMBER_OF_RETRIES 1000 // 1s max total
 
+// Maximum number of steps to execute, used by the client to limit the execution steps of the
+// assembly code.  This limit is set by the ZisK PIL constraints.
 #define MAX_STEPS (1ULL << 36)
 
-uint8_t * pInput = (uint8_t *)INPUT_ADDR;
-uint8_t * pInputLast = (uint8_t *)(INPUT_ADDR + 10440504 - 64);
-uint8_t * pRam = (uint8_t *)RAM_ADDR;
-uint8_t * pRom = (uint8_t *)ROM_ADDR;
-uint64_t * pInputTrace = (uint64_t *)TRACE_ADDR;
-uint64_t * pOutputTrace = (uint64_t *)TRACE_ADDR;
-
 // Assembly service request/response types
+// Only the methods supported by the configured generation method will be implemented by the server,
+// e.g. gen_method=1 => PING, MT and SHUTDOWN; the rest will fail with an error response.
 #define TYPE_PING 1 // Ping
 #define TYPE_PONG 2
 #define TYPE_MT_REQUEST 3 // Minimal trace
@@ -94,7 +141,53 @@ uint64_t * pOutputTrace = (uint64_t *)TRACE_ADDR;
 #define TYPE_SD_REQUEST 1000000 // Shutdown
 #define TYPE_SD_RESPONSE 1000001
 
-// Generation method, to be used with mandatory argument --gen=<method>
+// Server IP address, used by the client to connect to the server
+#define SERVER_IP "127.0.0.1"  // Change to your server IP; otherwise use localhost IP address
+
+// Chunk size used in generation methods that generate a trace chunk at every N steps, e.g. gen_method=1 or gen_method=7.
+// It must be a power of two, and it is used to calculate the trace address threshold at which the next chunk must be mapped,
+// to avoid reaching the end of the currently mapped trace memory.
+#define CHUNK_SIZE (1ULL << 18)
+
+// Maximum trace chunk size, used to determine when the trace address is close to the end of the
+// currently mapped trace memory and the next chunk must be mapped.  It is calculated based on the
+// maximum number of bytes that can be generated in a chunk
+// Worst case: every chunk instruction is a keccak operation, with an input data of 200 bytes
+// (let's use 256 bytes to be safe), and the trace includes the access to 2 source registers, 2
+// destination registers and 3 memory addresses (e.g. for a keccak operation with 3 memory operands),
+//  which are the maximum number of registers and memory addresses that can be accessed by a chunk
+// instruction, according to the ZisK assembly code generation configuration.
+
+#define MAX_MTRACE_REGS_ACCESS_SIZE ((2 + 2 + 3) * 8)
+#define MAX_TRACE_CHUNK_INFO ((44*8) + 32)
+#define MAX_BYTES_DIRECT_MTRACE 256
+#define MAX_BYTES_MTRACE_STEP (MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE)
+#define MAX_CHUNK_TRACE_SIZE ((CHUNK_SIZE * MAX_BYTES_MTRACE_STEP) + MAX_TRACE_CHUNK_INFO)
+
+// Maximum precompile results share memory size
+// It is a circular buffer
+#define MAX_PRECOMPILE_SIZE (uint64_t)0x400000 // 4MB
+
+// Maximum chunk mask for zip generation method, which indicates which chunks are included in the trace,
+// and must be between 0 and 7 (inclusive), as it is used to generate a mask of 8 bits where each
+// bit indicates if the corresponding chunk is included in the trace or not.
+#define MAX_CHUNK_MASK 7
+
+// Maximum length of the shared memory prefix, e.g. "ZISK_12345"
+// This prefix is used to generate the names of the shared memories and semaphores used for
+// communication and synchronization between the server and the client,
+#define MAX_SHM_PREFIX_LENGTH 64
+
+/*********************/
+/* Generation method */
+/*********************/
+
+// Specifies how the assembly code generates the trace, and what information it includes.
+// It is specified with the mandatory argument --gen=<method>
+// It must match the value returned by the assembly function get_gen_method()
+// The enum names are equivalent to the rust ones defined in core/src/riscv2zisk.rs as AsmGenerationMethod
+// ZisK uses generation methods 1 (minimal trace), 2 (ROM histogram) and 7 (memory operations)
+// but the rest of methods can be used for testing and debugging purposes
 typedef enum {
     Fast = 0,
     MinimalTrace = 1,
@@ -108,10 +201,35 @@ typedef enum {
     MemReads = 9,
     ChunkPlayerMemReadsCollectMain = 10,
 } GenMethod;
+
+// Default generation method, can be overridden by the --gen argument
 GenMethod gen_method = Fast;
 
+// Returns the acronym of the generation method, used for logging and file naming
+const char * gen_method_acronym(GenMethod method)
+{
+    switch (method)
+    {
+        case Fast: return "FT";
+        case MinimalTrace: return "MT";
+        case RomHistogram: return "RH";
+        case MainTrace: return "MA";
+        case ChunksOnly: return "CO";
+        //case BusOp: return "bus-op";
+        case Zip: return "ZP";
+        case MemOp: return "MO";
+        case ChunkPlayerMTCollectMem: return "CPM";
+        case MemReads: return "MR";
+        case ChunkPlayerMemReadsCollectMain: return "CPMCM";
+        default: return "?";
+    }
+}
+
+// Pointers to the input, RAM, ROM and trace memory, used by both C and assembly code to access these memories
+uint64_t * pInputTrace = (uint64_t *)TRACE_ADDR; // Used for trace consumption, i.e. chunk player
+uint64_t * pOutputTrace = (uint64_t *)TRACE_ADDR; // Used for trace generation, i.e. assembly code writes the trace to this address, and client reads it from this address
+
 // Service TCP parameters
-#define SERVER_IP "127.0.0.1"  // Change to your server IP
 uint16_t port = 0;
 uint16_t arguments_port = 0;
 
@@ -121,8 +239,6 @@ bool client = false;
 bool call_chunk_done = false;
 bool do_shutdown = false; // If true, the client will perform a shutdown request to the server when done
 uint64_t number_of_mt_requests = 1; // Loop to send this number of minimal trace requests
-
-char input_file[4096];
 
 // To be used when calculating partial durations
 // Time measurements cannot be overlapped
@@ -138,65 +254,30 @@ uint64_t total_duration;
 // To be used when calculating the assembly duration
 uint64_t assembly_duration;
 
-extern uint64_t MEM_STEP;
-extern uint64_t MEM_END;
-extern uint64_t MEM_ERROR;
-extern uint64_t MEM_TRACE_ADDRESS;
-extern uint64_t MEM_CHUNK_ADDRESS;
-extern uint64_t MEM_CHUNK_START_STEP;
-
+// Counters used in functions called from assembly code
 uint64_t realloc_counter = 0;
 uint64_t wait_counter = 0;
-
-extern void zisk_keccakf(uint64_t state[25]);
-/* Used for debugging
-extern uint64_t reg_0;
-extern uint64_t reg_1;
-extern uint64_t reg_2;
-extern uint64_t reg_3;
-extern uint64_t reg_4;
-extern uint64_t reg_5;
-extern uint64_t reg_6;
-extern uint64_t reg_7;
-extern uint64_t reg_8;
-extern uint64_t reg_9;
-extern uint64_t reg_10;
-extern uint64_t reg_11;
-extern uint64_t reg_12;
-extern uint64_t reg_13;
-extern uint64_t reg_14;
-extern uint64_t reg_15;
-extern uint64_t reg_16;
-extern uint64_t reg_17;
-extern uint64_t reg_18;
-extern uint64_t reg_19;
-extern uint64_t reg_20;
-extern uint64_t reg_21;
-extern uint64_t reg_22;
-extern uint64_t reg_23;
-extern uint64_t reg_24;
-extern uint64_t reg_25;
-extern uint64_t reg_26;
-extern uint64_t reg_27;
-extern uint64_t reg_28;
-extern uint64_t reg_29;
-extern uint64_t reg_30;
-extern uint64_t reg_31;
-*/
-
-bool is_power_of_two (uint64_t number) {
-    return (number != 0) && ((number & (number - 1)) == 0);
-}
-
-#define INITIAL_CHUNK_SIZE (1ULL << 18)
-uint64_t chunk_size = INITIAL_CHUNK_SIZE;
-uint64_t chunk_size_mask = INITIAL_CHUNK_SIZE - 1;
-uint64_t max_steps = (1ULL << 32);
+uint64_t print_pc_counter = 0;
 
 // Chunk player globals
 uint64_t chunk_player_address = 0;
-uint64_t chunk_player_mt_size = TRACE_INITIAL_SIZE; // TODO
+uint64_t chunk_player_mt_size = TRACE_INITIAL_SIZE;
 
+// Checks if a number is a power of two, used to validate the max steps and chunk size provided by the client
+bool is_power_of_two (uint64_t number)
+{
+    return (number != 0) && ((number & (number - 1)) == 0);
+}
+
+/*************/
+/* MAX STEPS */
+/*************/
+
+// Maximum number of steps to execute, used by the client to limit the execution steps of the
+// assembly code.
+uint64_t max_steps = (1ULL << 32);
+
+// Sets the maximum number of steps provided by the client in the request
 void set_max_steps (uint64_t new_max_steps)
 {
     if (!is_power_of_two(new_max_steps))
@@ -209,25 +290,38 @@ void set_max_steps (uint64_t new_max_steps)
     max_steps = new_max_steps;
 }
 
-// Worst case: every chunk instruction is a keccak operation, with an input data of 256 bytes
-
-#define MAX_MTRACE_REGS_ACCESS_SIZE ((2 + 2 + 3) * 8)
-#define MAX_TRACE_CHUNK_INFO ((44*8) + 32)
-#define MAX_BYTES_DIRECT_MTRACE 256
-#define MAX_BYTES_MTRACE_STEP (MAX_BYTES_DIRECT_MTRACE + MAX_MTRACE_REGS_ACCESS_SIZE)
-#define MAX_CHUNK_TRACE_SIZE ((INITIAL_CHUNK_SIZE * MAX_BYTES_MTRACE_STEP) + MAX_TRACE_CHUNK_INFO)
-
 uint64_t trace_address_threshold = TRACE_ADDR + TRACE_INITIAL_SIZE - MAX_CHUNK_TRACE_SIZE;
-uint64_t print_pc_counter = 0;
 
 int map_locked_flag = MAP_LOCKED;
 
-#ifdef ASM_PRECOMPILE_CACHE
-bool precompile_cache_enabled = false;
-#endif
 
-bool precompile_results_enabled = false;
-uint64_t * precompile_results_address = NULL;
+/**************/
+/* TRACE SIZE */
+/**************/
+
+uint64_t initial_trace_size = TRACE_INITIAL_SIZE;
+uint64_t trace_address = TRACE_ADDR;
+uint64_t trace_size = TRACE_INITIAL_SIZE;
+uint64_t trace_used_size = 0;
+
+void set_trace_size (uint64_t new_trace_size)
+{
+    // Update trace global variables
+    // printf("%s trace resize (trace_resize_request: %ld):  %ld MB => %ld MB\n", log_name, trace_resize_request, trace_size >> 20, new_trace_size >> 20);
+    
+    // trace_resize_request = 0;
+
+    trace_size = new_trace_size;
+    trace_address_threshold = TRACE_ADDR + trace_size - MAX_CHUNK_TRACE_SIZE;
+    pOutputTrace[2] = trace_size;    
+}
+
+/**************/
+/* CHUNK SIZE */
+/**************/
+
+uint64_t chunk_size = CHUNK_SIZE;
+uint64_t chunk_size_mask = CHUNK_SIZE - 1;
 
 void set_chunk_size (uint64_t new_chunk_size)
 {
@@ -243,29 +337,19 @@ void set_chunk_size (uint64_t new_chunk_size)
     trace_address_threshold = TRACE_ADDR + trace_size - MAX_CHUNK_TRACE_SIZE;
 }
 
-void set_trace_size (uint64_t new_trace_size)
-{
-    // Update trace global variables
-    trace_size = new_trace_size;
-    trace_address_threshold = TRACE_ADDR + trace_size - MAX_CHUNK_TRACE_SIZE;
-    pOutputTrace[2] = trace_size;
-}
-
 void parse_arguments(int argc, char *argv[]);
 uint64_t TimeDiff(const struct timeval startTime, const struct timeval endTime);
-
 void configure (void);
 void server_setup (void);
-void server_reset (void);
+void server_reset_fast (void);
+void server_reset_slow (void);
+void server_reset_trace (void);
 void server_run (void);
 void server_cleanup (void);
-
 void client_setup (void);
 void client_run (void);
 void client_cleanup (void);
-
 void _chunk_done(void);
-
 void log_minimal_trace(void);
 void log_histogram(void);
 void log_main_trace(void);
@@ -273,12 +357,10 @@ void log_mem_trace(void);
 void log_mem_op(void);
 void save_mem_op_to_files(void);
 void log_chunk_player_main_trace(void);
-
 int recv_all_with_timeout (int sockfd, void *buffer, size_t length, int flags, int timeout_sec);
-
 void file_lock(void);
 
-// Configuration
+// Configuration globals, set by arguments
 bool output = false;
 bool output_riscof = false;
 bool silent = false;
@@ -289,6 +371,8 @@ bool verbose = false;
 bool save_to_file = false;
 bool share_input_shm = false; // Shares input shared memories: input, precompile results and control input, using a common name
 bool open_input_shm = false; // Opens existing input shared memories, without creating them.  They must be previously created by another process (assembly emulator or witness computation)
+char input_file[4096] = {0};
+bool redirect_output_to_file = false;
 
 // ROM histogram
 uint64_t histogram_size = 0;
@@ -297,10 +381,12 @@ uint64_t program_size = 0;
 
 // Zip
 uint64_t chunk_mask = 0x0; // 0, 1, 2, 3, 4, 5, 6 or 7
-#define MAX_CHUNK_MASK 7
 
-// Maximum length of the shared memory prefix, e.g. SHMZISK12345678
-#define MAX_SHM_PREFIX_LENGTH 64
+/*****************/
+/* SHARED MEMORY */
+/*****************/
+
+// Shared memory prefix
 char shm_prefix[MAX_SHM_PREFIX_LENGTH];
 
 // Input shared memory
@@ -325,19 +411,27 @@ sem_t * sem_chunk_done = NULL;
 char sem_shutdown_done_name[128];
 sem_t * sem_shutdown_done = NULL;
 
-// File lock name
+// File lock name, used to lock a file that indicates that the assembly emulator process is running,
+// to prevent multiple instances of the server from running at the same time.
 char file_lock_name[128];
 int file_lock_fd = -1;
 
 // Log name
 char log_name[128];
 
+// Process id
 int process_id = 0;
 
-uint64_t input_size = 0;
+/**************************/
+/* PRECOMPILE AND CONTROL */
+/**************************/
 
-#define MAX_PRECOMPILE_SIZE (uint64_t)0x400000 // 4MB
-//#define MAX_PRECOMPILE_SIZE (uint64_t)0x100000 // 1MB
+#ifdef ASM_PRECOMPILE_CACHE
+bool precompile_cache_enabled = false;
+#endif
+
+bool precompile_results_enabled = false;
+uint64_t * precompile_results_address = NULL;
 
 // Precompile results shared memory
 char shmem_precompile_name[128];
@@ -389,6 +483,8 @@ uint64_t trace_total_mapped_size = 0; // Total mapped trace size
 
 void * trace_get_chunk_address (uint64_t chunk_id)
 {
+    assert(gen_method != RomHistogram || chunk_id == 0);
+
     if (chunk_id == 0)
     {
         return (void *)TRACE_ADDR;
@@ -401,6 +497,11 @@ void * trace_get_chunk_address (uint64_t chunk_id)
 
 uint64_t trace_get_chunk_size (uint64_t chunk_id)
 {
+    if (gen_method == RomHistogram) {
+        assert(chunk_id == 0);
+        return trace_size;
+    }
+
     if (chunk_id == 0)
     {
         return TRACE_INITIAL_SIZE;
@@ -580,6 +681,10 @@ void trace_map_initialize (void)
     pOutputTrace = (uint64_t *)TRACE_ADDR;
 }
 
+/********/
+/* MAIN */
+/********/
+
 int main(int argc, char *argv[])
 {
 #ifdef DEBUG
@@ -603,6 +708,33 @@ int main(int argc, char *argv[])
 
     // Parse arguments
     parse_arguments(argc, argv);
+
+    // Redirect output to file if requested
+    if (redirect_output_to_file)
+    {
+        char redirect_output_file[256];
+        snprintf(redirect_output_file, sizeof(redirect_output_file), "/tmp/%s_%s_output.txt", shm_prefix, gen_method_acronym(gen_method));
+
+        // Redirect stdout to file
+        FILE * file_pointer = freopen(redirect_output_file, "w", stdout);
+        if (file_pointer == NULL)
+        {
+            printf("ERROR: Failed to redirect stdout to file %s\n", redirect_output_file);
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+        
+        // Redirect stderr to the same file
+        file_pointer = freopen(redirect_output_file, "a", stderr);
+        if (file_pointer == NULL)
+        {
+            printf("ERROR: Failed to redirect stderr to file %s\n", redirect_output_file);
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+    }
 
     // Configure based on parguments
     configure();
@@ -635,7 +767,9 @@ int main(int argc, char *argv[])
     server_setup();
 
     // Reset the server, i.e. reset memory
-    server_reset();
+    server_reset_fast();
+    server_reset_slow();
+    server_reset_trace();
 
     // Create socket file descriptor
     int server_fd;
@@ -690,7 +824,12 @@ int main(int argc, char *argv[])
         struct sockaddr_in address;
         int addrlen = sizeof(address);
         int client_fd;
-        if (!silent) printf("%s Waiting for incoming connections to port %u...\n", log_name, port);
+        if (!silent)
+        {
+            printf("%s Waiting for incoming connections to port %u...\n", log_name, port);
+            fflush(stdout);
+            fflush(stderr);
+        }
         client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
         if (client_fd < 0)
         {
@@ -723,20 +862,34 @@ int main(int argc, char *argv[])
             if (bytes_read < 0)
             {
                 printf("%s ERROR: Failed calling recv() bytes_read=%ld errno=%d=%s\n", log_name, bytes_read, errno, strerror(errno));
+                fflush(stdout);
+                fflush(stderr);
                 break;
             }
             if (bytes_read != sizeof(request))
             {
                 if ((errno != 0) && (errno != 2))
                 {
-                    printf("%s ERROR: Failed calling recv() invalid bytes_read=%ld errno=%d=%s\n", log_name, bytes_read, errno, strerror(errno));
+                    printf("%s WARNING: Failed calling recv() invalid bytes_read=%ld errno=%d=%s\n", log_name, bytes_read, errno, strerror(errno));
+                    fflush(stdout);
+                    fflush(stderr);
                 }
                 break;
             }
 #ifdef DEBUG
-            if (verbose) printf("%s recv() returned: %ld\n", log_name, bytes_read);
+            if (verbose)
+            {
+                printf("%s recv() returned: %ld\n", log_name, bytes_read);
+                fflush(stdout);
+                fflush(stderr);
+            }
 #endif
-            if (verbose) printf("%s recv()'d request=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", log_name, request[0], request[1], request[2], request[3], request[4]);
+            if (verbose)
+            {
+                printf("%s recv()'d request=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", log_name, request[0], request[1], request[2], request[3], request[4]);
+                fflush(stdout);
+                fflush(stderr);
+            }
 
             uint64_t response[5];
             bReset = false;
@@ -766,6 +919,8 @@ int main(int argc, char *argv[])
 
                         server_run();
 
+                        server_reset_fast();
+
                         response[0] = TYPE_MT_RESPONSE;
                         response[1] = (MEM_END && !MEM_ERROR) ? 0 : 1;
                         response[2] = trace_size;
@@ -794,6 +949,8 @@ int main(int argc, char *argv[])
                         set_max_steps(request[1]);
 
                         server_run();
+
+                        server_reset_fast();
 
                         response[0] = TYPE_RH_RESPONSE;
                         response[1] = MEM_END ? 0 : 1;
@@ -825,6 +982,8 @@ int main(int argc, char *argv[])
 
                         server_run();
 
+                        server_reset_fast();
+
                         response[0] = TYPE_MO_RESPONSE;
                         response[1] = MEM_END ? 0 : 1;
                         response[2] = trace_size;
@@ -854,6 +1013,8 @@ int main(int argc, char *argv[])
                         set_chunk_size(request[2]);
 
                         server_run();
+
+                        server_reset_fast();
 
                         response[0] = TYPE_MA_RESPONSE;
                         response[1] = MEM_END ? 0 : 1;
@@ -888,6 +1049,8 @@ int main(int argc, char *argv[])
 
                         server_run();
 
+                        server_reset_fast();
+
                         response[0] = TYPE_CM_RESPONSE;
                         response[1] = 0;
                         response[2] = trace_size;
@@ -918,6 +1081,8 @@ int main(int argc, char *argv[])
 
                         server_run();
 
+                        server_reset_fast();
+
                         response[0] = TYPE_FA_RESPONSE;
                         response[1] = MEM_END ? 0 : 1;
                         response[2] = 0;
@@ -947,6 +1112,8 @@ int main(int argc, char *argv[])
                         set_chunk_size(request[2]);
 
                         server_run();
+
+                        server_reset_fast();
 
                         response[0] = TYPE_MR_RESPONSE;
                         response[1] = MEM_END ? 0 : 1;
@@ -980,6 +1147,8 @@ int main(int argc, char *argv[])
                         print_pc_counter = pChunk[3];
 
                         server_run();
+
+                        server_reset_fast();
 
                         response[0] = TYPE_CA_RESPONSE;
                         response[1] = 0;
@@ -1020,20 +1189,32 @@ int main(int argc, char *argv[])
                 }
             }
 
-            if (verbose) printf("%s send()'ing response=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", log_name, response[0], response[1], response[2], response[3], response[4]);
+            if (verbose)
+            {
+                printf("%s send()'ing response=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", log_name, response[0], response[1], response[2], response[3], response[4]);
+                fflush(stdout);
+                fflush(stderr);
+            }
 
             ssize_t bytes_sent = send(client_fd, response, sizeof(response), MSG_WAITALL);
             if (bytes_sent != sizeof(response))
             {
                 printf("%s ERROR: Failed calling send() invalid bytes_sent=%ld errno=%d=%s\n", log_name, bytes_sent, errno, strerror(errno));
+                fflush(stdout);
+                fflush(stderr);
                 break;
             }
-#ifdef DEBUG
-            else if (verbose) printf("Response sent to client\n");
-#endif
+//#ifdef DEBUG
+            else if (verbose)
+            {
+                printf("Response sent to client\n");
+                fflush(stdout);
+                fflush(stderr);
+            }
+//#endif
             if (bReset)
             {
-                server_reset();
+                server_reset_slow();
             }
 
             if (bShutdown)
@@ -1056,7 +1237,6 @@ int main(int argc, char *argv[])
 
     // Close the server
     close(server_fd);
-
 
     /************/
     /* CLEAN UP */
@@ -1082,6 +1262,11 @@ int main(int argc, char *argv[])
     #endif
 }
 
+/*******************************/
+/* ARGUMENTS AND CONFIGURATION */
+/*******************************/
+
+// Print usage information: valid arguments
 void print_usage (void)
 {
     printf("Usage: ziskemuasm\n");
@@ -1121,9 +1306,11 @@ void print_usage (void)
     {
         printf("\t-r <precompile_results_file>\n");
     }
+    printf("\t--redirect-output-to-file redirect output to file\n");
     printf("\t-h/--help print this\n");
 }
 
+// Parse main function arguments and configure global variables accordingly
 void parse_arguments(int argc, char *argv[])
 {
     strcpy(shm_prefix, "ZISK");
@@ -1444,6 +1631,11 @@ void parse_arguments(int argc, char *argv[])
                 open_input_shm = true;
                 continue;
             }
+            if (strcmp(argv[i], "--redirect-output-to-file") == 0)
+            {
+                redirect_output_to_file = true;
+                continue;
+            }
 #ifdef ASM_PRECOMPILE_CACHE
             if (strcmp(argv[i], "--precompile-cache-store") == 0)
             {
@@ -1547,6 +1739,7 @@ void parse_arguments(int argc, char *argv[])
     }
 }
 
+// Configure global variables based on generation method and other arguments
 void configure (void)
 {
     // Select configuration based on generation method
@@ -1992,6 +2185,14 @@ void configure (void)
         }
     }
 
+    if (precompile_results_enabled && (gen_method == ChunkPlayerMTCollectMem || gen_method == ChunkPlayerMemReadsCollectMain))
+    {
+        printf("ERROR: configure() precompile results enabled is not compatible with generation method %u\n", gen_method);
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+
     if (arguments_port != 0)
     {
         port = arguments_port;
@@ -2023,6 +2224,10 @@ void configure (void)
         printf("\toutput_riscof=%u\n", output_riscof);
     }
 }
+
+/**********/
+/* CLIENT */
+/**********/
 
 void client_setup (void)
 {
@@ -2078,7 +2283,7 @@ void client_setup (void)
     /* PRECOMPILE_RESULTS */
     /**********************/
 
-    if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+    if (precompile_results_enabled)
     {
         /**************/
         /* PRECOMPILE */
@@ -2649,7 +2854,7 @@ void client_run (void)
     /*****************************/
     /* Read precompile file data */
     /*****************************/
-    if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+    if (precompile_results_enabled)
     {
         // reset written counter
         *precompile_written_address = 0;
@@ -2773,7 +2978,7 @@ void client_run (void)
                 request[3] = 0;
                 request[4] = 0;
 
-                if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+                if (precompile_results_enabled)
                 {
                     client_write_precompile_results();
                 }
@@ -2849,7 +3054,7 @@ void client_run (void)
                     exit(-1);
                 }
 
-                if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+                if (precompile_results_enabled)
                 {
                     client_write_precompile_results();
                 }
@@ -2915,7 +3120,7 @@ void client_run (void)
                     exit(-1);
                 }
 
-                if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+                if (precompile_results_enabled)
                 {
                     client_write_precompile_results();
                 }
@@ -3501,6 +3706,10 @@ void client_cleanup (void)
     }
 }
 
+/**********/
+/* SERVER */
+/**********/
+
 void server_setup (void)
 {
     assert(server);
@@ -3621,7 +3830,7 @@ void server_setup (void)
     /* PRECOMPILE_RESULTS */
     /**********************/
 
-    if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
+    if (precompile_results_enabled)
     {
         /**************/
         /* PRECOMPILE */
@@ -3910,7 +4119,6 @@ void server_setup (void)
         bios_size = ((max_bios_pc - 0x1000) >> 2) + 1;
         program_size = max_program_pc - 0x80000000 + 1;
         histogram_size = (4 + 1 + bios_size + 1 + program_size)*8;
-#define TRACE_SIZE_GRANULARITY (1014*1014)
         initial_trace_size = ((histogram_size/TRACE_SIZE_GRANULARITY) + 1) * TRACE_SIZE_GRANULARITY;
         trace_size = initial_trace_size;
     }
@@ -4011,10 +4219,27 @@ void server_setup (void)
     if (verbose) printf("sem_open(%s) succeeded\n", sem_shutdown_done_name);
 }
 
-void server_reset (void)
+void server_reset_fast (void)
 {
-    if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain)) *precompile_read_address = 0;
+    // Reset precompile read address for next emulation
+    if (precompile_results_enabled)
+    {
+        // Set precompile read counter to 0 for next emulation
+        *precompile_read_address = 0;
 
+        // Sync control output shared memory so that the writer can see the precompile reads we have
+        // done, and thus update the precompile_written_address if needed
+        if (msync((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: server_reset_fast() msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+    }
+}
+
+void server_reset_slow (void)
+{
     // Reset RAM data for next emulation
     if ((gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
     {
@@ -4025,34 +4250,18 @@ void server_reset (void)
 #ifdef DEBUG
         gettimeofday(&stop_time, NULL);
         duration = TimeDiff(start_time, stop_time);
-        if (verbose) printf("server_reset() memset(ram) in %lu us\n", duration);
+        if (verbose) printf("server_reset_slow() memset(ram) in %lu us\n", duration);
 #endif
-        if ((gen_method != Fast) && (gen_method != RomHistogram))
-        {
-            // Reset trace: init output header data
-            pOutputTrace[0] = 0x000100; // Version, e.g. v1.0.0 [8]
-            pOutputTrace[1] = 1; // Exit code: 0=successfully completed, 1=not completed (written at the beginning of the emulation), etc. [8]
-            pOutputTrace[2] = trace_size; // MT allocated size [8] -> to be updated after reallocation
-            pOutputTrace[3] = 0; // MT used size [8] -> to be updated after completion
-            
-            // Reset trace used size
-            trace_used_size = 0;
-        }
     }
 }
 
-void server_run (void)
+void server_reset_trace (void)
 {
-    if ((gen_method == RomHistogram)) {
-        memset((void *)trace_address, 0, trace_size);
-    }
-
-#ifdef ASM_CALL_METRICS
-    reset_asm_call_metrics();
-#endif
-
-    // Init trace header
-    if ((gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain) && (gen_method != Fast))
+    // Reset trace header and trace_used_size for next emulation
+    if ( (gen_method != ChunkPlayerMTCollectMem) &&
+         (gen_method != ChunkPlayerMemReadsCollectMain) &&
+         (gen_method != Fast) &&
+         (gen_method != RomHistogram) )
     {
         // Reset trace: init output header data
         pOutputTrace[0] = 0x000100; // Version, e.g. v1.0.0 [8]
@@ -4063,13 +4272,49 @@ void server_run (void)
         // Reset trace used size
         trace_used_size = 0;
     }
+}
+
+void server_run (void)
+{
+    // If ROM histogram, reset the trace area to 0 for the histogram data since it represents the
+    // ROM instruction multiplicity and one of them will be increased at every executed instruction
+    if ((gen_method == RomHistogram)) {
+        memset((void *)trace_address, 0, trace_size);
+    }
+
+#ifdef ASM_CALL_METRICS
+    reset_asm_call_metrics();
+#endif
+
+    // Init trace header
+    server_reset_trace();
 
     // Sync input shared memory
-    if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) {
+    if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) 
+    {
         printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
         fflush(stdout);
         fflush(stderr);
         exit(-1);
+    }
+
+    if (precompile_results_enabled)
+    {
+        // Sync control input shared memory
+        if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
+        // Sync precompile shared memory
+        if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
     }
 
     /*******/
@@ -4078,8 +4323,19 @@ void server_run (void)
 
     // Call emulator assembly code
     gettimeofday(&start_time,NULL);
-    if (verbose) printf("trace_address=%lx\n", trace_address);
+    if (verbose)
+    {
+        printf("Before calling emulator_start() trace_address=%lx\n", trace_address);
+        fflush(stdout);
+        fflush(stderr);
+    }
     emulator_start();
+    if (verbose)
+    {
+        printf("After calling emulator_start() trace_address=%lx\n", trace_address);
+        fflush(stdout);
+        fflush(stderr);
+    }
     gettimeofday(&stop_time,NULL);
     assembly_duration = TimeDiff(start_time, stop_time);
 
@@ -4101,7 +4357,7 @@ void server_run (void)
         uint64_t step_duration_ns = steps == 0 ? 0 : (duration * 1000) / steps;
         uint64_t step_tp_sec = duration == 0 ? 0 : steps * 1000000 / duration;
         uint64_t final_trace_size_percentage = (final_trace_size * 100) / trace_size;
-        printf("Duration = %lu us, realloc counter = %lu, wait counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%% of %lu), end=%lu, error=%lu, max steps=%lu, chunk size=%lu\n",
+        printf("Duration = %lu us, realloc counter = %lu, wait counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%% of %lu), end=%lu, error=%lu, max steps=%lu, chunk size=%lu, prec_written=%lu, prec_read=%lu\n",
             duration,
             realloc_counter,
             wait_counter,
@@ -4116,15 +4372,24 @@ void server_run (void)
             end,
             error,
             max_steps,
-            chunk_size);
+            chunk_size,
+            precompile_written_address ? *precompile_written_address : 0,
+            precompile_read_address ? *precompile_read_address : 0
+        );
+        fflush(stdout);
+        fflush(stderr);
         if (gen_method == RomHistogram)
         {
             printf("Rom histogram size=%lu\n", histogram_size);
+            fflush(stdout);
+            fflush(stderr);
         }
     }
     if (MEM_ERROR)
     {
         printf("Emulation ended with error code %lu\n", MEM_ERROR);
+        fflush(stdout);
+        fflush(stderr);
     }
 
     // Log output
@@ -4133,7 +4398,12 @@ void server_run (void)
         unsigned int * pOutput = (unsigned int *)OUTPUT_ADDR;
         unsigned int output_size = 64;
 #ifdef DEBUG
-        if (verbose) printf("Output size=%d\n", output_size);
+        if (verbose)
+        {
+            printf("Output size=%d\n", output_size);
+            fflush(stdout);
+            fflush(stderr);
+        }
 #endif
 
         for (unsigned int i = 0; i < output_size; i++)
@@ -4141,6 +4411,8 @@ void server_run (void)
             printf("%08x\n", *pOutput);
             pOutput++;
         }
+        fflush(stdout);
+        fflush(stderr);
     }
 
     // Log output for riscof tests
@@ -4149,7 +4421,12 @@ void server_run (void)
         unsigned int * pOutput = (unsigned int *)OUTPUT_ADDR;
         unsigned int output_size = *pOutput;
 #ifdef DEBUG
-        if (verbose) printf("Output size=%d\n", output_size);
+        if (verbose)
+        {
+            printf("Output size=%d\n", output_size);
+            fflush(stdout);
+            fflush(stderr);
+        }
 #endif
 
         for (unsigned int i = 0; i < output_size; i++)
@@ -4157,6 +4434,8 @@ void server_run (void)
             pOutput++;
             printf("%08x\n", *pOutput);
         }
+        fflush(stdout);
+        fflush(stderr);
     }
 
     // Complete output header data
@@ -4358,87 +4637,126 @@ void server_cleanup (void)
     }
 }
 
-// extern uint64_t reg_0;
-// extern uint64_t reg_1;
-// extern uint64_t reg_2;
-// extern uint64_t reg_3;
-// extern uint64_t reg_4;
-// extern uint64_t reg_5;
-// extern uint64_t reg_6;
-// extern uint64_t reg_7;
-// extern uint64_t reg_8;
-// extern uint64_t reg_9;
-// extern uint64_t reg_10;
-// extern uint64_t reg_11;
-// extern uint64_t reg_12;
-// extern uint64_t reg_13;
-// extern uint64_t reg_14;
-// extern uint64_t reg_15;
-// extern uint64_t reg_16;
-// extern uint64_t reg_17;
-// extern uint64_t reg_18;
-// extern uint64_t reg_19;
-// extern uint64_t reg_20;
-// extern uint64_t reg_21;
-// extern uint64_t reg_22;
-// extern uint64_t reg_23;
-// extern uint64_t reg_24;
-// extern uint64_t reg_25;
-// extern uint64_t reg_26;
-// extern uint64_t reg_27;
-// extern uint64_t reg_28;
-// extern uint64_t reg_29;
-// extern uint64_t reg_30;
-// extern uint64_t reg_31;
-// extern uint64_t reg_32;
-// extern uint64_t reg_33;
-// extern uint64_t reg_34;
+/**************/
+/* PRINT REGS */
+/**************/
 
+//#define PRINT_REGS
+#ifdef PRINT_REGS
+extern uint64_t reg_0;
+extern uint64_t reg_1;
+extern uint64_t reg_2;
+extern uint64_t reg_3;
+extern uint64_t reg_4;
+extern uint64_t reg_5;
+extern uint64_t reg_6;
+extern uint64_t reg_7;
+extern uint64_t reg_8;
+extern uint64_t reg_9;
+extern uint64_t reg_10;
+extern uint64_t reg_11;
+extern uint64_t reg_12;
+extern uint64_t reg_13;
+extern uint64_t reg_14;
+extern uint64_t reg_15;
+extern uint64_t reg_16;
+extern uint64_t reg_17;
+extern uint64_t reg_18;
+extern uint64_t reg_19;
+extern uint64_t reg_20;
+extern uint64_t reg_21;
+extern uint64_t reg_22;
+extern uint64_t reg_23;
+extern uint64_t reg_24;
+extern uint64_t reg_25;
+extern uint64_t reg_26;
+extern uint64_t reg_27;
+extern uint64_t reg_28;
+extern uint64_t reg_29;
+extern uint64_t reg_30;
+extern uint64_t reg_31;
+extern uint64_t reg_32;
+extern uint64_t reg_33;
+extern uint64_t reg_34;
+#endif
+
+// Used for debugging purposes
 extern int _print_regs()
 {
-    // printf("print_regs()\n");
-    // printf("\treg[ 0]=%lu=0x%lx=@%p\n", reg_0,  reg_0,  &reg_0);
-    // //printf("\treg[ 1]=%lu=0x%lx=@%p\n", reg_1,  reg_1,  &reg_1);
-    // //printf("\treg[ 2]=%lu=0x%lx=@%p\n", reg_2,  reg_2,  &reg_2);
-    // printf("\treg[ 3]=%lu=0x%lx=@%p\n", reg_3,  reg_3,  &reg_3);
-    // printf("\treg[ 4]=%lu=0x%lx=@%p\n", reg_4,  reg_4,  &reg_4);
-    // /*printf("\treg[ 5]=%lu=0x%lx=@%p\n", reg_5,  reg_5,  &reg_5);
-    // printf("\treg[ 6]=%lu=0x%lx=@%p\n", reg_6,  reg_6,  &reg_6);
-    // printf("\treg[ 7]=%lu=0x%lx=@%p\n", reg_7,  reg_7,  &reg_7);
-    // printf("\treg[ 8]=%lu=0x%lx=@%p\n", reg_8,  reg_8,  &reg_8);
-    // printf("\treg[ 9]=%lu=0x%lx=@%p\n", reg_9,  reg_9,  &reg_9);
-    // printf("\treg[10]=%lu=0x%lx=@%p\n", reg_10, reg_10, &reg_10);
-    // printf("\treg[11]=%lu=0x%lx=@%p\n", reg_11, reg_11, &reg_11);
-    // printf("\treg[12]=%lu=0x%lx=@%p\n", reg_12, reg_12, &reg_12);
-    // printf("\treg[13]=%lu=0x%lx=@%p\n", reg_13, reg_13, &reg_13);
-    // printf("\treg[14]=%lu=0x%lx=@%p\n", reg_14, reg_14, &reg_14);
-    // printf("\treg[15]=%lu=0x%lx=@%p\n", reg_15, reg_15, &reg_15);
-    // printf("\treg[16]=%lu=0x%lx=@%p\n", reg_16, reg_16, &reg_16);
-    // printf("\treg[17]=%lu=0x%lx=@%p\n", reg_17, reg_17, &reg_17);
-    // printf("\treg[18]=%lu=0x%lx=@%p\n", reg_18, reg_18, &reg_18);*/
-    // printf("\treg[19]=%lu=0x%lx=@%p\n", reg_19, reg_19, &reg_19);
-    // printf("\treg[20]=%lu=0x%lx=@%p\n", reg_20, reg_20, &reg_20);
-    // printf("\treg[21]=%lu=0x%lx=@%p\n", reg_21, reg_21, &reg_21);
-    // printf("\treg[22]=%lu=0x%lx=@%p\n", reg_22, reg_22, &reg_22);
-    // printf("\treg[23]=%lu=0x%lx=@%p\n", reg_23, reg_23, &reg_23);
-    // printf("\treg[24]=%lu=0x%lx=@%p\n", reg_24, reg_24, &reg_24);
-    // printf("\treg[25]=%lu=0x%lx=@%p\n", reg_25, reg_25, &reg_25);
-    // printf("\treg[26]=%lu=0x%lx=@%p\n", reg_26, reg_26, &reg_26);
-    // printf("\treg[27]=%lu=0x%lx=@%p\n", reg_27, reg_27, &reg_27);
-    // printf("\treg[28]=%lu=0x%lx=@%p\n", reg_28, reg_28, &reg_28);
-    // printf("\treg[29]=%lu=0x%lx=@%p\n", reg_29, reg_29, &reg_29);
-    // printf("\treg[30]=%lu=0x%lx=@%p\n", reg_30, reg_30, &reg_30);
-    // printf("\treg[31]=%lu=0x%lx=@%p\n", reg_31, reg_31, &reg_31);
-    // printf("\treg[32]=%lu=0x%lx=@%p\n", reg_32, reg_32, &reg_32);
-    // printf("\treg[33]=%lu=0x%lx=@%p\n", reg_33, reg_33, &reg_33);
-    // printf("\treg[34]=%lu=0x%lx=@%p\n", reg_34, reg_34, &reg_34);
-    // printf("\n");
+#ifdef PRINT_REGS
+    printf("print_regs()\n");
+    printf("\treg[ 0]=%lu=0x%lx=@%p\n", reg_0,  reg_0,  &reg_0);
+    printf("\treg[ 1]=%lu=0x%lx=@%p\n", reg_1,  reg_1,  &reg_1);
+    printf("\treg[ 2]=%lu=0x%lx=@%p\n", reg_2,  reg_2,  &reg_2);
+    printf("\treg[ 3]=%lu=0x%lx=@%p\n", reg_3,  reg_3,  &reg_3);
+    printf("\treg[ 4]=%lu=0x%lx=@%p\n", reg_4,  reg_4,  &reg_4);
+    printf("\treg[ 5]=%lu=0x%lx=@%p\n", reg_5,  reg_5,  &reg_5);
+    printf("\treg[ 6]=%lu=0x%lx=@%p\n", reg_6,  reg_6,  &reg_6);
+    printf("\treg[ 7]=%lu=0x%lx=@%p\n", reg_7,  reg_7,  &reg_7);
+    printf("\treg[ 8]=%lu=0x%lx=@%p\n", reg_8,  reg_8,  &reg_8);
+    printf("\treg[ 9]=%lu=0x%lx=@%p\n", reg_9,  reg_9,  &reg_9);
+    printf("\treg[10]=%lu=0x%lx=@%p\n", reg_10, reg_10, &reg_10);
+    printf("\treg[11]=%lu=0x%lx=@%p\n", reg_11, reg_11, &reg_11);
+    printf("\treg[12]=%lu=0x%lx=@%p\n", reg_12, reg_12, &reg_12);
+    printf("\treg[13]=%lu=0x%lx=@%p\n", reg_13, reg_13, &reg_13);
+    printf("\treg[14]=%lu=0x%lx=@%p\n", reg_14, reg_14, &reg_14);
+    printf("\treg[15]=%lu=0x%lx=@%p\n", reg_15, reg_15, &reg_15);
+    printf("\treg[16]=%lu=0x%lx=@%p\n", reg_16, reg_16, &reg_16);
+    printf("\treg[17]=%lu=0x%lx=@%p\n", reg_17, reg_17, &reg_17);
+    printf("\treg[18]=%lu=0x%lx=@%p\n", reg_18, reg_18, &reg_18);
+    printf("\treg[19]=%lu=0x%lx=@%p\n", reg_19, reg_19, &reg_19);
+    printf("\treg[20]=%lu=0x%lx=@%p\n", reg_20, reg_20, &reg_20);
+    printf("\treg[21]=%lu=0x%lx=@%p\n", reg_21, reg_21, &reg_21);
+    printf("\treg[22]=%lu=0x%lx=@%p\n", reg_22, reg_22, &reg_22);
+    printf("\treg[23]=%lu=0x%lx=@%p\n", reg_23, reg_23, &reg_23);
+    printf("\treg[24]=%lu=0x%lx=@%p\n", reg_24, reg_24, &reg_24);
+    printf("\treg[25]=%lu=0x%lx=@%p\n", reg_25, reg_25, &reg_25);
+    printf("\treg[26]=%lu=0x%lx=@%p\n", reg_26, reg_26, &reg_26);
+    printf("\treg[27]=%lu=0x%lx=@%p\n", reg_27, reg_27, &reg_27);
+    printf("\treg[28]=%lu=0x%lx=@%p\n", reg_28, reg_28, &reg_28);
+    printf("\treg[29]=%lu=0x%lx=@%p\n", reg_29, reg_29, &reg_29);
+    printf("\treg[30]=%lu=0x%lx=@%p\n", reg_30, reg_30, &reg_30);
+    printf("\treg[31]=%lu=0x%lx=@%p\n", reg_31, reg_31, &reg_31);
+    printf("\treg[32]=%lu=0x%lx=@%p\n", reg_32, reg_32, &reg_32);
+    printf("\treg[33]=%lu=0x%lx=@%p\n", reg_33, reg_33, &reg_33);
+    printf("\treg[34]=%lu=0x%lx=@%p\n", reg_34, reg_34, &reg_34);
+    printf("\n");
+#endif
 }
 
+/************/
+/* PRINT PC */
+/************/
+
+//#define PRINT_PC_DURATION
+#ifdef PRINT_PC_DURATION
+struct timeval print_pc_tv;
+#endif
+
+// Used for debugging purposes
 extern int _print_pc (uint64_t pc, uint64_t c)
 {
+#ifdef PRINT_PC_DURATION
+    print_pc_counter++;
+    {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        uint64_t duration = TimeDiff(print_pc_tv, tv);
+        if (duration > 900)
+        {
+            uint64_t chunk = print_pc_counter / chunk_size;
+            printf("print_pc() pc=%lx counter=%lu sec=%lu usec=%lu duration=%lu chunk=%lu\n", pc, print_pc_counter, tv.tv_sec, tv.tv_usec, duration, chunk);
+            fflush(stdout);
+        }
+        print_pc_tv = tv;
+    }
+#endif
+
     printf("s=%lu pc=%lx c=%lx", print_pc_counter, pc, c);
-    /* Used for debugging
+
+//#define PRINT_PC_REGS
+#ifdef PRINT_PC_REGS
+    /* Used for debugging */
     printf(" r0=%lx", reg_0);
     printf(" r1=%lx", reg_1);
     printf(" r2=%lx", reg_2);
@@ -4471,32 +4789,59 @@ extern int _print_pc (uint64_t pc, uint64_t c)
     printf(" r29=%lx", reg_29);
     printf(" r30=%lx", reg_30);
     printf(" r31=%lx", reg_31);
-    */
+#endif
+
     printf("\n");
     fflush(stdout);
     print_pc_counter++;
 }
 
-// uint64_t chunk_done_counter = 0;
-// struct timeval chunk_done_tv;
-// struct timeval sync_start, sync_stop;
-// uint64_t sync_duration = 0;
+/**************/
+/* CHUNK DONE */
+/**************/
+
+//#define CHUNK_DONE_DURATION
+#ifdef CHUNK_DONE_DURATION
+uint64_t chunk_done_counter = 0;
+struct timeval chunk_done_tv;
+#endif
+
+//#define CHUNK_DONE_SYNC_DURATION
+#ifdef CHUNK_DONE_SYNC_DURATION
+struct timeval sync_start, sync_stop;
+uint64_t sync_duration = 0;
+#endif
+
+// Called by the assembly to notify that a chunk is done and its trace is ready to be consumed
 extern void _chunk_done()
 {
-    // chunk_done_counter++;
-    // if ((chunk_done_counter & 0xFF) == 0)
-    // {
-    //     struct timeval tv;
-    //     gettimeofday(&tv, NULL);
-    //     uint64_t duration = TimeDiff(chunk_done_tv, tv);
-    //     chunk_done_tv = tv;
-    //     printf("chunk_done() counter=%lu sec=%lu usec=%lu duration=%lu\n", chunk_done_counter, tv.tv_sec, tv.tv_usec, duration);
-    // }
-    //gettimeofday(&sync_start, NULL);
+#ifdef CHUNK_DONE_DURATION
+    chunk_done_counter++;
+    if ((chunk_done_counter & 0xFF) == 0)
+    {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        uint64_t duration = TimeDiff(chunk_done_tv, tv);
+        if (duration > 5000)
+        {
+            printf("chunk_done() counter=%lu sec=%lu usec=%lu duration=%lu\n", chunk_done_counter, tv.tv_sec, tv.tv_usec, duration);
+            fflush(stdout);
+        }
+        chunk_done_tv = tv;
+    }
+#endif
+
+#ifdef CHUNK_DONE_SYNC_DURATION
+    gettimeofday(&sync_start, NULL);
+#endif
+
     __sync_synchronize();
-    // gettimeofday(&sync_stop, NULL);
-    // sync_duration += TimeDiff(sync_start, sync_stop);
-    // printf("chunk_done() sync_duration=%lu\n", sync_duration);
+
+#ifdef CHUNK_DONE_SYNC_DURATION
+    gettimeofday(&sync_stop, NULL);
+    sync_duration += TimeDiff(sync_start, sync_stop);
+    printf("chunk_done() sync_duration=%lu\n", sync_duration);
+#endif
 
     // Notify the caller that a new chunk is done and its trace is ready to be consumed
     assert(call_chunk_done);
@@ -4510,10 +4855,18 @@ extern void _chunk_done()
     }
 }
 
+/*****************/
+/* REALLOC TRACE */
+/*****************/
+
+// Called by the assembly to reallocate the trace when needed, e.g. for the next chunk,
+// to increase the trace size by another chunk size
 extern void _realloc_trace (void)
 {
+    // Increase realloc counter
     realloc_counter++;
 
+    // Map next chunk of the trace shared memory
     trace_map_next_chunk();
 
     // Update trace global variables
@@ -4523,6 +4876,10 @@ extern void _realloc_trace (void)
     if (verbose) printf("realloc_trace() realloc counter=%lu trace_address=0x%lx trace_size=%lu=%lx max_address=0x%lx trace_address_threshold=0x%lx chunk_size=%lu\n", realloc_counter, trace_address, trace_size, trace_size, trace_address + trace_size, trace_address_threshold, chunk_size);
 #endif
 }
+
+/*****************/
+/* LOG FUNCTIONS */
+/*****************/
 
 /* Trace data structure
     [8B] Number of chunks: C
@@ -5187,6 +5544,11 @@ void log_chunk_player_main_trace(void)
     printf("Chunk=%p size=%lu\n", chunk, mem_reads_size);
 }
 
+/*************/
+/* FILE LOCK */
+/*************/
+
+// Lock file exclusively to ensure that only one instance of the program is running at a time
 void file_lock(void)
 {
     // Open (or create) the lock file. We don't need to write to it.
@@ -5208,29 +5570,51 @@ void file_lock(void)
     }
 }
 
+/*********************************/
+/* WAIT FOR PRECOMPILE AVAILABLE */
+/*********************************/
+
+// Called by the assembly when prec_written == prec_read, to wait for new precompile results to be available
 int _wait_for_prec_avail (void)
 {
     // Increment wait counter
     wait_counter++;
 
-    // Sync precompile shared memory
+    // Sync control output shared memory so that the writer can see the precompile reads we have
+    // done, and thus update the precompile_written_address if needed
     if (msync((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE, MS_SYNC) != 0) {
-        printf("ERROR: 1 msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
+        printf("ERROR: msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
         fflush(stdout);
         fflush(stderr);
         exit(-1);
     }
 
-    // Tell the writer that we have read the precompile results
+    // Tell the writer that we have read some precompile results
     sem_post(sem_prec_read);
 
-    // Make sure the semaphore is reset before checking the condition,
+    // Make sure the precompile available semaphore is reset before checking the condition,
     // since the caller may have posted it (even several times) before we called sem_wait()
     while (sem_trywait(sem_prec_avail) == 0) {/*printf("Purging sem_prec_avail\n");*/};
+
+    // Sync control input shared memory so that we can see the latest precompile_written_address value
+    if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
+        printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
 
     // Check if there are already precompile results available
     if (*precompile_written_address > *precompile_read_address)
     {
+        // Sync precompile shared memory
+        if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
         return 0;
     }
 
@@ -5258,6 +5642,15 @@ int _wait_for_prec_avail (void)
             fflush(stderr);
             exit(-1);
         }
+
+        // Sync control input shared memory so that we can see the latest precompile_written_address value
+        if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
         if (*precompile_exit_address != 0)
         {
             printf("ERROR: wait_for_prec_avail() found precompile_exit_address=%lu\n", *precompile_exit_address);
@@ -5267,39 +5660,20 @@ int _wait_for_prec_avail (void)
         }
         if (*precompile_written_address > *precompile_read_address)
         {
+            // Sync precompile shared memory
+            if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
+                printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
+                fflush(stdout);
+                fflush(stderr);
+                exit(-1);
+            }
+
             return 0;
         }
     }
 
-    // // Wait for control input shared memory to synchronize
-    // uint64_t written;
-    // uint64_t read;
-    // for (uint64_t i=0; i<CONTROL_NUMBER_OF_RETRIES; i++)
-    // {
-    //     written = *precompile_written_address;
-    //     read = *precompile_read_address;
-
-    //     // When some data is available, exit the loop
-    //     if (written != read) break;
-
-    //     // Retry
-    //     //printf("WARNING: wait_for_prec_avail() found written=%lu == read=%lu i=%lu retrying...\n", written, read, i);
-    //     usleep(CONTROL_RETRY_DELAY_US);
-    // }
-
-    // // Check if some data is available
-    // if (written == read)
-    // {
-    //     printf("ERROR: wait_for_prec_avail() found written=%lu == read=%lu\n", written, read);
-    //     fflush(stdout);
-    //     fflush(stderr);
-    //     exit(-1);
-    // }
-
-    return 0;
-}
-
-void post_prec_read (void)
-{
-    sem_post(sem_prec_read);
+    printf("ERROR: wait_for_prec_avail() unreachable code\n");
+    fflush(stdout);
+    fflush(stderr);
+    exit(-1);
 }

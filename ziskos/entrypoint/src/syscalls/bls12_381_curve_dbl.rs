@@ -32,7 +32,7 @@ pub extern "C" fn syscall_bls12_381_curve_dbl(
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
-    ziskos_syscall!(0x80D, p1);
+    ziskos_syscall!(zisk_definitions::SYSCALL_BLS12_381_CURVE_DBL_ID, p1);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
         let _p1 = [p1.x, p1.y].concat().try_into().unwrap();

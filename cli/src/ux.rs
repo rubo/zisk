@@ -50,6 +50,10 @@ pub fn print_banner() {
     // );
 }
 
-pub fn print_banner_field(label: &str, value: &str) {
+pub fn print_banner_command(command: impl std::fmt::Display) {
+    print_banner_field("Command", command);
+}
+
+pub fn print_banner_field(label: &str, value: impl std::fmt::Display) {
     println!("{} {}", format!("{: >12}", label).bright_green().bold(), value);
 }

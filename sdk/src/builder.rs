@@ -59,6 +59,7 @@ pub struct ProverClientBuilder<Backend = (), Operation = ()> {
     asm_path: Option<PathBuf>,
     base_port: Option<u16>,
     unlock_mapped_memory: bool,
+    no_auto_setup: bool,
 
     // Prove-specific fields (only available when Operation = Prove)
     gpu_params: ParamsGPU,
@@ -212,6 +213,12 @@ impl<Operation> ProverClientBuilder<AsmB, Operation> {
     }
 
     #[must_use]
+    pub fn no_auto_setup(mut self, no_auto_setup: bool) -> Self {
+        self.no_auto_setup = no_auto_setup;
+        self
+    }
+
+    #[must_use]
     pub fn base_port(mut self, base_port: u16) -> Self {
         self.base_port = Some(base_port);
         self
@@ -290,12 +297,7 @@ impl<X> ProverClientBuilder<EmuB, X> {
         let proving_key_snark = get_proving_key_snark(self.proving_key_snark.as_ref());
 
         if self.print_command_info {
-            Self::print_emu_command_info(
-                self.witness,
-                self.verify_constraints,
-                &proving_key,
-                &proving_key_snark,
-            );
+            Self::print_emu_command_info(&proving_key, &proving_key_snark);
         }
 
         let emu = if self.verifier {
@@ -317,20 +319,7 @@ impl<X> ProverClientBuilder<EmuB, X> {
         Ok(ZiskProver::<Emu>::new(emu))
     }
 
-    fn print_emu_command_info(
-        witness: bool,
-        verify_constraints: bool,
-        proving_key: &Path,
-        proving_key_snark: &Path,
-    ) {
-        if witness {
-            println!("{: >12} StatsConstraints", "Command".bright_green().bold());
-        } else if verify_constraints {
-            println!("{: >12} VerifyConstraints", "Command".bright_green().bold());
-        } else {
-            println!("{: >12} Prove", "Command".bright_green().bold());
-        }
-
+    fn print_emu_command_info(proving_key: &Path, proving_key_snark: &Path) {
         println!(
             "{: >12} {}",
             "Emulator".bright_green().bold(),
@@ -408,12 +397,7 @@ impl<X> ProverClientBuilder<AsmB, X> {
         let proving_key_snark = get_proving_key_snark(self.proving_key_snark.as_ref());
 
         if self.print_command_info {
-            Self::print_asm_command_info(
-                self.witness,
-                self.verify_constraints,
-                &proving_key,
-                &proving_key_snark,
-            );
+            Self::print_asm_command_info(&proving_key, &proving_key_snark);
         }
 
         let asm = if self.verifier {
@@ -429,6 +413,7 @@ impl<X> ProverClientBuilder<AsmB, X> {
                 self.shared_tables,
                 self.base_port,
                 self.unlock_mapped_memory,
+                self.no_auto_setup,
                 self.gpu_params,
                 self.logging_config,
             )?
@@ -437,20 +422,7 @@ impl<X> ProverClientBuilder<AsmB, X> {
         Ok(ZiskProver::<Asm>::new(asm))
     }
 
-    fn print_asm_command_info(
-        witness: bool,
-        verify_constraints: bool,
-        proving_key: &Path,
-        proving_key_snark: &Path,
-    ) {
-        if witness {
-            println!("{: >12} StatsConstraints", "Command".bright_green().bold());
-        } else if verify_constraints {
-            println!("{: >12} VerifyConstraints", "Command".bright_green().bold());
-        } else {
-            println!("{: >12} Prove", "Command".bright_green().bold());
-        }
-
+    fn print_asm_command_info(proving_key: &Path, proving_key_snark: &Path) {
         println!("{: >12} {}", "Proving Key".bright_green().bold(), proving_key.display());
 
         println!("{: >12} {}", "SNARK Key".bright_green().bold(), proving_key_snark.display());
@@ -481,6 +453,7 @@ impl From<ProverClientBuilder<(), ()>> for ProverClientBuilder<EmuB, ()> {
             asm_path: None,
             base_port: None,
             unlock_mapped_memory: false,
+            no_auto_setup: false,
 
             _backend: std::marker::PhantomData,
             _operation: std::marker::PhantomData,
@@ -509,6 +482,7 @@ impl From<ProverClientBuilder<(), ()>> for ProverClientBuilder<AsmB, ()> {
             asm_path: builder.asm_path,
             base_port: builder.base_port,
             unlock_mapped_memory: builder.unlock_mapped_memory,
+            no_auto_setup: builder.no_auto_setup,
 
             _backend: std::marker::PhantomData,
             _operation: std::marker::PhantomData,
@@ -539,6 +513,7 @@ impl<Backend> From<ProverClientBuilder<Backend, ()>>
             asm_path: builder.asm_path,
             base_port: builder.base_port,
             unlock_mapped_memory: builder.unlock_mapped_memory,
+            no_auto_setup: builder.no_auto_setup,
 
             _backend: std::marker::PhantomData,
             _operation: std::marker::PhantomData,
@@ -567,6 +542,7 @@ impl<Backend> From<ProverClientBuilder<Backend, ()>> for ProverClientBuilder<Bac
             asm_path: builder.asm_path,
             base_port: builder.base_port,
             unlock_mapped_memory: builder.unlock_mapped_memory,
+            no_auto_setup: builder.no_auto_setup,
 
             _backend: std::marker::PhantomData,
             _operation: std::marker::PhantomData,

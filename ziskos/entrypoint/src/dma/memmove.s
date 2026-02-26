@@ -6,8 +6,8 @@
         .p2align        4
         .type   memmove,@function
 memmove:
-        csrs    0x813, a2                  # Marker: Write count (a2) to CSR 0x813
-        add	x0,a0,a1
+        csrs    0x813, a1                  # Marker: Write count (a2) to CSR 0x813
+        add	x0,a0,a2
         ret        
         .size memmove, .-memmove
         .section .text.hot,"ax",@progbits

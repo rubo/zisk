@@ -449,7 +449,7 @@ The `--compute-capacity` flag indicates the total compute units required to gene
 | `--coordinator-url` | - | String | http://127.0.0.1:50051 | URL of the coordinator to send the request to |
 | `--data-id` | - | String | Auto (from filename or UUID) | Custom identifier for the proof job |
 | `--hints-uri` | - | String | - | Path/URI to the precompile hints source |
-| `--stream-hints` | - | Boolean | false | Stream hints from the coordinator to workers via gRPC (see [Precompile Hints](../book/getting_started/precompile_hints.md)) |
+| `--stream-hints` | - | Boolean | false | Stream hints from the coordinator to workers via gRPC (see [Precompile Hints](precompile_hints.md)) |
 | `--direct-inputs` | `-x` | Boolean | false | Send input data inline via gRPC instead of as a file path |
 | `--minimal-compute-capacity` | `-m` | Number | Same as `--compute-capacity` | Minimum acceptable compute capacity (allows partial worker allocation) |
 | `--simulated-node` | - | Number | - | Simulated node ID (for testing) |
@@ -464,7 +464,7 @@ The `prove` subcommand supports two modes for delivering inputs and hints to wor
 
 **Hints modes** (controlled by `--hints-uri` and `--stream-hints`):
 - **Path mode** (default): The coordinator sends the hints URI to workers. Each worker loads hints from the specified path independently.
-- **Streaming mode** (`--stream-hints`): The coordinator reads hints from the URI and broadcasts them to all workers in real-time via gRPC. See the [Precompile Hints documentation](../book/getting_started/precompile_hints.md) for details.
+- **Streaming mode** (`--stream-hints`): The coordinator reads hints from the URI and broadcasts them to all workers in real-time via gRPC. See the [Precompile Hints documentation](precompile_hints.md) for details.
 
 **Examples:**
 ```bash

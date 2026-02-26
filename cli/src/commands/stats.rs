@@ -11,7 +11,7 @@ use zisk_common::{ExecutorStatsHandle, Stats};
 use zisk_pil::*;
 use zisk_sdk::ProverClient;
 
-use crate::ux::{print_banner, print_banner_field};
+use crate::ux::{print_banner, print_banner_command, print_banner_field};
 
 #[derive(Parser)]
 #[command(author, about, long_about = None, version = ZISK_VERSION_MESSAGE)]
@@ -70,7 +70,7 @@ pub struct ZiskStats {
     #[arg(short = 'v', long, action = clap::ArgAction::Count, help = "Increase verbosity level")]
     pub verbose: u8, // Using u8 to hold the number of `-v`
 
-    #[clap(short = 'n', long)]
+    #[clap(short = 'h', long)]
     pub number_threads_witness: Option<usize>,
 
     #[clap(short = 'x', long)]
@@ -88,6 +88,9 @@ pub struct ZiskStats {
 
     #[clap(short = 'j', long, default_value_t = false)]
     pub shared_tables: bool,
+
+    #[clap(short = 'n', long, default_value_t = false)]
+    pub no_auto_setup: bool,
 }
 
 impl ZiskStats {
@@ -99,9 +102,12 @@ impl ZiskStats {
 
         print_banner();
 
-        if let Some(inputs) = &self.inputs {
-            print_banner_field("Input", inputs);
-        }
+        print_banner_command("Stats");
+
+        print_banner_field("Elf", self.elf.display());
+
+        let inputs_str = self.inputs.clone().unwrap_or_else(|| "None".dimmed().to_string());
+        print_banner_field("Input", inputs_str);
 
         if let Some(hints) = &self.hints {
             print_banner_field("Prec. Hints", hints);
@@ -161,9 +167,10 @@ impl ZiskStats {
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, false)?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         prover.stats(
+            &pk,
             stdin,
             self.debug.clone(),
             self.minimal_memory,
@@ -183,19 +190,20 @@ impl ZiskStats {
             .verbose(self.verbose)
             .shared_tables(self.shared_tables)
             .asm_path_opt(self.asm.clone())
+            .no_auto_setup(self.no_auto_setup)
             .base_port_opt(self.port)
             .unlock_mapped_memory(self.unlock_mapped_memory)
             .print_command_info()
             .build()?;
 
         let elf = ElfBinaryFromFile::new(&self.elf, hints_stream.is_some())?;
-        prover.setup(&elf)?;
+        let (pk, _) = prover.setup(&elf)?;
 
         if let Some(hints_stream) = hints_stream {
-            prover.set_hints_stream(hints_stream)?;
+            pk.register_hints_stream(hints_stream)?;
         }
         let mpi_node = self.mpi_node.map(|n| n as u32);
-        prover.stats(stdin, self.debug.clone(), self.minimal_memory, mpi_node)
+        prover.stats(&pk, stdin, self.debug.clone(), self.minimal_memory, mpi_node)
     }
 
     /// Prints stats individually and grouped, with aligned columns.

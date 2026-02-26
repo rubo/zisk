@@ -2,8 +2,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zisk_sdk::{
-    ZiskStdin, ZiskIO, ElfBinary,
-    ProofOpts, ProverClient, ZiskProof, ZiskProofWithPublicValues, ZiskPublics, include_elf,
+    include_elf, ElfBinary, ProofOpts, ProverClient, ZiskIO, ZiskProof, ZiskProofWithPublicValues,
+    ZiskPublics, ZiskStdin,
 };
 
 pub const ELF: ElfBinary = include_elf!("sha-hasher-guest");
@@ -29,12 +29,12 @@ fn main() -> Result<()> {
     let client = ProverClient::builder().asm().base_port(54321).build().unwrap();
 
     println!("Setting up program...");
-    client.setup(&ELF)?;
+    let (pk, _) = client.setup(&ELF)?;
     println!("Setup completed successfully");
 
     println!("Generating proof (this may take a while)...");
     let proof_opts = ProofOpts::default().minimal_memory();
-    let result = client.prove(stdin).with_proof_options(proof_opts).run()?;
+    let result = client.prove(&pk, stdin).with_proof_options(proof_opts).run()?;
     println!("Proof generated successfully in {:?}", result.get_duration());
     println!("Execution steps: {}", result.get_execution_steps());
 

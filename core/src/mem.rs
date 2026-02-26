@@ -142,7 +142,7 @@ pub const ARCH_ID_ZISK: u64 = 0xFFFEEEE;
 /// UART memory address; single bytes written here will be copied to the standard output
 pub const UART_ADDR: u64 = SYS_ADDR + 0x200;
 /// Extra parameters of repcompiles are stored in fixed memory area (256 bytes => 32 parameters)
-pub const EXTRA_PARAMS: u64 = SYS_ADDR + 0x0F00;
+pub const EXTRA_PARAMS_ADDR: u64 = SYS_ADDR + 0x0F00;
 /// Float registers first address
 pub const FREG_FIRST: u64 = SYS_ADDR + 0x1000;
 /// CSR memory address; contains control and status registers
@@ -909,6 +909,20 @@ impl Mem {
         dst_section.buffer[dst_offset..dst_offset + count].copy_from_slice(bytes);
     }
 
+    pub fn memset(&mut self, dst: u64, count: u64, data: u8) {
+        // Early return if source and destination are the same or count is zero
+        if count == 0 {
+            return;
+        }
+
+        // Then, write to destination
+        let dst_section = self.get_writeable_section(dst, count);
+        let dst_offset: usize = (dst - dst_section.start) as usize;
+
+        let count = count as usize;
+        dst_section.buffer[dst_offset..dst_offset + count].fill(data);
+    }
+
     /// Reads `count` bytes from memory starting at `addr` and appends them as u64 values to `data`.
     /// The data is read in 64-bit aligned chunks and pushed to the vector.
     pub fn push_from_mem(&mut self, data: &mut Vec<u64>, addr: u64, count: u64) {
@@ -948,16 +962,23 @@ impl Mem {
 
         // Compare byte by byte
         for i in 0..count_usize {
-            let byte_a = a_section.buffer[a_offset + i] as i8;
-            let byte_b = b_section.buffer[b_offset + i] as i8;
+            let byte_a = a_section.buffer[a_offset + i];
+            let byte_b = b_section.buffer[b_offset + i];
 
             if byte_a != byte_b {
                 // Sign extend the difference to 64 bits
                 let diff = (byte_a as i64) - (byte_b as i64);
-                return (diff as u64, i);
+                // return effective count, needs the last byte to compare.
+                // println!("BYTE_DIFF[{i:>4}] = {diff} BYTE_A[0x{a:08X} + {i:>4}](0x{byte_a:02X}) ? BYTE_B[0x{b:08X} + {i:>4}](0x{byte_b:02X}) S:{step}");
+                // if i > 0 {
+                //     println!("PREV BYTE_A[0x{a:08X} + {:>4}](0x{:02X}) ? BYTE_B[0x{b:08X} + {:>4}](0x{:02X}) S:{step}",
+                //     i - 1, a_section.buffer[a_offset + i - 1], i - 1, b_section.buffer[b_offset + i - 1]);
+                // }
+                // println!("POST BYTE_A[0x{a:08X} + {:>4}](0x{:02X}) ? BYTE_B[0x{b:08X} + {:>4}](0x{:02X}) S:{step}",
+                // i + 1, a_section.buffer[a_offset + i + 1], i + 1, b_section.buffer[b_offset + i + 1]);
+                return (diff as u64, i + 1);
             }
         }
-
         // All bytes are equal
         (0, count_usize)
     }

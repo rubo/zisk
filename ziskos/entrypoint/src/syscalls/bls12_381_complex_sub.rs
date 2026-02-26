@@ -41,7 +41,7 @@ pub extern "C" fn syscall_bls12_381_complex_sub(
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) {
     #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
-    ziskos_syscall!(0x80F, params);
+    ziskos_syscall!(zisk_definitions::SYSCALL_BLS12_381_COMPLEX_SUB_ID, params);
     #[cfg(not(all(target_os = "zkvm", target_vendor = "zisk")))]
     {
         let f1 = [params.f1.x, params.f1.y].concat().try_into().unwrap();

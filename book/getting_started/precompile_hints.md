@@ -357,6 +357,8 @@ If a hints file was generated, it can be consumed using the `--hints` flag in th
 
 If you want to display metrics in the console about the number of hints generated during native guest execution, you can additionally compile the guest with the `--cfg zisk_hints_metrics` flag.
 
+To enable hint support when executing the guest inside the zkVM (ELF guest), you must pass the `--hints` flag when generating the assembly ROM using the `cargo-zisk rom-setup` command.
+
 ### 5.4 Deterministic Execution Requirement
 
 An important requirement of the hints generation flow is that the native execution that generates the hints must be fully deterministic and always produce hints in the exact same order.

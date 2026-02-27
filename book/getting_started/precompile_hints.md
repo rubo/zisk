@@ -299,7 +299,7 @@ After the hint generation, execution continues in the native target code to comp
 
 From the guest program, we generate hints containing the input data for the corresponding `zisklib` functions (in this example, the `sha256_c` function). These `zisklib` functions may internally invoke one or more precompiles to produce the final result.
 
-When the hints are processed by the `HintsProcessor`, it executes the same ``zisklib function using the implementation code for the zkvm/zisk target. This produces the exact precompile results expected when executing the guest ELF inside the zkVM.
+When the hints are processed by the `HintsProcessor`, it executes the same `zisklib` function using the implementation code for the zkvm/zisk target. This produces the exact precompile results expected when executing the guest ELF inside the zkVM.
 
 As a result, for each `zisklib` function invocation, the `HintsProcessor` may generate one or more precompile hint results corresponding to the precompile inputs originally emitted by the guest.
 

@@ -612,9 +612,9 @@ extern int _opcode_blake2(uint64_t * address)
 #endif
 #ifdef DEBUG
 #ifdef ASM_CALL_METRICS
-    if (emu_verbose) printf("opcode_blake2() calling blake2b() counter=%lu address=%08lx\n", asm_call_metrics.blake2_counter, address);
+    if (emu_verbose) printf("opcode_blake2() calling blake2b() counter=%lu address=%p\n", asm_call_metrics.blake2_counter, address);
 #else
-    if (emu_verbose) printf("opcode_blake2() calling blake2b() address=%08lx\n", address);
+    if (emu_verbose) printf("opcode_blake2() calling blake2b() address=%p\n", address);
 #endif
 #endif
 

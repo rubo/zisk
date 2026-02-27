@@ -1,6 +1,7 @@
 mod blake2b;
 mod bls12_381;
 mod bn254;
+mod custom;
 mod hint_buffer;
 mod keccak256;
 mod kzg;
@@ -36,6 +37,7 @@ use std::thread::ThreadId;
 pub use blake2b::*;
 pub use bls12_381::*;
 pub use bn254::*;
+pub use custom::*;
 pub use keccak256::*;
 pub use kzg::*;
 pub use modexp::*;

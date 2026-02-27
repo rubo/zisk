@@ -21,12 +21,14 @@ flowchart LR
 2. [Hints in CLI Execution](#2-hints-in-cli-execution)
 3. [Hints in Distributed Execution](#3-hints-in-distributed-execution)
 4. [Custom Hint Handlers](#4-custom-hint-handlers)
+5. [Generating Hints in Guest Programs](#5-generating-hints-in-guest-programs)
 
 ---
 
 ## 1. Hint Format and Protocol
 
 ### 1.1. Hint Request Format
+
 Hints are transmitted as a stream of `u64` values. Each hint request consists of a **header** (1 `u64`) followed by **data** (N `u64` values).
 
 ```
@@ -48,6 +50,7 @@ Hints are transmitted as a stream of `u64` values. Each hint request consists of
 - **Length** (lower 32 bits): Payload data size in **bytes**. The last `u64` may contain padding bytes.
 
 ### 1.2. Control Hint Types:
+
 The following control codes are defined:
 - `0x00` (START): Start a new hint stream. Resets processor state and sequence counters. Must be the first hint in the first batch.
 - `0x01` (END): End the current hint stream. The processor will wait for all pending hints to be processed before returning. Must be the last hint in its batch; only a `CTRL_START` may follow in a subsequent batch.
@@ -57,6 +60,7 @@ The following control codes are defined:
 Control codes are for control only and do not have any associated data (Length should be zero).
 
 ### 1.3. Data Hint Types
+
 For data hints, the hint code (32 bits) is structured as follows:
 - **Bit 31 (MSB)**: Pass-through flag. When set, the data bypasses computation and is forwarded directly to the sink.
 - **Bits 0-30**: The hint type identifier (control, built-in, or custom code).
@@ -77,6 +81,7 @@ Header: 0x80000100_00000020
 ```
 
 #### 1.3.1 Stream Batching
+
 The hints protocol supports chunking for individual hints that exceed the transport’s message size limit (currently 128 KB). Each message in the stream contains either a single complete hint or one chunk of a larger hint — hints are never combined in the same message.
 
 When a hint exceeds the size limit, it must be split into multiple sequential chunks, each sent as a separate message. Each chunk includes a header specifying the total length of the complete hint, allowing the receiver to reassemble all chunks before processing. For example, a hint with a 300 KB payload would be split into three messages:
@@ -87,6 +92,7 @@ Message 3: Header (code + total length), Data[0..M] (final 44 KB chunk)
 The receiver buffers incoming chunks and reassembles them based on the total length specified in the header before invoking the hint handler. This allows the system to handle arbitrarily large hints while respecting transport limitations.
 
 #### 1.3.2 Pass-Through Hints
+
 When bit 31 of the hint code is set (e.g., `0x8000_0000 | actual_code`), the hint is marked as **pass-through**:
 
 - The data payload is forwarded directly to the sink without invoking any handler.
@@ -94,6 +100,7 @@ When bit 31 of the hint code is set (e.g., `0x8000_0000 | actual_code`), the hin
 - This is useful for pre-computed results that don't need processing.
 
 ### 1.4. Hint Code Types
+
 | Category     | Code Range        | Description                         |
 |--------------|-------------------|-------------------------------------|
 | **Control**  | `0x0000`-`0x000F` | Stream lifecycle management         |
@@ -103,6 +110,7 @@ When bit 31 of the hint code is set (e.g., `0x8000_0000 | actual_code`), the hin
 > **Note:** Custom hint codes can technically use any value not occupied by control or built-in codes. By convention, codes `0xA000`-`0xFFFF` are recommended for custom use to avoid future conflicts as new built-in types are added. The processor does not enforce a range restriction — any unrecognized code is treated as custom.
 
 #### 1.4.1. Control Codes
+
 Control codes manage the stream lifecycle and do not carry computational data:
 
 | Code | Name | Description |
@@ -113,6 +121,7 @@ Control codes manage the stream lifecycle and do not carry computational data:
 | `0x0003` | `CTRL_ERROR`   | **[Reserved for future use]** External error signal. Sets error flag and stops processing. |
 
 #### 1.4.2. Built-in Hint Types
+
 | Code | Name | Description |
 |------|------|-------------|
 | `0x0100` | `Sha256` | SHA-256 hash computation |
@@ -134,6 +143,7 @@ Control codes manage the stream lifecycle and do not carry computational data:
 | `0x0700` | `Keccak256` | Keccak-256 hash computation |
 
 #### 1.4.3. Custom Hint Types
+
 Custom hint types allow users to define their own hint handlers for application-specific logic. Users can register custom handlers via the `HintsProcessor` builder API, providing a mapping from hint code to a processing function (see [Custom Hint Handlers](#4-custom-hint-handlers)). By convention, codes in the range `0xA000`-`0xFFFF` are recommended for custom use to avoid conflicts with current and future built-in types. If a data hint is received with an unregistered code, the processor returns an error and stops processing immediately.
 
 ### 1.5. Stream Protocol
@@ -212,6 +222,7 @@ A hints stream system can be configured in two ways:
 * **Path mode**: Workers load hints from a local path/URI. This is useful for debugging or when hints are pre-generated and stored in a file. In this mode, the coordinator does not send hints to workers; instead, each worker reads the hints directly from the specified path.
 
 #### 3.2.1 Coordinator Hints Streaming Mode
+
 To start the coordinator in streaming mode, provide the `--hints-uri` option with a URI that the `coordinator` will connect to, and set `--stream-hints` to enable broadcasting to workers. The URI determines the input stream source for hints.
 The supported schemes are:
 ```
@@ -227,6 +238,7 @@ zisk-coordinator prove --hints-uri unix:///tmp/hints.sock --stream-hints ...
 ```
 
 #### 3.2.2 Worker Hints non-Streaming Mode
+
 To start a worker in non-streaming mode, provide the `--hints-uri` option with a URI that points to the local workers path where hints are stored, without the `--stream-hints` option. In this mode the worker(s) will load the precompile hints from the specified URI instead of receiving them from the coordinator. This mode is useful for debugging or when hints are pre-generated and stored in a file.
 
 ## 4. Custom Hint Handlers
@@ -249,3 +261,146 @@ let processor = HintsProcessor::builder(my_sink)
 **Requirements:**
 - Handler function must be `Fn(&[u64]) -> Result<Vec<u64>> + Send + Sync + 'static`.
 - Custom hint codes should not conflict with built-in codes (`0x0000`-`0x0700`). By convention, use codes in the range `0xA000`-`0xFFFF`.
+
+## 5. Generating Hints in Guest Programs
+
+To generate hints from the guest program you need to follow these steps and requirements:
+
+1. **Emit hint requests**: Patch your code or dependent crates to call the external FFI Hints helper functions that generate the hints input data required later by the `HintsProcessor`. See [FFI Hints Helper Functions](#55-ffi-hints-helper-functions) for the list of available built-in FFI Hints helper functions, or [Custom Hints Generation](#56-custom-hints-generation) to learn how to generate custom hints from the guest program.
+2. **Add the `ziskos` crate** to your guest `Cargo.toml`.
+3. **Initialize and finalize the hint stream**: Call the hints init and close functions immediately before and after the section of code that executes precompile logic.
+4. **Enable hints at compile time**: Compile your guest program with `RUSTFLAGS='--cfg zisk_hints'` for the native target to activate hint code generation and FFI helper functions in the `ziskos` crate.
+5. **Ensure deterministic execution**: Verify that both the native execution that generates hints and the guest compiled for the `zkvm/zisk` target execute deterministically and produce/consume hints in the exact same order. See [Deterministic Execution Requirement](#54-deterministic-execution-requirement).
+
+To illustrate these steps, consider the `zec-reth` guest program, which executes and verifies Ethereum Mainnet blocks using the ZisK zkVM:
+
+https://github.com/0xPolygonHermez/zisk-eth-client/tree/main-reth/bin/guest
+
+### 5.1 Emit Hint Requests
+
+`zec-reth` relies on `reth` crates, which expose a `Crypto` trait that allows a guest program to override precompile implementations. This enables zkVM-optimized implementations while also emitting hints so the computation can be performed outside the zkVM.
+
+For example, the SHA-256 implementation for the `Crypto` trait can be found here:
+
+https://github.com/0xPolygonHermez/zisk-eth-client/blob/c855d2fb401648828cc3ac044da2999b4f641917/crates/crypto/src/lib.rs#L164
+
+In that file, two target-specific implementations are provided: one for `zkvm/zisk` and one for native (non-zkVM) targets. When compiling with `--cfg zisk_hints` for the native target, the zkVM-specific implementation emits a hint request using the FFI helper:
+
+```rust
+#[cfg(zisk_hints)]
+unsafe {
+    hint_sha256(input.as_ptr(), input.len());
+}
+```
+
+This call generates the hint input data using the exact input values that will later be used by the ZisK zkVM when executing the `zkvm/zisk` target code. This hint input data is consumed later by the `HintsProcessor`, allowing the SHA-256 computation to be performed outside the zkVM while remaining fully verifiable inside the circuit.
+
+After the hint generation, execution continues in the native target code to compute the SHA-256 result.
+
+From the guest program, we generate hints containing the input data for the corresponding `zisklib` functions (in this example, the `sha256_c` function). These `zisklib` functions may internally invoke one or more precompiles to produce the final result.
+
+When the hints are processed by the `HintsProcessor`, it executes the same `zisklib` function using the implementation code for the zkvm/zisk target. This produces the exact precompile results expected when executing the guest ELF inside the zkVM.
+
+As a result, for each `zisklib` function invocation, the `HintsProcessor` may generate one or more precompile hint results corresponding to the precompile inputs originally emitted by the guest.
+
+### 5.2 Initialize/Finalize Hint Stream
+
+To start hints generation from your guest program you must call one of the following functions from the `ziskos::hints` crate:
+
+```rust
+pub fn init_hints_file(hints_file_path: PathBuf, ready: Option<oneshot::Sender<()>>) -> Result<()>
+```
+
+This function stores the generated hints in the file specified by the `hints_file_path` parameter.
+
+```rust
+pub fn init_hints_socket(socket_path: PathBuf, debug_file: Option<PathBuf>, ready: Option<oneshot::Sender<()>>) -> Result<()>
+```
+
+This function sends the hints through the Unix socket specified by the `socket_path` parameter.
+
+The optional `ready` parameter can be used for synchronization with the host when the guest program is executed in a separate thread to generate hints in parallel. It signals `ready` when the hints generation is ready to start writing hints through the Unix socket.
+
+The optional `debug_file` parameter can be used to store, in the specified file, a copy of the hints sent through the socket. This file can later be used for debugging purposes.
+
+To close hints generation you must call:
+
+```rust
+pub fn close_hints() -> Result<()>
+```
+
+You should call these functions only when the guest is compiled for the native target used for hints generation. This can be achieved by placing the code under the following configuration flag:
+
+```rust
+#[cfg(zisk_hints)]
+{
+    // Initialization/Finalize Hints generation code
+    ...
+}
+```
+
+You can review how hints generation is initialized and finalized in the `zec-reth` guest here:
+
+https://github.com/0xPolygonHermez/zisk-eth-client/blob/main-reth/bin/guest/src/main.rs
+
+### 5.3 Enable Hints at Compile Time
+
+Once the guest program is set up to generate hints for the native target, it must be compiled with the `zisk_hints` configuration flag enabled:
+
+```bash
+RUSTFLAGS='--cfg zisk_hints' cargo build --release
+```
+
+After compiling, executing the guest program will generate the hints binary file at the specified location (if `init_hints_file` was used) or start writing hints to the specified Unix socket (if `init_hints_socket` was used).
+
+If a hints file was generated, it can be consumed using the `--hints` flag in the `cargo-zisk` commands that support hints (as explained in [Hints in CLI Execution](#2-hints-in-cli-execution)).
+
+If you want to display metrics in the console about the number of hints generated during native guest execution, you can additionally compile the guest with the `--cfg zisk_hints_metrics` flag.
+
+To enable hint support when executing the guest inside the zkVM (ELF guest), you must pass the `--hints` flag when generating the assembly ROM using the `cargo-zisk rom-setup` command.
+
+**NOTE:** Hint processing is not supported when executing the guest ELF file in emulation mode.
+
+### 5.4 Deterministic Execution Requirement
+
+An important requirement of the hints generation flow is that the native execution that generates the hints must be fully deterministic and always produce hints in the exact same order.
+
+Furthermore, the order of hints generated during native execution must match the order in which the guest program compiled for the `zkvm/zisk` target expects to receive them. Since the zkVM execution is also deterministic, any divergence in hint ordering between native execution and zkVM execution will result in incorrect behavior.
+
+To guarantee deterministic hint generation, the code paths that directly or indirectly generate hints must avoid:
+
+- The use of threads or parallel execution.
+- Data structures such as `HashMap` (or any structure based on randomized hash seeds) when iterated in loops that directly or indirectly call precompile/hint functions.
+
+Using threads or iterating over non-deterministically ordered data structures may cause the hint generation order to vary between runs, breaking the required alignment between native and zkVM executions.
+
+### 5.5 FFI Hints Helper Functions
+
+| Code | Function |
+| ---- | -------- |
+| `0x0100` | `fn hint_sha256(f_ptr: *const u8, f_len: usize);` |
+| `0x0200` | `fn hint_bn254_g1_add(p1: *const u8, p2: *const u8);`|
+| `0x0201` | `fn hint_bn254_g1_mul(point: *const u8, scalar: *const u8);` |
+| `0x0205` | `fn hint_bn254_pairing_check(pairs: *const u8, num_pairs: usize);` |
+| `0x0300` | `fn hint_secp256k1_ecdsa_address_recover(sig: *const u8, recid: *const u8, msg: *const u8);` |
+| `0x0301` | `fn hint_secp256k1_ecdsa_verify_and_address_recover(sig: *const u8, msg: *const u8, pk: *const u8);` |
+| `0x0380` | `fn hint_secp256r1_ecdsa_verify(msg: *const u8, sig: *const u8, pk: *const u8);` |
+| `0x0400` | `fn hint_bls12_381_g1_add(a: *const u8, b: *const u8);` |
+| `0x0401` | `fn hint_bls12_381_g1_msm(pairs: *const u8, num_pairs: usize);` |
+| `0x0405` | `fn hint_bls12_381_g2_add(a: *const u8, b: *const u8);` |
+| `0x0406` | `fn hint_bls12_381_g2_msm(pairs: *const u8, num_pairs: usize);` |
+| `0x040A` | `fn hint_bls12_381_pairing_check(pairs: *const u8, num_pairs: usize);` |
+| `0x0410` | `fn hint_bls12_381_fp_to_g1(fp: *const u8);` |
+| `0x0411` | `fn hint_bls12_381_fp2_to_g2(fp2: *const u8);` |
+| `0x0500` | `fn hint_modexp_bytes(base_ptr: *const u8, base_len: usize, exp_ptr: *const u8, exp_len: usize, modulus_ptr: *const u8, modulus_len: usize);` |
+| `0x0600` | `fn hint_verify_kzg_proof(z: *const u8, y: *const u8, commitment: *const u8, proof: *const u8);` |
+| `0x0700` | `fn hint_keccak256(input_ptr: *const u8, input_len: usize);` |
+
+### 5.6 Custom Hints Generation
+To extend the built-in precompile hints, you can generate custom hints for new precompiles. The first step is to register the new hint in the `HintsProcessor`, as explained in section [Custom Hint Handlers](#4-custom-hint-handlers). Once the precompile hint is registered, you can generate hints for it from the guest program using the following FFI function:
+
+```rust
+fn hint_custom(hint_id: u32, data_ptr: *const u8, data_len: usize, is_result: u8);
+```
+
+and following the same guidelines described for the built-in FFI hint helper functions.

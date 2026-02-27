@@ -164,7 +164,7 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
 
         let (main_assignments, cost_main) =
             self.planner.assign_main_instances(&pctx, &sctx, global_ids, main_output.plans);
-        self.registry.populate_main_instances(&self.state, main_assignments);
+        self.registry.populate_main_instances(&pctx, &self.state, main_assignments)?;
 
         stats_end!(self.state.stats, &_main_plan_scope);
 

@@ -4,7 +4,7 @@
 //! state machine instances.
 
 use fields::PrimeField64;
-use proofman_common::ProofCtx;
+use proofman_common::{ProofCtx, ProofmanResult};
 use sm_main::MainInstance;
 use std::sync::Arc;
 use zisk_common::{CheckPoint, Instance, InstanceCtx, InstanceType, Plan};
@@ -74,15 +74,22 @@ impl<F: PrimeField64> InstanceRegistry<F> {
     /// * `assignments` - Vector of (global_id, plan) pairs.
     pub fn populate_main_instances(
         &self,
+        pctx: &ProofCtx<F>,
         state: &ExecutionState<F>,
         assignments: Vec<(usize, Plan)>,
-    ) {
+    ) -> ProofmanResult<()> {
         let mut main_instances = state.main_instances.write().unwrap();
         for (global_id, plan) in assignments {
             main_instances
                 .entry(global_id)
                 .or_insert_with(|| self.create_main_instance(plan, global_id));
+
+            let is_mine = pctx.dctx_is_my_process_instance(global_id)?;
+            if is_mine {
+                pctx.set_witness_ready(global_id, false);
+            }
         }
+        Ok(())
     }
 
     /// Populates secondary instances in the execution state.

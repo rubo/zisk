@@ -14,7 +14,9 @@ mod sha256f;
 #[cfg(zisk_hints_metrics)]
 mod metrics;
 
-use crate::hints::hint_buffer::{build_hint_buffer, HintBuffer, MAX_WRITER_LEN};
+use crate::hints::hint_buffer::{
+    build_hint_buffer, HintBuffer, MAX_WRITER_LEN, WRITE_BUFFER_FLUSH_LEN,
+};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use std::cell::UnsafeCell;
@@ -154,7 +156,7 @@ pub fn init_hints_socket(
     init_hints();
 
     let handle = thread::spawn(move || {
-        let flush_threshold = write_flush_threshold.unwrap_or(MAX_WRITER_LEN);
+        let flush_threshold = write_flush_threshold.unwrap_or(WRITE_BUFFER_FLUSH_LEN);
         write_hints_to_socket(socket_writer, debug_file, flush_threshold)
     });
     HINT_WRITER_HANDLE.store(handle);

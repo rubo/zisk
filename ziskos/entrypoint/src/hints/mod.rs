@@ -130,7 +130,7 @@ pub fn init_hints_file(hints_file_path: PathBuf, ready: Option<oneshot::Sender<(
 pub fn init_hints_socket(
     socket_path: PathBuf,
     debug_file: Option<PathBuf>,
-    write_flush_threshold: usize,
+    write_flush_threshold: Option<usize>,
     ready: Option<oneshot::Sender<()>>,
 ) -> Result<()> {
     wait_for_hints_writer()?;
@@ -154,7 +154,8 @@ pub fn init_hints_socket(
     init_hints();
 
     let handle = thread::spawn(move || {
-        write_hints_to_socket(socket_writer, debug_file, write_flush_threshold)
+        let flush_threshold = write_flush_threshold.unwrap_or(MAX_WRITER_LEN);
+        write_hints_to_socket(socket_writer, debug_file, flush_threshold)
     });
     HINT_WRITER_HANDLE.store(handle);
 

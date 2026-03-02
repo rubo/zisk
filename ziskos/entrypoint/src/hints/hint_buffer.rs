@@ -119,6 +119,7 @@ impl HintBuffer {
         &self,
         writer: &mut W,
         mut debug_writer: Option<&mut D>,
+        write_flush_threshold: usize,
     ) -> io::Result<()>
     where
         W: Write + ?Sized,
@@ -150,7 +151,10 @@ impl HintBuffer {
             Ok(())
         }
 
-        let mut write_buf = Vec::with_capacity(WRITE_BUFFER_FLUSH_LEN);
+        let mut flush_threshold = std::cmp::min(write_flush_threshold, MAX_WRITER_LEN);
+        flush_threshold = flush_threshold.max(1);
+
+        let mut write_buf = Vec::with_capacity(flush_threshold);
         'drain: loop {
             // Get chunk of hints to write from HintBuffer (under lock)
             let chunk: Bytes = {
@@ -228,7 +232,7 @@ impl HintBuffer {
                 chunk_pos += hint_len;
             }
 
-            if write_buf.len() >= WRITE_BUFFER_FLUSH_LEN {
+            if write_buf.len() >= flush_threshold {
                 flush_write_buf(&mut write_all, &mut write_buf)?;
             }
         }

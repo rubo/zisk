@@ -14,7 +14,9 @@ mod sha256f;
 #[cfg(zisk_hints_metrics)]
 mod metrics;
 
-use crate::hints::hint_buffer::{build_hint_buffer, HintBuffer};
+use crate::hints::hint_buffer::{
+    build_hint_buffer, HintBuffer, MAX_WRITER_LEN, WRITE_BUFFER_FLUSH_LEN,
+};
 use anyhow::{anyhow, Result};
 use once_cell::sync::Lazy;
 use std::cell::UnsafeCell;
@@ -130,6 +132,7 @@ pub fn init_hints_file(hints_file_path: PathBuf, ready: Option<oneshot::Sender<(
 pub fn init_hints_socket(
     socket_path: PathBuf,
     debug_file: Option<PathBuf>,
+    write_flush_threshold: Option<usize>,
     ready: Option<oneshot::Sender<()>>,
 ) -> Result<()> {
     wait_for_hints_writer()?;
@@ -152,7 +155,10 @@ pub fn init_hints_socket(
 
     init_hints();
 
-    let handle = thread::spawn(move || write_hints_to_socket(socket_writer, debug_file));
+    let handle = thread::spawn(move || {
+        let flush_threshold = write_flush_threshold.unwrap_or(WRITE_BUFFER_FLUSH_LEN);
+        write_hints_to_socket(socket_writer, debug_file, flush_threshold)
+    });
     HINT_WRITER_HANDLE.store(handle);
 
     Ok(())
@@ -188,9 +194,10 @@ pub fn close_hints() -> Result<()> {
 pub fn write_hints<W: Write + ?Sized>(
     writer: &mut W,
     debug_writer: Option<&mut dyn Write>,
+    write_flush_threshold: usize,
 ) -> io::Result<()> {
     // Write hints from the buffer
-    HINT_BUFFER.drain_to_writer(writer, debug_writer)?;
+    HINT_BUFFER.drain_to_writer(writer, debug_writer, write_flush_threshold)?;
 
     #[cfg(zisk_hints_metrics)]
     crate::hints::metrics::print_metrics();
@@ -204,7 +211,7 @@ fn write_hints_to_file(path: PathBuf) -> io::Result<()> {
     let file = std::fs::File::create(path)?;
     let mut file_writer = BufWriter::with_capacity(1 << 20, file);
 
-    write_hints(&mut file_writer, None)?;
+    write_hints(&mut file_writer, None, MAX_WRITER_LEN)?;
 
     Ok(())
 }
@@ -253,15 +260,20 @@ impl Write for UnixSocketWriter {
 fn write_hints_to_socket(
     mut socket_writer: UnixSocketWriter,
     debug_file: Option<PathBuf>,
+    write_flush_threshold: usize,
 ) -> io::Result<()> {
     debug_assert!(cfg!(target_endian = "little"));
 
     if let Some(path) = debug_file {
         let file = std::fs::File::create(path)?;
         let mut debug_writer = BufWriter::with_capacity(1 << 20, file); // 1 MiB buffer
-        write_hints(&mut socket_writer, Some(&mut debug_writer as &mut dyn Write))?;
+        write_hints(
+            &mut socket_writer,
+            Some(&mut debug_writer as &mut dyn Write),
+            write_flush_threshold,
+        )?;
     } else {
-        write_hints(&mut socket_writer, None)?;
+        write_hints(&mut socket_writer, None, write_flush_threshold)?;
     }
 
     socket_writer.close().map_err(io::Error::other)?;

@@ -6,6 +6,7 @@ use zisk_common::{CTRL_END, CTRL_START};
 pub const DEFAULT_BUFFER_LEN: usize = 1 << 20; // 1 MiB
                                                // TODO: Set MAX_WRITE_LEN based on writer type (file or socket)
 pub const MAX_WRITER_LEN: usize = 128 * 1024; // 128KB is the max write size for Unix sockets
+pub const WRITE_BUFFER_FLUSH_LEN: usize = 64 * 1024; // Flush writer buffer once it exceeds 64KB
 pub const HEADER_LEN: usize = 8;
 
 pub struct HintBuffer {
@@ -118,6 +119,7 @@ impl HintBuffer {
         &self,
         writer: &mut W,
         mut debug_writer: Option<&mut D>,
+        write_flush_threshold: usize,
     ) -> io::Result<()>
     where
         W: Write + ?Sized,
@@ -134,6 +136,25 @@ impl HintBuffer {
             Ok(())
         };
 
+        fn flush_write_buf<F>(write_all: &mut F, buf: &mut Vec<u8>) -> io::Result<()>
+        where
+            F: FnMut(&[u8]) -> io::Result<()>,
+        {
+            if buf.is_empty() {
+                return Ok(());
+            }
+
+            debug_assert!(buf.len() <= MAX_WRITER_LEN);
+            write_all(buf)?;
+            buf.clear();
+
+            Ok(())
+        }
+
+        let mut flush_threshold = std::cmp::min(write_flush_threshold, MAX_WRITER_LEN);
+        flush_threshold = flush_threshold.max(1);
+
+        let mut write_buf = Vec::with_capacity(flush_threshold);
         'drain: loop {
             // Get chunk of hints to write from HintBuffer (under lock)
             let chunk: Bytes = {
@@ -160,10 +181,6 @@ impl HintBuffer {
             let chunk_len = chunk.len();
             let chunk_base = chunk.as_ptr();
 
-            // Start and end of the write buffer (MAX_WRITER_LEN)
-            let mut buf_start = 0usize;
-            let mut buf_end = 0usize;
-
             while chunk_pos < chunk_len {
                 let hint_header = unsafe {
                     let header_bytes = core::slice::from_raw_parts(chunk_base.add(chunk_pos), 8);
@@ -180,20 +197,10 @@ impl HintBuffer {
                 let pad = (8 - (hint_data_len & 7)) & 7;
                 let hint_len = HEADER_LEN + hint_data_len + pad;
 
-                // If adding this hint exceeds max write size, flush current write buffer
-                if buf_end - buf_start + hint_len > MAX_WRITER_LEN {
-                    let buf: &[u8] = unsafe {
-                        core::slice::from_raw_parts(chunk_base.add(buf_start), buf_end - buf_start)
-                    };
-                    write_all(buf)?;
-
-                    // Reset write buffer
-                    buf_start = chunk_pos;
-                    buf_end = chunk_pos;
-                }
-
-                // If single hint exceeds MAX_WRITER_LEN, write it in chunks
+                // If single hint exceeds MAX_WRITER_LEN, write it in chunks directly
                 if hint_len > MAX_WRITER_LEN {
+                    flush_write_buf(&mut write_all, &mut write_buf)?;
+
                     let mut hint_pos = 0usize;
                     while hint_pos < hint_len {
                         let chunk_size = std::cmp::min(MAX_WRITER_LEN, hint_len - hint_pos);
@@ -208,27 +215,29 @@ impl HintBuffer {
 
                         hint_pos += chunk_size;
                     }
-                    // Advance to next hint
+
                     chunk_pos += hint_len;
-                    // Reset write buffer
-                    buf_start = chunk_pos;
-                    buf_end = chunk_pos;
-                } else {
-                    // Accumulate current hint into write buffer
-                    buf_end += hint_len;
-                    // Advance to next hint
-                    chunk_pos += hint_len;
+                    continue;
                 }
+
+                let hint_bytes: &[u8] =
+                    unsafe { core::slice::from_raw_parts(chunk_base.add(chunk_pos), hint_len) };
+
+                if write_buf.len() + hint_len > MAX_WRITER_LEN {
+                    flush_write_buf(&mut write_all, &mut write_buf)?;
+                }
+
+                write_buf.extend_from_slice(hint_bytes);
+
+                chunk_pos += hint_len;
             }
 
-            // Write any remaining data in write buffer
-            if buf_end > buf_start {
-                let buf: &[u8] = unsafe {
-                    core::slice::from_raw_parts(chunk_base.add(buf_start), buf_end - buf_start)
-                };
-                write_all(buf)?;
+            if write_buf.len() >= flush_threshold {
+                flush_write_buf(&mut write_all, &mut write_buf)?;
             }
         }
+
+        flush_write_buf(&mut write_all, &mut write_buf)?;
 
         // Flush the writer and debug writer at the end
         writer.flush()?;

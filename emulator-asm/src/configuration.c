@@ -216,7 +216,7 @@ void parse_arguments(int argc, char *argv[])
                     print_usage();
                     exit(-1);
                 }
-                if (strlen(argv[i]) > MAX_SHM_PREFIX_LENGTH)
+                if (strlen(argv[i]) >= MAX_SHM_PREFIX_LENGTH)
                 {
                     printf("ERROR: Detected argument --shm_prefix but next argument is too long\n");
                     print_usage();
@@ -311,7 +311,14 @@ void parse_arguments(int argc, char *argv[])
                 }
                 errno = 0;
                 char *endptr;
-                arguments_port = strtoul(argv[i], &endptr, 10);
+                uint64_t arguments_port_u64 = strtoul(argv[i], &endptr, 10);
+                if (arguments_port_u64 > 0xFFFF)
+                {
+                    printf("ERROR: Port number is too large, must be at most 65535\n");
+                    print_usage();
+                    exit(-1);
+                }
+                arguments_port = arguments_port_u64 & 0xFFFF; // Keep only lower 16 bits, since port numbers are 16 bits
 
                 // Check for errors
                 if (errno == ERANGE) {

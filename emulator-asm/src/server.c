@@ -949,7 +949,7 @@ void server_cleanup (void)
         }
     }
 
-    // Post shutdown donw semaphore
+    // Post shutdown done semaphore
     result = sem_post(sem_shutdown_done);
     if (result == -1)
     {

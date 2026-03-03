@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <time.h>
 #include <semaphore.h>
+#include <sys/time.h>
 #include "constants.hpp"
 
 // Configuration globals, set by arguments

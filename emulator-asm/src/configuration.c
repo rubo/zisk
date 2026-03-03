@@ -349,7 +349,7 @@ void parse_arguments(int argc, char *argv[])
                 char *endptr;
                 char * argument = argv[i];
                 if ((argument[0] == '0') && (argument[1] == 'x')) argument += 2;
-                chunk_player_address = strtoul(argv[i], &endptr, 16);
+                chunk_player_address = strtoul(argument, &endptr, 16);
 
                 // Check for errors
                 if (errno == ERANGE) {
@@ -357,7 +357,7 @@ void parse_arguments(int argc, char *argv[])
                     print_usage();
                     exit(-1);
                 } else if (endptr == argument) {
-                    printf("ERROR: No digits found while parsing chunk addresss\n");
+                    printf("ERROR: No digits found while parsing chunk address\n");
                     print_usage();
                     exit(-1);
                 } else if (*endptr != '\0') {

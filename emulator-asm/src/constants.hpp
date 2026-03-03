@@ -1,6 +1,8 @@
 #ifndef EMULATOR_ASM_CONSTANTS_HPP
 #define EMULATOR_ASM_CONSTANTS_HPP
 
+#include <stdint.h>
+
 /***************/
 /* Definitions */
 /***************/

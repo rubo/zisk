@@ -295,7 +295,7 @@ static void buffer2file (const void * buffer_address, size_t buffer_length, cons
         size_t bytes_written = fwrite(buffer_address, 1, buffer_length, file);
         if (bytes_written != buffer_length)
         {
-            printf("ERROR: buffer2file() failed calling fwrite(%s) buffer_address=%p buffer_length=%lu errno=%d=%s\n", file_name, buffer_address, buffer_length, errno, strerror(errno));
+            printf("ERROR: buffer2file() failed calling fwrite(%s) buffer_address=%p buffer_length=%zu errno=%d=%s\n", file_name, buffer_address, buffer_length, errno, strerror(errno));
             fflush(stdout);
             fflush(stderr);
             fclose(file);

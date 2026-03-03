@@ -616,8 +616,8 @@ void save_mem_op_to_files(void)
 
         buffer2file(&chunk[i], mem_op_trace_size * 8, file_name);
 
-        //Set next chunk pointer
-        chunk = chunk + mem_op_trace_size + 1;
+        //Set next chunk pointer: skip [end] and [mem_op_trace_size] headers plus data
+        chunk = chunk + mem_op_trace_size + 2;
     }
     printf("Trace=%p chunk=%p size=%lu\n", trace, chunk, (uint64_t)chunk - (uint64_t)trace);
 }

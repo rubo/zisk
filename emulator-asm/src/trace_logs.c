@@ -10,6 +10,10 @@
 #include "globals.hpp"
 #include "asm_provided.hpp"
 
+// This file contains trace logging functions that are used only for debugging purposes, to log the
+// content of the generated traces in a human-readable format.  These functions are not used by the
+// assembly code, and are not optimized for performance.
+
 /*****************/
 /* LOG FUNCTIONS */
 /*****************/
@@ -597,6 +601,7 @@ void save_mem_op_to_files(void)
         }
 
         uint64_t i=0;
+        i++; // Skip end
         uint64_t mem_op_trace_size = chunk[i];
         i++;
         if (mem_op_trace_size > 10000000)

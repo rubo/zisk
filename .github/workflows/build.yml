@@ -18,22 +18,13 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          profile: minimal
+          #profile: minimal
           override: true
 
       - name: Install riscv64 toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-unknown-elf pkg-config libopenmpi-dev nlohmann-json3-dev nasm libsodium-dev libomp-dev
-      #   - name: Ensure libiomp5 is available
-      #     run: |
-      #       if ! ldconfig -p | grep -q libiomp5; then
-      #         libomp_path="$(ldconfig -p | awk '/libomp\\.so/ {print $NF; exit}')"
-      #         if [ -n "$libomp_path" ]; then
-      #           sudo ln -sf "$libomp_path" /usr/lib/x86_64-linux-gnu/libiomp5.so
-      #           sudo ldconfig
-      #         fi
-      #       fi
+          sudo apt-get install -y gcc-riscv64-unknown-elf  nasm binutils-riscv64-linux-gnu
       - name: Build cargo-zisk
         run: |
           cargo build -p cargo-zisk --release
@@ -45,7 +36,7 @@ jobs:
           git apply ./.github/workflows/cargo.toml.patch
           git apply ./.github/workflows/entrypoint-no-entrypoint.patch
           cargo +zisk build -p ziskos --release --target "${TARGET}" --features no_entrypoint
-          strip "target/${TARGET}/release/libziskos.a"
+          riscv64-linux-gnu-strip "target/${TARGET}/release/libziskos.a"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

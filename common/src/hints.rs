@@ -58,6 +58,9 @@ pub const CTRL_END: u32 = 0x0001;
 pub const CTRL_CANCEL: u32 = 0x0002;
 pub const CTRL_ERROR: u32 = 0x0003;
 
+// === INPUT HINT CODES ===
+pub const HINT_INPUT: u32 = 0xF000;
+
 // === BUILT-IN HINT CODES ===
 // SHA256 hint codes
 pub const HINT_SHA256: u32 = 0x0100;
@@ -139,6 +142,10 @@ impl TryFrom<u32> for CtrlHint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum BuiltInHint {
+    // INPUT hint types.
+    /// Input data hint.
+    Input = HINT_INPUT,
+
     // SHA256 hint types.
     /// Compute SHA-256 hash
     Sha256 = HINT_SHA256,
@@ -197,6 +204,8 @@ pub enum BuiltInHint {
 impl Display for BuiltInHint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
+            // INPUT hint types
+            BuiltInHint::Input => "INPUT",
             // SHA256 hint types
             BuiltInHint::Sha256 => "SHA256",
             // BN254 Hints
@@ -237,6 +246,8 @@ impl TryFrom<u32> for BuiltInHint {
 
     fn try_from(value: u32) -> Result<Self> {
         match value {
+            // INPUT hint types
+            HINT_INPUT => Ok(Self::Input),
             // SHA256 hint types
             HINT_SHA256 => Ok(Self::Sha256),
             // BN254 Hints
@@ -322,6 +333,8 @@ impl HintCode {
             HintCode::Ctrl(CtrlHint::Error) => CTRL_ERROR,
 
             // Built-In Hint Codes
+            // INPUT hint types
+            HintCode::BuiltIn(BuiltInHint::Input) => HINT_INPUT,
             // SHA256 Hints
             HintCode::BuiltIn(BuiltInHint::Sha256) => HINT_SHA256,
             // BN254 Hints

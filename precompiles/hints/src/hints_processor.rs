@@ -668,6 +668,9 @@ impl HintsProcessor {
         data_len_bytes: usize,
     ) -> Result<Vec<u64>> {
         match hint {
+            // Input Hint Codes
+            BuiltInHint::Input => unimplemented!("Input hint unimplemented"),
+
             // SHA256 Hint Codes
             BuiltInHint::Sha256 => sha256_hint(&data, data_len_bytes),
 

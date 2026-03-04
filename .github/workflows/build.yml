@@ -42,8 +42,8 @@ jobs:
           ./target/release/cargo-zisk sdk install-toolchain
       - name: Build ziskos static library
         run: |
-          git apply ./github/workflows/cargo.toml.patch
-          git apply ./github/workflows/entrypoint-no-entrypoint.patch
+          git apply ./.github/workflows/cargo.toml.patch
+          git apply ./.github/workflows/entrypoint-no-entrypoint.patch
           cargo +zisk build -p ziskos --release --target "${TARGET}" --features no_entrypoint
       - name: Upload artifact
         uses: actions/upload-artifact@v4

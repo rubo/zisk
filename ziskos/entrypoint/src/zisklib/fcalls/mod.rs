@@ -21,12 +21,14 @@ pub const FCALL_BIN_DECOMP_ID: u16 = 18;
 pub const FCALL_BLS12_381_FP2_SQRT_ID: u16 = 19;
 pub const FCALL_SECP256K1_ECDSA_VERIFY_ID: u16 = 20;
 pub const FCALL_SECP256R1_ECDSA_VERIFY_ID: u16 = 21;
+pub const FCALL_INPUT_READY_ID: u16 = 22;
 
 mod big_int256_div;
 mod big_int_div;
 mod bin_decomp;
 mod bls12_381;
 mod bn254;
+mod input;
 mod msb_pos_256;
 mod msb_pos_384;
 mod secp256k1;

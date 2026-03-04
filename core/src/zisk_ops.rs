@@ -12,6 +12,10 @@
 use precompiles_helpers::DmaInfo;
 use ziskos_hints::zisklib::fcall_proxy;
 
+use crate::{
+    blake2br, sha256f, EmulationMode, InstContext, Mem, ZiskOperationType, ZiskRequiredOperation,
+    EXTRA_PARAMS_ADDR, INPUT_ADDR, M64, MAX_INPUT_SIZE, REG_A0, SYS_ADDR,
+};
 use fields::{poseidon2_hash, Goldilocks, Poseidon16, PrimeField64};
 use paste::paste;
 use std::{
@@ -21,11 +25,7 @@ use std::{
     str::FromStr,
 };
 use tiny_keccak::keccakf;
-
-use crate::{
-    blake2br, sha256f, EmulationMode, InstContext, Mem, ZiskOperationType, ZiskRequiredOperation,
-    EXTRA_PARAMS_ADDR, M64, REG_A0, SYS_ADDR,
-};
+use ziskos_hints::zisklib::FCALL_INPUT_READY_ID;
 
 use lib_c::{inverse_fn_ec_c, inverse_fp_ec_c, sqrt_fp_ec_parity_c, Fcall, FcallContext};
 
@@ -2500,7 +2500,36 @@ pub fn opc_fcall(ctx: &mut InstContext) {
     // Get function id from a
     let function_id = ctx.a;
 
-    let iresult = fcall_proxy(function_id, &ctx.fcall.parameters, &mut ctx.fcall.result);
+    let iresult = if function_id == FCALL_INPUT_READY_ID as u64 {
+        let required_address = ctx.fcall.parameters[0] as u64;
+        if required_address < INPUT_ADDR + 8 {
+            panic!(
+                "opc_fcall() FCALL_INPUT_READY_ID called with required_address {:#x} < {:#x}",
+                required_address,
+                INPUT_ADDR + 8
+            );
+        }
+        if required_address >= INPUT_ADDR + MAX_INPUT_SIZE as u64 - 1 {
+            panic!(
+                "opc_fcall() FCALL_INPUT_READY_ID called with required_address {:#x} > {:#x}",
+                required_address,
+                INPUT_ADDR + MAX_INPUT_SIZE as u64 - 1
+            );
+        }
+
+        let required_bytes = required_address - INPUT_ADDR - 8 + 1; // + 1 because required_address is the address of the last required byte
+        if required_bytes > ctx.input_len {
+            panic!(
+                "opc_fcall() FCALL_INPUT_READY_ID called with required_address {:#x} requiring {} bytes, but only {} bytes available",
+                required_address,
+                required_bytes,
+                ctx.input_len
+            );
+        }
+        0
+    } else {
+        fcall_proxy(function_id, &ctx.fcall.parameters, &mut ctx.fcall.result)
+    };
 
     if iresult < 0 {
         panic!("opc_fcall() failed calling Fcall() function_id={function_id} iresult={iresult}");

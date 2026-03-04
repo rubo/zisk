@@ -15,7 +15,6 @@ pub struct EmuContext {
     pub last_callback_step: u64,
     pub trace: EmuTrace,
     pub do_stats: bool,
-    pub max_input_mem: u64,
     pub stats: Stats,
 }
 
@@ -35,19 +34,18 @@ impl EmuContext {
             last_callback_step: 0,
             do_stats: false,
             stats: Stats::default(),
-            max_input_mem: options.max_input_mem, // 128 MiB
         };
 
         // Check the input data size is inside the proper range
-        if input.len() > (ctx.max_input_mem - 16) as usize {
+        if input.len() > (options.max_input_mem - 16) as usize {
             panic!("EmuContext::new() input size too big size={}", input.len());
         }
 
         // Add the length and input data read sections
-        let input_len = input.len() as u64;
+        ctx.inst_ctx.input_len = input.len() as u64;
         let free_input = 0u64;
         ctx.inst_ctx.mem.add_read_section(INPUT_ADDR, &free_input.to_le_bytes());
-        ctx.inst_ctx.mem.add_read_section(INPUT_ADDR + 8, &input_len.to_le_bytes());
+        ctx.inst_ctx.mem.add_read_section(INPUT_ADDR + 8, &ctx.inst_ctx.input_len.to_le_bytes());
         ctx.inst_ctx.mem.add_read_section(INPUT_ADDR + 16, &input);
 
         // Add the write section

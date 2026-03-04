@@ -24,7 +24,7 @@ jobs:
       - name: Install riscv64 toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-riscv64-unknown-elf libopenmpi-dev nlohmann-json3-dev nasm libsodium-dev libomp-dev binutils-riscv64-linux-gnu
+          sudo apt-get install -y gcc-riscv64-unknown-elf libopenmpi-dev nlohmann-json3-dev nasm libsodium-dev libomp-dev
       - name: Build cargo-zisk
         run: |
           cargo build -p cargo-zisk --release
@@ -36,7 +36,6 @@ jobs:
           git apply ./.github/workflows/cargo.toml.patch
           git apply ./.github/workflows/entrypoint-no-entrypoint.patch
           cargo +zisk build -p ziskos --release --target "${TARGET}" --features no_entrypoint
-          riscv64-linux-gnu-strip --strip-unneeded "target/${TARGET}/release/libziskos.a"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

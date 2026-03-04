@@ -1,0 +1,23 @@
+diff --git a/ziskos/entrypoint/Cargo.toml b/ziskos/entrypoint/Cargo.toml
+index 41ddb4637..da331d8aa 100644
+--- a/ziskos/entrypoint/Cargo.toml
++++ b/ziskos/entrypoint/Cargo.toml
+@@ -7,6 +7,10 @@ keywords = { workspace = true }
+ repository = { workspace = true }
+ categories = { workspace = true }
+ 
++[lib]
++name = "ziskos"
++crate-type = ["staticlib", "rlib"]
++
+ [dependencies]
+ lib-c = { workspace = true }
+ 
+@@ -45,6 +49,7 @@ ctor = { version = "0.2", optional = true }
+ default = ["user-hints", "inputcpy"]
+ user-hints = ["dep:zisk-common", "dep:bytes", "dep:paste", "dep:once_cell", "dep:ctor", "dep:anyhow", "dep:tokio"]
+ inputcpy = []
++no_entrypoint = []
+ 
+ [lints.rust]
+ unexpected_cfgs = { level = "warn", check-cfg = [

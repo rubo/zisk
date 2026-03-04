@@ -39,7 +39,7 @@ jobs:
       - name: Install riscv64 toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y binutils-riscv64-linux-gnu gcc-riscv64-unknown-elf libopenmpi-dev nlohmann-json3-dev nasm libsodium-dev libomp-dev
+          sudo apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu binutils-riscv64-linux-gnu gcc-riscv64-unknown-elf libopenmpi-dev nlohmann-json3-dev nasm libsodium-dev libomp-dev
       #   - name: Build cargo-zisk
       #     run: |
       #       cargo build -p cargo-zisk --release

@@ -56,9 +56,9 @@ build/dma.o: $(DMA_OBJS)
 	ld -r $(DMA_OBJS) -o $@
 
 # Compile the final executable
-$(OUT_PATH): build/emu.o src/main.c src/emu.c src/chfast/keccak.c  build/dma.o
+$(OUT_PATH): build/emu.o src/main.c src/globals.c src/configuration.c src/trace_logs.c src/server.c src/client.c src/c_provided.c src/trace.c src/emu.c src/chfast/keccak.c src/bcon/bcon_sha256.c build/dma.o
 	mkdir -p $(OUT_DIR)
-	gcc $(CFLAGS) src/main.c src/emu.c src/chfast/keccak.c src/bcon/bcon_sha256.c -L../lib-c/c/lib -L../../bin -L../target/release -L../target/debug -lc build/emu.o -lc build/dma.o -lziskc -lziskclib -lgmp -lstdc++ -lgmpxx -o $@
+	gcc $(CFLAGS) src/main.c src/globals.c src/configuration.c src/trace_logs.c src/server.c src/client.c src/c_provided.c src/trace.c src/emu.c src/chfast/keccak.c src/bcon/bcon_sha256.c -L../lib-c/c/lib -L../../bin -L../target/release -L../target/debug -lc build/emu.o -lc build/dma.o -lziskc -lziskclib -lgmp -lstdc++ -lgmpxx -o $@
 
 clean:
 	rm -rf build

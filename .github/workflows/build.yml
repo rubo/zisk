@@ -18,7 +18,6 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
-          rustup target add $TARGET
 
       - name: Install riscv64 toolchain
         run: |

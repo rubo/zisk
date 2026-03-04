@@ -14,6 +14,18 @@ jobs:
       AR_riscv64imad_unknown_none_elf: riscv64-linux-gnu-ar
       CARGO_TARGET_RISCV64IMAD_UNKNOWN_NONE_ELF_LINKER: riscv64-linux-gnu-gcc
       #CARGO_TARGET_RISCV64IMA_ZISK_ZKVM_ELF_RUSTFLAGS: "-Cpasses=lower-atomic"
+      # C toolchain for this exact target
+      CC_riscv64imad-zisk-zkvm-elf: riscv64-linux-gnu-gcc
+      CXX_riscv64imad-zisk-zkvm-elf: riscv64-linux-gnu-g++
+      AR_riscv64imad-zisk-zkvm-elf: riscv64-linux-gnu-ar
+
+      # Underscore variants (some crates check this form)
+      CC_riscv64imad_zisk_zkvm_elf: riscv64-linux-gnu-gcc
+      CXX_riscv64imad_zisk_zkvm_elf: riscv64-linux-gnu-g++
+      AR_riscv64imad_zisk_zkvm_elf: riscv64-linux-gnu-ar
+
+      # Rust linker
+      CARGO_TARGET_RISCV64IMAD_ZISK_ZKVM_ELF_LINKER: riscv64-linux-gnu-gcc
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4

@@ -12,11 +12,8 @@ use std::{
     sync::atomic::{fence, Ordering},
 };
 use tracing::info;
-use zisk_common::io::{ZiskIO, ZiskStdin};
 
-use crate::{AsmInputHeader, SharedMemoryWriter};
-use anyhow::anyhow;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 pub enum AsmSharedMemoryMode {
     ReadOnly,
@@ -279,7 +276,7 @@ impl<H: AsmShmemHeader> AsmSharedMemory<H> {
 }
 
 pub fn open_shmem(name: &str, flags: i32, mode: u32) -> Result<i32> {
-    let c_name = CString::new(name).expect("CString::new failed");
+    let c_name = CString::new(name)?;
     let fd = unsafe { shm_open(c_name.as_ptr(), flags, mode) };
 
     if fd == -1 {
@@ -332,25 +329,4 @@ pub unsafe fn unmap(ptr: *mut c_void, size: usize) {
     if munmap(ptr, size) != 0 {
         tracing::error!("munmap failed: {:?}", io::Error::last_os_error());
     }
-}
-
-pub fn write_input(stdin: &ZiskStdin, shmem_input_writer: &SharedMemoryWriter) {
-    const HEADER_SIZE: usize = size_of::<AsmInputHeader>();
-
-    let inputs = stdin.read_bytes();
-
-    let shmem_input_size = (HEADER_SIZE + inputs.len() + 7) & !7;
-
-    let mut full_input = Vec::with_capacity(shmem_input_size);
-
-    let header = AsmInputHeader { zero: 0, input_data_size: 0 };
-    full_input.extend_from_slice(&header.to_bytes());
-    full_input.extend_from_slice(&inputs);
-    while full_input.len() < shmem_input_size {
-        full_input.push(0);
-    }
-
-    shmem_input_writer.write_input(&full_input).expect("Failed to write input to shared memory");
-
-    shmem_input_writer.write_u64_at(8, inputs.len() as u64);
 }

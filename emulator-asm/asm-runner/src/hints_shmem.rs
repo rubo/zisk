@@ -4,14 +4,18 @@
 //! using SharedMemoryWriter instances.
 
 use crate::{
-    sem_available_name, sem_read_name, shmem_control_reader_name, shmem_control_writer_name,
-    shmem_precompile_name, AsmService, AsmServices, SharedMemoryReader, SharedMemoryWriter,
+    sem_available_name, sem_read_name, shmem_control_reader_name, shmem_precompile_name,
+    AsmService, AsmServices, ControlShmem, ControlShmemOffsets, SharedMemoryReader,
+    SharedMemoryWriter,
 };
 use anyhow::Result;
 use named_sem::NamedSemaphore;
 use std::{
     cell::RefCell,
-    sync::atomic::{fence, AtomicBool, Ordering},
+    sync::{
+        atomic::{fence, AtomicBool, Ordering},
+        Arc,
+    },
 };
 use tracing::debug;
 use zisk_common::io::StreamSink;
@@ -46,7 +50,7 @@ struct SeparateResources {
 /// Unified resources shared across all asm services
 struct UnifiedResources {
     /// Control shared memory writer (single write_pos)
-    control_writer: SharedMemoryWriter,
+    control_writer: Arc<ControlShmem>,
     /// Data shared memory writer (single data buffer)
     data_writer: SharedMemoryWriter,
 }
@@ -81,6 +85,7 @@ impl HintsShmem {
         base_port: Option<u16>,
         local_rank: i32,
         unlock_mapped_memory: bool,
+        control_writer: Arc<ControlShmem>,
     ) -> Result<Self> {
         // Use the first service's port for shared resources naming
         let first_service = &AsmServices::SERVICES[0];
@@ -91,9 +96,13 @@ impl HintsShmem {
         };
 
         // Create unified resources (single data buffer and control writer)
-        let unified =
-            Self::create_unified_resources(shared_port, local_rank, unlock_mapped_memory)?;
-        unified.control_writer.write_u64_at(0, 0);
+        let unified = Self::create_unified_resources(
+            shared_port,
+            local_rank,
+            unlock_mapped_memory,
+            control_writer,
+        )?;
+        unified.control_writer.reset();
 
         // Create separate resources
         let separate_names: Vec<SeparateResourceNames> = AsmServices::SERVICES
@@ -119,17 +128,13 @@ impl HintsShmem {
         port: u16,
         local_rank: i32,
         unlock_mapped_memory: bool,
+        control_writer: Arc<ControlShmem>,
     ) -> Result<UnifiedResources> {
         debug!("Initializing unified resources for precompile hints");
-        let control_name = shmem_control_writer_name(port, local_rank);
         let data_name = shmem_precompile_name(port, local_rank);
 
         Ok(UnifiedResources {
-            control_writer: SharedMemoryWriter::new(
-                &control_name,
-                Self::CONTROL_PRECOMPILE_SIZE as usize,
-                unlock_mapped_memory,
-            )?,
+            control_writer,
             data_writer: SharedMemoryWriter::new(
                 &data_name,
                 Self::MAX_PRECOMPILE_SIZE as usize,
@@ -213,7 +218,7 @@ impl StreamSink for HintsShmem {
         };
 
         // Read current write position once
-        let write_pos = unified.control_writer.read_u64_at(0);
+        let write_pos = unified.control_writer.read_u64_at(ControlShmemOffsets::PrecompilesSize);
 
         // Flow control: wait until all consumers have advanced enough
         // We need to wait for the slowest consumer (minimum read position)
@@ -263,7 +268,9 @@ impl StreamSink for HintsShmem {
         fence(Ordering::Release);
 
         // Update write position ONCE in control memory
-        unified.control_writer.write_u64_at(0, write_pos + data_size);
+        unified
+            .control_writer
+            .write_u64_at(ControlShmemOffsets::PrecompilesSize, write_pos + data_size);
 
         fence(Ordering::Release);
 
@@ -278,7 +285,7 @@ impl StreamSink for HintsShmem {
     fn reset(&self) {
         // Reset control writer and data writer to initial state for next stream
         let mut unified = self.unified.borrow_mut();
-        unified.control_writer.write_u64_at(0, 0);
+        unified.control_writer.reset();
         unified.data_writer.reset();
 
         // Drain stale semaphore signals from previous execution

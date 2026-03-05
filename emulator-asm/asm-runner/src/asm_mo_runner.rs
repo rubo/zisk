@@ -21,13 +21,13 @@ use anyhow::{Context, Result};
 #[cfg(feature = "save_mem_plans")]
 use mem_common::save_plans;
 
-pub struct MOOutputShmem {
+pub struct MOShMemReader {
     pub output_shmem: AsmMultiSharedMemory<AsmMOHeader>,
     mem_planner: Option<MemPlanner>,
     handle_mo: Option<std::thread::JoinHandle<MemPlanner>>,
 }
 
-impl MOOutputShmem {
+impl MOShMemReader {
     pub fn new(
         local_rank: i32,
         base_port: Option<u16>,
@@ -53,7 +53,7 @@ impl MOOutputShmem {
     }
 }
 
-impl Drop for MOOutputShmem {
+impl Drop for MOShMemReader {
     fn drop(&mut self) {
         if let Some(handle_mo) = self.handle_mo.take() {
             match handle_mo.join() {
@@ -81,7 +81,7 @@ impl AsmRunnerMO {
 
     #[allow(clippy::too_many_arguments)]
     pub fn run(
-        preloaded: &mut MOOutputShmem,
+        preloaded: &mut MOShMemReader,
         max_steps: u64,
         chunk_size: u64,
         world_rank: i32,

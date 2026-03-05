@@ -1,5 +1,5 @@
 use anyhow::Result;
-use asm_runner::HintsShmem;
+use asm_runner::{ControlShmem, HintsShmem, InputsShmemWriter};
 use cargo_zisk::commands::get_proving_key;
 use precompiles_hints::HintsProcessor;
 use proofman::{AggProofs, AggProofsRegister, ContributionsInfo};
@@ -694,11 +694,15 @@ impl<T: ZiskBackend + 'static> Worker<T> {
         let local_rank = self.prover.local_rank();
         let unlock_mapped_memory = self.prover_config.unlock_mapped_memory;
 
+        let control_writer =
+            Arc::new(ControlShmem::new(base_port, local_rank, unlock_mapped_memory)?);
+
         // HintsShmem::new and HintsProcessor::build perform OS-level shared-memory operations;
         // run them on the blocking thread pool to avoid stalling Tokio workers.
         let processor = tokio::task::spawn_blocking(move || -> Result<HintsProcessor> {
-            let hints_shmem = HintsShmem::new(base_port, local_rank, unlock_mapped_memory)?;
-            HintsProcessor::builder(hints_shmem)
+            let hints_shmem =
+                HintsShmem::new(base_port, local_rank, unlock_mapped_memory, control_writer)?;
+            HintsProcessor::builder(hints_shmem, None::<InputsShmemWriter>)
                 .build()
                 .map_err(|e| anyhow::anyhow!("Failed to initialize hints processor: {}", e))
         })

@@ -90,6 +90,7 @@ pub type CustomHintHandler = Arc<dyn Fn(&[u64]) -> Result<Vec<u64>> + Send + Syn
 /// Builder for configuring and constructing a [`HintsProcessor`].
 pub struct HintsProcessorBuilder {
     hints_sink: Arc<dyn StreamSink>,
+    inputs_sink: Option<Arc<dyn StreamSink>>,
     num_threads: usize,
     enable_stats: bool,
     custom_handlers: HashMap<u32, CustomHintHandler>,
@@ -147,6 +148,7 @@ impl HintsProcessorBuilder {
 
         let state = Arc::new(HintProcessorState::new());
         let hints_sink = self.hints_sink;
+        let inputs_sink = self.inputs_sink;
 
         // Spawn drainer thread
         let drainer_state = Arc::clone(&state);
@@ -161,6 +163,7 @@ impl HintsProcessorBuilder {
             state,
             stats: if self.enable_stats { Some(Mutex::new(HashMap::new())) } else { None },
             hints_sink,
+            inputs_sink,
             drainer_thread: ManuallyDrop::new(drainer_thread),
             custom_handlers: Arc::new(self.custom_handlers),
             stream_active: AtomicBool::new(false),
@@ -188,8 +191,10 @@ pub struct HintsProcessor {
     stats: Option<Mutex<HashMap<HintCode, usize>>>,
 
     /// The hints sink used to submit processed hints (kept for ownership).
-    #[allow(dead_code)]
     hints_sink: Arc<dyn StreamSink>,
+
+    /// The inputs sink used to submit processed input hints (if any).
+    inputs_sink: Option<Arc<dyn StreamSink>>,
 
     /// Handle to the drainer thread (wrapped in ManuallyDrop to join in Drop)
     drainer_thread: ManuallyDrop<std::thread::JoinHandle<()>>,
@@ -225,9 +230,26 @@ impl HintsProcessor {
     ///     .enable_stats(false)
     ///     .build()?;
     /// ```
-    pub fn builder(hints_sink: impl StreamSink) -> HintsProcessorBuilder {
+    pub fn builder(
+        hints_sink: impl StreamSink,
+        inputs_sink: Option<impl StreamSink>,
+    ) -> HintsProcessorBuilder {
         HintsProcessorBuilder {
             hints_sink: Arc::new(hints_sink),
+            inputs_sink: inputs_sink.map(|s| Arc::new(s) as Arc<dyn StreamSink>),
+            num_threads: Self::DEFAULT_NUM_THREADS,
+            enable_stats: false,
+            custom_handlers: HashMap::new(),
+        }
+    }
+
+    pub fn builder2(
+        hints_sink: impl StreamSink,
+        inputs_sink: Option<Arc<impl StreamSink>>,
+    ) -> HintsProcessorBuilder {
+        HintsProcessorBuilder {
+            hints_sink: Arc::new(hints_sink),
+            inputs_sink: inputs_sink.map(|s| s as Arc<dyn StreamSink>),
             num_threads: Self::DEFAULT_NUM_THREADS,
             enable_stats: false,
             custom_handlers: HashMap::new(),
@@ -382,7 +404,19 @@ impl HintsProcessor {
                 _ => {} // Built-in data hint or custom hint; continue processing
             }
 
-            // Capture generation outside mutex - SeqCst provides sufficient ordering
+            // If the hint is an input hint, write it to the inputs sink instead of processing
+            if hint.hint_code == HintCode::BuiltIn(BuiltInHint::Input) {
+                self.inputs_sink
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Received input hint but no inputs sink configured")
+                    })?
+                    .submit(hint.data)?;
+                // Continue to next hint without spawning worker
+                idx += length;
+                continue;
+            }
+
             let generation = self.state.generation.load(Ordering::SeqCst);
 
             // Atomically reserve slot - use Relaxed for seq since mutex provides ordering
@@ -668,9 +702,6 @@ impl HintsProcessor {
         data_len_bytes: usize,
     ) -> Result<Vec<u64>> {
         match hint {
-            // Input Hint Codes
-            BuiltInHint::Input => unimplemented!("Input hint unimplemented"),
-
             // SHA256 Hint Codes
             BuiltInHint::Sha256 => sha256_hint(&data, data_len_bytes),
 
@@ -708,6 +739,11 @@ impl HintsProcessor {
 
             // Blake2b Hint Codes
             BuiltInHint::Blake2bCompress => blake2b_compress_hint(&data),
+
+            // Input Hint Codes
+            BuiltInHint::Input => unreachable!(
+                "Input hints should be handled separately and not dispatched to workers"
+            ),
         }
     }
 
@@ -780,7 +816,7 @@ mod tests {
     const TEST_PASSTHROUGH_HINT: u32 = 0x8000_0000 | 0x7FFF_0000;
 
     fn processor() -> HintsProcessor {
-        HintsProcessor::builder(NullHints)
+        HintsProcessor::builder(NullHints, None::<NullHints>)
             .num_threads(2)
             .custom_hint(0x7FFF_0000, |data| {
                 // This should never be called for pass-through hints
@@ -1033,7 +1069,8 @@ mod tests {
 
         let received = Arc::new(Mutex::new(Vec::new()));
         let sink = RecordingSink { received: Arc::clone(&received) };
-        let p = HintsProcessor::builder(sink).num_threads(2).build().unwrap();
+        let p =
+            HintsProcessor::builder(sink, None::<RecordingSink>).num_threads(2).build().unwrap();
 
         // Send some data (16 bytes = 2 u64s, 8 bytes = 1 u64)
         let data = vec![
@@ -1075,7 +1112,7 @@ mod tests {
 
         let should_fail = Arc::new(AtomicBool::new(false));
         let sink = FailingSink { should_fail: Arc::clone(&should_fail) };
-        let p = HintsProcessor::builder(sink).num_threads(2).build().unwrap();
+        let p = HintsProcessor::builder(sink, None::<FailingSink>).num_threads(2).build().unwrap();
 
         // First batch succeeds (8 bytes = 1 u64)
         let data1 = vec![make_header(TEST_PASSTHROUGH_HINT, 8), 0x01];
@@ -1098,26 +1135,36 @@ mod tests {
     #[test]
     fn test_builder_configuration() {
         // Default builder - stats disabled
-        let p1 = HintsProcessor::builder(NullHints).build().unwrap();
+        let p1 = HintsProcessor::builder(NullHints, None::<NullHints>).build().unwrap();
         assert!(p1.stats.is_none());
 
         // Explicitly disabled stats
-        let p2 = HintsProcessor::builder(NullHints).enable_stats(false).build().unwrap();
+        let p2 = HintsProcessor::builder(NullHints, None::<NullHints>)
+            .enable_stats(false)
+            .build()
+            .unwrap();
         assert!(p2.stats.is_none());
 
         // Stats enabled
-        let p3 = HintsProcessor::builder(NullHints).enable_stats(true).build().unwrap();
+        let p3 = HintsProcessor::builder(NullHints, None::<NullHints>)
+            .enable_stats(true)
+            .build()
+            .unwrap();
         assert!(p3.stats.is_some());
 
         // Custom threads
-        let p4 = HintsProcessor::builder(NullHints).num_threads(4).build().unwrap();
+        let p4 =
+            HintsProcessor::builder(NullHints, None::<NullHints>).num_threads(4).build().unwrap();
         let data = vec![make_header(TEST_PASSTHROUGH_HINT, 1), 0x42];
         assert!(p4.process_hints(&data, false).is_ok());
         assert!(p4.wait_for_completion().is_ok());
 
         // Chaining multiple options
-        let p5 =
-            HintsProcessor::builder(NullHints).num_threads(8).enable_stats(true).build().unwrap();
+        let p5 = HintsProcessor::builder(NullHints, None::<NullHints>)
+            .num_threads(8)
+            .enable_stats(true)
+            .build()
+            .unwrap();
         assert!(p5.stats.is_some());
     }
 
@@ -1126,7 +1173,8 @@ mod tests {
     fn test_stress_throughput() {
         use std::time::Instant;
 
-        let p = HintsProcessor::builder(NullHints).num_threads(32).build().unwrap();
+        let p =
+            HintsProcessor::builder(NullHints, None::<NullHints>).num_threads(32).build().unwrap();
 
         // Generate a large batch of hints
         const NUM_HINTS: usize = 100_000;
@@ -1159,7 +1207,8 @@ mod tests {
     fn test_stress_concurrent_batches() {
         use std::time::Instant;
 
-        let p = HintsProcessor::builder(NullHints).num_threads(32).build().unwrap();
+        let p =
+            HintsProcessor::builder(NullHints, None::<NullHints>).num_threads(32).build().unwrap();
 
         const NUM_BATCHES: usize = 1_000;
         const HINTS_PER_BATCH: usize = 100;
@@ -1198,7 +1247,8 @@ mod tests {
     fn test_stress_with_resets() {
         use std::time::Instant;
 
-        let p = HintsProcessor::builder(NullHints).num_threads(32).build().unwrap();
+        let p =
+            HintsProcessor::builder(NullHints, None::<NullHints>).num_threads(32).build().unwrap();
 
         const ITERATIONS: usize = 100;
         const HINTS_PER_ITER: usize = 1_000;
@@ -1268,7 +1318,7 @@ mod tests {
         const SLOW_HINT: u32 = 0x7FFF_0001; // Delays 10ms
         const MED_HINT: u32 = 0x7FFF_0002; // Delays 5ms
 
-        let p = HintsProcessor::builder(sink)
+        let p = HintsProcessor::builder(sink, None::<RecordingSink>)
             .num_threads(8)
             .custom_hint(FAST_HINT, |data| {
                 // No delay - returns immediately
@@ -1636,7 +1686,7 @@ mod tests {
 
         const VARIABLE_HINT: u32 = 0x7FFF_0100;
 
-        let p = HintsProcessor::builder(sink)
+        let p = HintsProcessor::builder(sink, None::<RecordingSink>)
             .num_threads(16)
             .custom_hint(VARIABLE_HINT, |data| {
                 // Pseudo-random delay based on hash of input value (0-15ms range)

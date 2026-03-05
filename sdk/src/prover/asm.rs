@@ -185,7 +185,7 @@ impl ProverEngine for AsmProver {
             unlock_mapped_memory,
             verbose_mode,
             elf.with_hints(),
-        );
+        )?;
 
         self.n_setups.fetch_add(1, Ordering::SeqCst);
 

@@ -18,11 +18,11 @@ use crate::{
 
 use anyhow::{Context, Result};
 
-pub struct MTOutputShmem {
+pub struct MTShMemReader {
     pub output_shmem: AsmMultiSharedMemory<AsmMTHeader>,
 }
 
-impl MTOutputShmem {
+impl MTShMemReader {
     pub fn new(
         local_rank: i32,
         base_port: Option<u16>,
@@ -56,7 +56,7 @@ impl AsmRunnerMT {
 
     #[allow(clippy::too_many_arguments)]
     pub fn run_and_count<F: FnMut(usize, Arc<EmuTrace>)>(
-        preloaded: &mut MTOutputShmem,
+        preloaded: &mut MTShMemReader,
         max_steps: u64,
         chunk_size: u64,
         mut on_chunk: F,

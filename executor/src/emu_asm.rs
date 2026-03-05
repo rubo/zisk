@@ -8,10 +8,7 @@ use crate::AsmResources;
 use crate::{
     DeviceMetricsList, DummyCounter, NestedDeviceMetricsList, StaticSMBundle, MAX_NUM_STEPS,
 };
-use asm_runner::{
-    shmem_input_name, write_input, AsmRunnerMO, AsmRunnerMT, AsmRunnerRH, AsmService, AsmServices,
-    SharedMemoryWriter,
-};
+use asm_runner::{AsmRunnerMO, AsmRunnerMT, AsmRunnerRH};
 use data_bus::DataBusTrait;
 use fields::PrimeField64;
 use proofman_common::ProofCtx;
@@ -20,7 +17,7 @@ use zisk_common::{
     io::ZiskStdin, stats_begin, stats_end, AsmExecutionInfo, ChunkId, EmuTrace,
     ExecutorStatsHandle, StatsScope,
 };
-use zisk_core::{ZiskRom, MAX_INPUT_SIZE};
+use zisk_core::ZiskRom;
 use ziskemu::ZiskEmulator;
 
 pub struct EmulatorAsm {
@@ -134,27 +131,11 @@ impl EmulatorAsm {
 
         stats_begin!(stats, &_exec_scope, _write_scope, "ASM_WRITE_INPUT", 0);
 
-        asm_resources.shmem_input_writer.lock().unwrap().get_or_insert_with(|| {
-            let port =
-                AsmServices::port_base_for(asm_resources.base_port, asm_resources.local_rank);
-            let shmem_input_name = shmem_input_name(port, asm_resources.local_rank);
-            tracing::debug!(
-                "Initializing SharedMemoryWriter for service {:?} at '{}'",
-                AsmService::MO,
-                shmem_input_name
-            );
-            SharedMemoryWriter::new(
-                &shmem_input_name,
-                MAX_INPUT_SIZE as usize,
-                asm_resources.unlock_mapped_memory,
-            )
-            .expect("Failed to create SharedMemoryWriter")
-        });
+        let config = asm_resources.config();
 
-        write_input(
-            &stdin.lock().unwrap(),
-            asm_resources.shmem_input_writer.lock().unwrap().as_ref().unwrap(),
-        );
+        asm_resources
+            .write_input(&stdin.lock().unwrap())
+            .expect("Failed to write input to shared memory");
 
         stats_end!(stats, &_write_scope);
 
@@ -165,8 +146,8 @@ impl EmulatorAsm {
 
         // Run the assembly Memory Operations (MO) runner thread
         let handle_mo = std::thread::spawn({
-            let asm_shmem_mo = asm_resources.asm_shmem_mo.clone();
-            let base_port = asm_resources.base_port;
+            let asm_shmem_mo = asm_resources.mo_shmem_reader.clone();
+            let base_port = config.base_port;
             move || {
                 AsmRunnerMO::run(
                     &mut asm_shmem_mo.lock().unwrap(),
@@ -187,8 +168,8 @@ impl EmulatorAsm {
         let _stats = stats.clone();
 
         let handle_rh = (has_rom_sm).then(|| {
-            let asm_shmem_rh = asm_resources.asm_shmem_rh.clone();
-            let base_port = asm_resources.base_port;
+            let asm_shmem_rh = asm_resources.rh_shmem_reader.clone();
+            let base_port = config.base_port;
             let unlock_mapped_memory = self.unlock_mapped_memory;
             std::thread::spawn(move || {
                 AsmRunnerRH::run(
@@ -255,13 +236,13 @@ impl EmulatorAsm {
             let asm_resources_guard = self.asm_resources.lock().unwrap();
             let asm_resources = asm_resources_guard.as_ref().expect("AsmResources not initialized");
             let result = AsmRunnerMT::run_and_count(
-                &mut asm_resources.asm_shmem_mt.lock().unwrap(),
+                &mut asm_resources.mt_shmem_reader.lock().unwrap(),
                 MAX_NUM_STEPS,
                 self.chunk_size,
                 on_chunk,
                 self.world_rank,
                 self.local_rank,
-                asm_resources.base_port,
+                asm_resources.config().base_port,
                 stats.clone(),
             )
             .expect("Error during ASM execution");

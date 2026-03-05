@@ -48,7 +48,7 @@ fn parallel_speedup_benchmark(c: &mut Criterion) {
                     let received_clone = received.clone();
                     let sink = BenchSink { received: received_clone };
 
-                    let p = HintsProcessor::builder(sink)
+                    let p = HintsProcessor::builder(sink, None::<BenchSink>)
                         .num_threads(threads)
                         .custom_hint(FAST_HINT, |data: &[u64]| -> Result<Vec<u64>> {
                             thread::sleep(Duration::from_millis(1));
@@ -121,7 +121,7 @@ fn microsecond_hints_benchmark(c: &mut Criterion) {
                 let received_clone = received.clone();
                 let sink = BenchSink { received: received_clone };
 
-                let p = HintsProcessor::builder(sink)
+                let p = HintsProcessor::builder(sink, None::<BenchSink>)
                     .num_threads(16)
                     .custom_hint(hint_code, move |data: &[u64]| -> Result<Vec<u64>> {
                         thread::sleep(Duration::from_micros(micros as u64));
@@ -173,7 +173,7 @@ fn workload_patterns_benchmark(c: &mut Criterion) {
                 let received_clone = received.clone();
                 let sink = BenchSink { received: received_clone };
 
-                let p = HintsProcessor::builder(sink)
+                let p = HintsProcessor::builder(sink, None::<BenchSink>)
                     .num_threads(8)
                     .custom_hint(VERY_FAST, |data: &[u64]| -> Result<Vec<u64>> {
                         thread::sleep(Duration::from_micros(500));
@@ -241,7 +241,10 @@ fn noop_throughput_benchmark(c: &mut Criterion) {
     for &count in &hint_counts {
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &num_hints| {
             b.iter(|| {
-                let p = HintsProcessor::builder(NullSink).num_threads(32).build().unwrap();
+                let p = HintsProcessor::builder(NullSink, None::<NullSink>)
+                    .num_threads(32)
+                    .build()
+                    .unwrap();
 
                 let mut data = Vec::with_capacity(num_hints * 2);
                 for i in 0..num_hints {

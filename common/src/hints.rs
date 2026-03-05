@@ -59,7 +59,7 @@ pub const CTRL_CANCEL: u32 = 0x0002;
 pub const CTRL_ERROR: u32 = 0x0003;
 
 // === INPUT HINT CODES ===
-pub const HINT_INPUT: u32 = 0xF000;
+pub const HINT_INPUT: u32 = 0xF0000;
 
 // === BUILT-IN HINT CODES ===
 // SHA256 hint codes

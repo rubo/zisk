@@ -40,29 +40,30 @@ impl ControlShmem {
     }
 
     pub fn reset(&self) {
-        self.write_u64_at(ControlShmemOffsets::PrecompilesSize, 0);
-        self.write_u64_at(ControlShmemOffsets::ShutdownFlag, 0);
-        self.write_u64_at(ControlShmemOffsets::InputsSize, 0);
+        self.writer.write_u64_at(ControlShmemOffsets::PrecompilesSize as usize, 0);
+        self.writer.write_u64_at(ControlShmemOffsets::ShutdownFlag as usize, 0);
+        self.writer.write_u64_at(ControlShmemOffsets::InputsSize as usize, 0);
     }
 
     pub fn set_prec_hints_size(&self, size: u64) {
-        self.write_u64_at(ControlShmemOffsets::PrecompilesSize, size);
+        self.writer.write_u64_at(ControlShmemOffsets::PrecompilesSize as usize, size);
     }
 
     pub fn prec_hints_size(&self) -> u64 {
-        self.read_u64_at(ControlShmemOffsets::PrecompilesSize)
+        self.writer.read_u64_at(ControlShmemOffsets::PrecompilesSize as usize)
     }
 
     pub fn set_shutdown_flag(&self) {
-        self.write_u64_at(ControlShmemOffsets::ShutdownFlag, 1);
+        self.writer.write_u64_at(ControlShmemOffsets::ShutdownFlag as usize, 1);
     }
 
     pub fn set_inputs_size(&self, size: u64) {
-        self.write_u64_at(ControlShmemOffsets::InputsSize, size);
+        self.writer.write_u64_at(ControlShmemOffsets::InputsSize as usize, size);
     }
 
     pub fn inc_inputs_size(&self, size: usize) {
-        let current_size = self.read_u64_at(ControlShmemOffsets::InputsSize);
-        self.write_u64_at(ControlShmemOffsets::InputsSize, current_size + size as u64);
+        let current_size = self.writer.read_u64_at(ControlShmemOffsets::InputsSize as usize);
+        self.writer
+            .write_u64_at(ControlShmemOffsets::InputsSize as usize, current_size + size as u64);
     }
 }

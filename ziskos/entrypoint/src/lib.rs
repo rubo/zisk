@@ -76,12 +76,13 @@ pub fn read_slice_zerocopy<'a>() -> &'a [u8] {
         u64::from_le_bytes(bytes.try_into().unwrap()) as usize
     };
 
-    // Ensure the data is ready
+    // Ensure the data is ready (8-byte aligned)
     let data_addr = addr + 8;
-    crate::zisklib::fcall_input_ready(&((data_addr + len + 7) as u64));
+    let aligned_len = (len + 7) & !0x7;
+    crate::zisklib::fcall_input_ready(&((data_addr + aligned_len - 1) as u64));
 
-    // Update input position: move past length (8 bytes) + data
-    unsafe { INPUT_POS = input_pos + 8 + (len + 7) & !0x7 };
+    // Update input position: move past length (8 bytes) + data (8-byte aligned)
+    unsafe { INPUT_POS = input_pos + 8 + aligned_len };
 
     // Return slice pointing directly to the input data (zero-copy)
     unsafe { core::slice::from_raw_parts(data_addr as *const u8, len) }

@@ -3,7 +3,6 @@ use zisk_common::HINT_INPUT;
 
 #[no_mangle]
 pub unsafe extern "C" fn hint_input_data(input_data_ptr: *const u8, input_data_len: usize) {
-    println!("hint_input_data (input_data_ptr: {:p}, input_data_len: {})", input_data_ptr, input_data_len);
     if !crate::hints::HINT_BUFFER.is_enabled() {
         return;
     }

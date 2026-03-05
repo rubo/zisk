@@ -223,138 +223,6 @@ void server_setup (void)
         precompile_results_address = (uint64_t *)pPrecompile;
         if (verbose) printf("mmap(precompile) mapped %lu B and returned address %p in %lu us\n", MAX_PRECOMPILE_SIZE, precompile_results_address, duration);
 
-        /*****************/
-        /* CONTROL INPUT */
-        /*****************/
-
-        if (!open_input_shm)
-        {
-            // Make sure the precompile results shared memory is deleted
-            shm_unlink(shmem_control_input_name);
-
-            // Create the control shared memory
-            shmem_control_input_fd = shm_open(shmem_control_input_name, O_RDWR | O_CREAT, 0666);
-            if (shmem_control_input_fd < 0)
-            {
-                printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
-                exit(-1);
-            }
-
-            // Size it
-            result = ftruncate(shmem_control_input_fd, CONTROL_INPUT_SIZE);
-            if (result != 0)
-            {
-                printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
-                exit(-1);
-            }
-
-            // Sync
-            fsync(shmem_control_input_fd);
-
-            // Close the descriptor
-            if (close(shmem_control_input_fd) != 0)
-            {
-                printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
-                exit(-1);
-            }
-        }
-
-        // Open the control input shared memory as read-only
-        shmem_control_input_fd = shm_open(shmem_control_input_name, O_RDONLY, 0666);
-        if (shmem_control_input_fd < 0)
-        {
-            printf("ERROR: Failed calling precompile RO shm_open(%s) as read-only errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-
-        // Map precompile address space
-        if (verbose) gettimeofday(&start_time, NULL);
-        void * pControl = mmap((void *)CONTROL_INPUT_ADDR, CONTROL_INPUT_SIZE, PROT_READ, MAP_SHARED | MAP_FIXED | map_locked_flag, shmem_control_input_fd, 0);
-        if (verbose)
-        {
-            gettimeofday(&stop_time, NULL);
-            duration = TimeDiff(start_time, stop_time);
-        }
-        if (pControl == MAP_FAILED)
-        {
-            printf("ERROR: Failed calling mmap(control_input) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-        if (pControl != (void *)CONTROL_INPUT_ADDR)
-        {
-            printf("ERROR: Called mmap(control_input) but returned address = %p != 0x%08lx\n", pControl, CONTROL_INPUT_ADDR);
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-        shmem_control_input_address = (uint64_t *)pControl;
-        precompile_written_address = &shmem_control_input_address[0];
-        precompile_exit_address = &shmem_control_input_address[1];
-        if (verbose) printf("mmap(control_input) mapped %lu B and returned address %p in %lu us\n", CONTROL_INPUT_SIZE, shmem_control_input_address, duration);
-
-        /******************/
-        /* CONTROL OUTPUT */
-        /******************/
-
-        // Make sure the precompile results shared memory is deleted
-        shm_unlink(shmem_control_output_name);
-
-        // Create the control shared memory
-        shmem_control_output_fd = shm_open(shmem_control_output_name, O_RDWR | O_CREAT, 0666);
-        if (shmem_control_output_fd < 0)
-        {
-            printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-
-        // Size it
-        result = ftruncate(shmem_control_output_fd, CONTROL_OUTPUT_SIZE);
-        if (result != 0)
-        {
-            printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-
-        // Map precompile address space
-        if (verbose) gettimeofday(&start_time, NULL);
-        pControl = mmap((void *)CONTROL_OUTPUT_ADDR, CONTROL_OUTPUT_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED | map_locked_flag, shmem_control_output_fd, 0);
-        if (verbose)
-        {
-            gettimeofday(&stop_time, NULL);
-            duration = TimeDiff(start_time, stop_time);
-        }
-        if (pControl == MAP_FAILED)
-        {
-            printf("ERROR: Failed calling mmap(control_output) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-        if (pControl != (void *)CONTROL_OUTPUT_ADDR)
-        {
-            printf("ERROR: Called mmap(control_output) but returned address = %p != 0x%08lx\n", pControl, CONTROL_OUTPUT_ADDR);
-            fflush(stdout);
-            fflush(stderr);
-            exit(-1);
-        }
-        shmem_control_output_address = (uint64_t *)pControl;
-        precompile_read_address = &shmem_control_output_address[0];
-        if (verbose) printf("mmap(control_output) mapped %lu B and returned address %p in %lu us\n", CONTROL_OUTPUT_SIZE, shmem_control_output_address, duration);
-
         /*************************/
         /* PRECOMPILE SEMAPHORES */
         /*************************/
@@ -389,6 +257,139 @@ void server_setup (void)
         }
         if (verbose) printf("sem_open(%s) succeeded sem_prec_read=%p\n", sem_prec_read_name, sem_prec_read);
     }
+
+    /*****************/
+    /* CONTROL INPUT */
+    /*****************/
+
+    if (!open_input_shm)
+    {
+        // Make sure the precompile results shared memory is deleted
+        shm_unlink(shmem_control_input_name);
+
+        // Create the control shared memory
+        shmem_control_input_fd = shm_open(shmem_control_input_name, O_RDWR | O_CREAT, 0666);
+        if (shmem_control_input_fd < 0)
+        {
+            printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
+        // Size it
+        result = ftruncate(shmem_control_input_fd, CONTROL_INPUT_SIZE);
+        if (result != 0)
+        {
+            printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
+        // Sync
+        fsync(shmem_control_input_fd);
+
+        // Close the descriptor
+        if (close(shmem_control_input_fd) != 0)
+        {
+            printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+    }
+
+    // Open the control input shared memory as read-only
+    shmem_control_input_fd = shm_open(shmem_control_input_name, O_RDONLY, 0666);
+    if (shmem_control_input_fd < 0)
+    {
+        printf("ERROR: Failed calling precompile RO shm_open(%s) as read-only errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+
+    // Map precompile address space
+    if (verbose) gettimeofday(&start_time, NULL);
+    void * pControl = mmap((void *)CONTROL_INPUT_ADDR, CONTROL_INPUT_SIZE, PROT_READ, MAP_SHARED | MAP_FIXED | map_locked_flag, shmem_control_input_fd, 0);
+    if (verbose)
+    {
+        gettimeofday(&stop_time, NULL);
+        duration = TimeDiff(start_time, stop_time);
+    }
+    if (pControl == MAP_FAILED)
+    {
+        printf("ERROR: Failed calling mmap(control_input) errno=%d=%s\n", errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+    if (pControl != (void *)CONTROL_INPUT_ADDR)
+    {
+        printf("ERROR: Called mmap(control_input) but returned address = %p != 0x%08lx\n", pControl, CONTROL_INPUT_ADDR);
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+    shmem_control_input_address = (uint64_t *)pControl;
+    precompile_written_address = &shmem_control_input_address[0];
+    precompile_exit_address = &shmem_control_input_address[1];
+    input_written_address = &shmem_control_input_address[2];
+    if (verbose) printf("mmap(control_input) mapped %lu B and returned address %p in %lu us\n", CONTROL_INPUT_SIZE, shmem_control_input_address, duration);
+
+    /******************/
+    /* CONTROL OUTPUT */
+    /******************/
+
+    // Make sure the precompile results shared memory is deleted
+    shm_unlink(shmem_control_output_name);
+
+    // Create the control shared memory
+    shmem_control_output_fd = shm_open(shmem_control_output_name, O_RDWR | O_CREAT, 0666);
+    if (shmem_control_output_fd < 0)
+    {
+        printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+
+    // Size it
+    result = ftruncate(shmem_control_output_fd, CONTROL_OUTPUT_SIZE);
+    if (result != 0)
+    {
+        printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+
+    // Map precompile address space
+    if (verbose) gettimeofday(&start_time, NULL);
+    pControl = mmap((void *)CONTROL_OUTPUT_ADDR, CONTROL_OUTPUT_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED | map_locked_flag, shmem_control_output_fd, 0);
+    if (verbose)
+    {
+        gettimeofday(&stop_time, NULL);
+        duration = TimeDiff(start_time, stop_time);
+    }
+    if (pControl == MAP_FAILED)
+    {
+        printf("ERROR: Failed calling mmap(control_output) errno=%d=%s\n", errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+    if (pControl != (void *)CONTROL_OUTPUT_ADDR)
+    {
+        printf("ERROR: Called mmap(control_output) but returned address = %p != 0x%08lx\n", pControl, CONTROL_OUTPUT_ADDR);
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+    shmem_control_output_address = (uint64_t *)pControl;
+    precompile_read_address = &shmem_control_output_address[0];
+    if (verbose) printf("mmap(control_output) mapped %lu B and returned address %p in %lu us\n", CONTROL_OUTPUT_SIZE, shmem_control_output_address, duration);
 
     /*******/
     /* RAM */
@@ -536,7 +537,25 @@ void server_setup (void)
         fflush(stderr);
         exit(-1);
     }
-    if (verbose) printf("sem_open(%s) succeeded\n", sem_shutdown_done_name);
+    if (verbose) printf("sem_open(%s) succeeded\n", sem_shutdown_done_name);    // Create the semaphore for input available signal
+
+    /***********************/
+    /* SEM INPUT AVAILABLE */
+    /***********************/
+
+    assert(strlen(sem_input_avail_name) > 0);
+
+    sem_unlink(sem_input_avail_name);
+
+    sem_input_avail = sem_open(sem_input_avail_name, O_CREAT | O_EXCL, 0666, 0);
+    if (sem_input_avail == SEM_FAILED)
+    {
+        printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+    if (verbose) printf("sem_open(%s) succeeded sem_input_avail=%p\n", sem_input_avail_name, sem_input_avail);
 }
 
 void server_reset_fast (void)
@@ -677,10 +696,11 @@ void server_run (void)
         uint64_t step_duration_ns = steps == 0 ? 0 : (duration * 1000) / steps;
         uint64_t step_tp_sec = duration == 0 ? 0 : steps * 1000000 / duration;
         uint64_t final_trace_size_percentage = (final_trace_size * 100) / trace_size;
-        printf("Duration = %lu us, realloc counter = %lu, wait counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%% of %lu), end=%lu, error=%lu, max steps=%lu, chunk size=%lu, prec_written=%lu, prec_read=%lu\n",
+        printf("Duration = %lu us, realloc counter = %lu, wait prec counter = %lu, wait input counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%% of %lu), end=%lu, error=%lu, max steps=%lu, chunk size=%lu, prec_written=%lu, prec_read=%lu\n",
             duration,
             realloc_counter,
-            wait_counter,
+            wait_prec_avail_counter,
+            wait_input_avail_counter,
             steps,
             step_duration_ns,
             step_tp_sec,
@@ -886,28 +906,6 @@ void server_cleanup (void)
             printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
         }
 
-        // Cleanup CONTROL
-        result = munmap((void *)shmem_control_input_address, CONTROL_INPUT_SIZE);
-        if (result == -1)
-        {
-            printf("ERROR: Failed calling munmap(control_input) errno=%d=%s\n", errno, strerror(errno));
-        }
-        result = shm_unlink(shmem_control_input_name);
-        if (result == -1)
-        {
-            printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-        }
-        result = munmap((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE);
-        if (result == -1)
-        {
-            printf("ERROR: Failed calling munmap(control_output) errno=%d=%s\n", errno, strerror(errno));
-        }
-        result = shm_unlink(shmem_control_output_name);
-        if (result == -1)
-        {
-            printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
-        }
-
         // Semaphores cleanup
         result = sem_close(sem_prec_avail);
         if (result == -1)
@@ -929,6 +927,33 @@ void server_cleanup (void)
         {
             printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
         }
+        result = sem_close(sem_input_avail);
+        if (result == -1)
+        {
+            printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
+        }
+    }
+
+    // Cleanup CONTROL
+    result = munmap((void *)shmem_control_input_address, CONTROL_INPUT_SIZE);
+    if (result == -1)
+    {
+        printf("ERROR: Failed calling munmap(control_input) errno=%d=%s\n", errno, strerror(errno));
+    }
+    result = shm_unlink(shmem_control_input_name);
+    if (result == -1)
+    {
+        printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
+    }
+    result = munmap((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE);
+    if (result == -1)
+    {
+        printf("ERROR: Failed calling munmap(control_output) errno=%d=%s\n", errno, strerror(errno));
+    }
+    result = shm_unlink(shmem_control_output_name);
+    if (result == -1)
+    {
+        printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
     }
 
     // Cleanup trace
@@ -947,6 +972,13 @@ void server_cleanup (void)
         {
             printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
         }
+    }
+
+    // Cleanup input available semaphore
+    result = sem_unlink(sem_input_avail_name);
+    if (result == -1)
+    {
+        printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
     }
 
     // Post shutdown done semaphore

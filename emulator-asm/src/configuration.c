@@ -525,12 +525,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_FT_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_FT_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_FT_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, "");
             strcpy(sem_chunk_done_name, "");
@@ -570,12 +573,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_MT_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_MT_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_MT_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_MT_output");
@@ -618,12 +624,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_RH_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_RH_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_RH_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_RH_output");
@@ -666,12 +675,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_MA_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_MA_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_MA_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_MA_output");
@@ -706,6 +718,7 @@ void configure (void)
             strcpy(shmem_precompile_name, "");
             strcpy(sem_prec_avail_name, "");
             strcpy(sem_prec_read_name, "");
+            strcpy(sem_input_avail_name, "");
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_CH_output");
             strcpy(sem_chunk_done_name, shm_prefix);
@@ -756,12 +769,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_ZP_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_ZP_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_ZP_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_ZP_output");
@@ -804,12 +820,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_MO_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_MO_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_MO_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_MO_output");
@@ -840,6 +859,7 @@ void configure (void)
             strcpy(shmem_precompile_name, "");
             strcpy(sem_prec_avail_name, "");
             strcpy(sem_prec_read_name, "");
+            strcpy(sem_input_avail_name, "");
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_CM_output");
             strcpy(sem_chunk_done_name, "");
@@ -880,12 +900,15 @@ void configure (void)
                 strcat(sem_prec_avail_name, "_MT_prec_avail");
                 strcpy(sem_prec_read_name, shm_prefix);
                 strcat(sem_prec_read_name, "_MT_prec_read");
+                strcpy(sem_input_avail_name, shm_prefix);
+                strcat(sem_input_avail_name, "_MT_input_avail");
             }
             else
             {
                 strcpy(shmem_precompile_name, "");
                 strcpy(sem_prec_avail_name, "");
                 strcpy(sem_prec_read_name, "");
+                strcpy(sem_input_avail_name, "");
             }
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_MT_output");
@@ -916,6 +939,7 @@ void configure (void)
             strcpy(shmem_precompile_name, "");
             strcpy(sem_prec_avail_name, "");
             strcpy(sem_prec_read_name, "");
+            strcpy(sem_input_avail_name, "");
             strcpy(shmem_output_name, shm_prefix);
             strcat(shmem_output_name, "_CA_output");
             strcpy(sem_chunk_done_name, "");
@@ -973,6 +997,7 @@ void configure (void)
         printf("\tsem_shutdown_done=%s\n", sem_shutdown_done_name);
         printf("\tsem_prec_avail=%s\n", sem_prec_avail_name);
         printf("\tsem_prec_read=%s\n", sem_prec_read_name);
+        printf("\tsem_input_avail=%s\n", sem_input_avail_name);
         printf("\tmap_locked_flag=%d\n", map_locked_flag);
         printf("\toutput=%u\n", output);
         printf("\tprecompile_results_enabled=%u\n", precompile_results_enabled);

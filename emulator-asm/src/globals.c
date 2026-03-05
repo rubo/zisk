@@ -36,6 +36,7 @@ char sem_prec_avail_name[128] = {0};
 char sem_prec_read_name[128] = {0};
 char sem_chunk_done_name[128] = {0};
 char sem_shutdown_done_name[128] = {0};
+char sem_input_avail_name[128] = {0};
 char file_lock_name[128] = {0};
 char log_name[128] = {0};
 bool call_chunk_done = false;
@@ -87,12 +88,14 @@ void * shmem_precompile_address = NULL;
 // Precompile results semaphores
 sem_t * sem_prec_avail = NULL;
 sem_t * sem_prec_read = NULL;
+sem_t * sem_input_avail = NULL;
 
 // Control input shared memory
 int shmem_control_input_fd = -1;
 uint64_t * shmem_control_input_address = NULL;
 volatile uint64_t * precompile_written_address = NULL;
 volatile uint64_t * precompile_exit_address = NULL;
+volatile uint64_t * input_written_address = NULL;
 
 // Control output shared memory
 int shmem_control_output_fd = -1;
@@ -114,7 +117,8 @@ uint64_t assembly_duration;
 
 // Counters used in functions called from assembly code
 uint64_t realloc_counter = 0;
-uint64_t wait_counter = 0;
+uint64_t wait_prec_avail_counter = 0;
+uint64_t wait_input_avail_counter = 0;
 uint64_t print_pc_counter = 0;
 
 // Chunk player globals

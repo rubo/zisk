@@ -41,6 +41,7 @@ extern char sem_prec_avail_name[128];
 extern char sem_prec_read_name[128];
 extern char sem_chunk_done_name[128];
 extern char sem_shutdown_done_name[128];
+extern char sem_input_avail_name[128];
 extern char file_lock_name[128];
 extern char log_name[128];
 extern bool call_chunk_done;
@@ -116,12 +117,14 @@ extern void * shmem_precompile_address;
 // Precompile results semaphores
 extern sem_t * sem_prec_avail;
 extern sem_t * sem_prec_read;
+extern sem_t * sem_input_avail;
 
 // Control input shared memory
 extern int shmem_control_input_fd;
 extern uint64_t * shmem_control_input_address;
 extern volatile uint64_t * precompile_written_address;
 extern volatile uint64_t * precompile_exit_address;
+extern volatile uint64_t * input_written_address;
 
 // Control output shared memory
 extern int shmem_control_output_fd;
@@ -143,7 +146,8 @@ extern uint64_t assembly_duration;
 
 // Counters used in functions called from assembly code
 extern uint64_t realloc_counter;
-extern uint64_t wait_counter;
+extern uint64_t wait_prec_avail_counter;
+extern uint64_t wait_input_avail_counter;
 extern uint64_t print_pc_counter;
 
 // Chunk player globals

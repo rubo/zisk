@@ -282,7 +282,7 @@ extern void _realloc_trace (void)
 int _wait_for_prec_avail (void)
 {
     // Increment wait counter
-    wait_counter++;
+    wait_prec_avail_counter++;
 
     // Sync control output shared memory so that the writer can see the precompile reads we have
     // done, and thus update the precompile_written_address if needed
@@ -377,6 +377,102 @@ int _wait_for_prec_avail (void)
     }
 
     printf("ERROR: wait_for_prec_avail() unreachable code\n");
+    fflush(stdout);
+    fflush(stderr);
+    exit(-1);
+}
+
+/****************************/
+/* WAIT FOR INPUT AVAILABLE */
+/****************************/
+
+// Called by the assembly when input_written == input_read, to wait for new input to be available
+int _wait_for_input_avail (uint64_t required_input_bytes)
+{
+    // Increment wait counter
+    wait_input_avail_counter++;
+
+    // Make sure the input available semaphore is reset before checking the condition,
+    // since the caller may have posted it (even several times) before we called sem_wait()
+    while (sem_trywait(sem_input_avail) == 0) {/*printf("Purging sem_input_avail\n");*/};
+    
+    // Sync control input shared memory so that we can see the latest input_written_address value
+    if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
+        printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
+        fflush(stdout);
+        fflush(stderr);
+        exit(-1);
+    }
+
+    // Check if there is already input data available
+    if (*input_written_address > required_input_bytes)
+    {
+        // Sync input shared memory
+        if (msync((void *)shmem_input_address, MAX_INPUT_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
+        return 0;
+    }
+
+    // Wait again, but blocking this time
+    while (true)
+    {
+        struct timespec ts;
+        int result = clock_gettime(CLOCK_REALTIME, &ts);
+        if (result == -1)
+        {
+            printf("ERROR: wait_for_input_avail() failed calling clock_gettime() errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+        ts.tv_sec += 5; // 5 seconds timeout
+
+        //printf("_wait_for_input_avail() calling sem_wait input_written_address=%lu required_input_bytes=%lu\n", *input_written_address, required_input_bytes);
+        result = sem_timedwait(sem_input_avail, &ts);
+        //printf("_wait_for_input_avail() called sem_wait input_written_address=%lu required_input_bytes=%lu\n", *input_written_address, required_input_bytes);
+        if ((result == -1) && (errno != ETIMEDOUT))
+        {
+            printf("ERROR: wait_for_input_avail() failed calling sem_wait(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
+        // Sync control input shared memory so that we can see the latest input_written_address value
+        if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
+            printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+
+        if (*precompile_exit_address != 0)
+        {
+            printf("ERROR: wait_for_input_avail() found precompile_exit_address=%lu\n", *precompile_exit_address);
+            fflush(stdout);
+            fflush(stderr);
+            exit(-1);
+        }
+        if (*input_written_address > required_input_bytes)
+        {
+            // Sync input shared memory
+            if (msync((void *)shmem_input_address, MAX_INPUT_SIZE, MS_SYNC) != 0) {
+                printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
+                fflush(stdout);
+                fflush(stderr);
+                exit(-1);
+            }
+
+            return 0;
+        }
+    }
+
+    printf("ERROR: wait_for_input_avail() unreachable code\n");
     fflush(stdout);
     fflush(stderr);
     exit(-1);

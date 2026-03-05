@@ -3,10 +3,13 @@
 //! Generates i86_64 assembly code that implements the Zisk ROM program
 use std::path::Path;
 
+use ziskos_hints::zisklib::FCALL_INPUT_READY_ID;
+
 use crate::{
     zisk_ops::ZiskOp, AsmGenerationMethod, ZiskInst, ZiskRom, EXTRA_PARAMS_ADDR,
-    FLOAT_LIB_ROM_ADDR, FREE_INPUT_ADDR, M64, P2_32, ROM_ADDR, ROM_ADDR_MAX, ROM_ENTRY, SRC_C,
-    SRC_IMM, SRC_IND, SRC_MEM, SRC_REG, SRC_STEP, STORE_IND, STORE_MEM, STORE_NONE, STORE_REG,
+    FLOAT_LIB_ROM_ADDR, FREE_INPUT_ADDR, INPUT_ADDR, M64, P2_32, ROM_ADDR, ROM_ADDR_MAX, ROM_ENTRY,
+    SRC_C, SRC_IMM, SRC_IND, SRC_MEM, SRC_REG, SRC_STEP, STORE_IND, STORE_MEM, STORE_NONE,
+    STORE_REG,
 };
 
 // Regs rax, rcx, rdx, rdi, rsi, rsp, and r8-r11 are caller-save, not saved across function calls.
@@ -150,6 +153,7 @@ pub struct ZiskAsmContext {
     mem_precompile_results_address: String, // Address where precompile results are read from
     mem_precompile_written_address: String, // Address where precompile written counter is stored
     mem_precompile_read_address: String, // Address where precompile read counter is stored
+    mem_input_written_address: String, // Address where input written counter is stored
 
     comments: bool, // true if we want to generate comments in the assembly source code
     boc: String,    // begin of comment: '/*', ';', '#', etc.
@@ -555,6 +559,7 @@ impl ZiskRom2Asm {
             ctx.mem_precompile_written_address = format!("qword {}[0x70000000]", ctx.ptr);
             ctx.mem_precompile_read_address = format!("qword {}[0x70001000]", ctx.ptr);
         }
+        ctx.mem_input_written_address = format!("qword {}[0x70000010]", ctx.ptr);
 
         // Preamble
         *code += ".intel_syntax noprefix\n";
@@ -6182,23 +6187,28 @@ impl ZiskRom2Asm {
                         ctx.comment_str("ctx.function id = a")
                     );
 
-                    // Set the fcall context address as the first parameter
-                    *code += &format!(
-                        "\tlea rdi, {} {}\n",
-                        ctx.fcall_ctx,
-                        ctx.comment_str("rdi = fcall context")
-                    );
-
                     // Get result from precompile results data
-                    if ctx.precompile_results_fcall() {
-                        Self::precompile_results_fcall(ctx, code, unusual_code, "rdi");
+                    if ctx.a.constant_value == FCALL_INPUT_READY_ID as u64 {
+                        Self::wait_for_input_ready(ctx, code, unusual_code, REG_C);
                     } else {
-                        // Call the fcall function
-                        Self::push_internal_registers(ctx, code, false);
-                        //Self::assert_rsp_is_aligned(ctx, code);
-                        *code += "\tcall _opcode_fcall\n";
-                        Self::pop_internal_registers(ctx, code, false);
-                        //Self::assert_rsp_is_aligned(ctx, code);
+                        // Set the fcall context address as the first parameter
+                        *code += &format!(
+                            "\tlea rdi, {} {}\n",
+                            ctx.fcall_ctx,
+                            ctx.comment_str("rdi = fcall context")
+                        );
+
+                        // Get result from precompile results data
+                        if ctx.precompile_results_fcall() {
+                            Self::precompile_results_fcall(ctx, code, unusual_code, "rdi");
+                        } else {
+                            // Call the fcall function
+                            Self::push_internal_registers(ctx, code, false);
+                            //Self::assert_rsp_is_aligned(ctx, code);
+                            *code += "\tcall _opcode_fcall\n";
+                            Self::pop_internal_registers(ctx, code, false);
+                            //Self::assert_rsp_is_aligned(ctx, code);
+                        }
                     }
 
                     // If ctx.result_size == 0 => free_input = 0
@@ -8786,6 +8796,64 @@ impl ZiskRom2Asm {
 
         // Increment wait_for_prec_counter
         ctx.wait_for_prec_counter += 1;
+    }
+
+    // Waits for the requested reg_address input address (and previous) to be available, waiting
+    // if necessary address in reg_address,
+    fn wait_for_input_ready(
+        ctx: &mut ZiskAsmContext,
+        code: &mut String,
+        unusual_code: &mut String,
+        reg_address: &str, // REG_C
+    ) {
+        *code += &ctx.full_line_comment("Wait for input data available".to_string());
+
+        // Calculate number of bytes until the requested address from the current read address
+        // required_bytes = (required_address - INPUT_ADDR - 8 + 1 + 7) & ~0x7;
+        // + 1 because required_address is the address of the last required byte
+        // + 7 & ~0x7 because if we require any byte of the last u64, we need to wait for the whole u64 to be available
+        *code +=
+            &format!("\tmov rdi, {} {}\n", reg_address, ctx.comment_str("rdi = required_address"));
+        *code += &format!(
+            "\tmov {}, {} {}\n",
+            REG_AUX,
+            INPUT_ADDR,
+            ctx.comment_str("aux = INPUT_ADDRESS")
+        );
+        *code += &format!(
+            "\tsub rdi, {} {}\n",
+            REG_AUX,
+            ctx.comment_str("rdi = required_address - INPUT_ADDRESS")
+        );
+        *code += &format!("\tand rdi, ~0x7 {}\n", ctx.comment_str("rdi &= 0x7"));
+
+        // if input_written == input_ready then call wait_for_input_avail
+        *code += &format!(
+            "\tmov {}, {} {}\n",
+            REG_AUX,
+            ctx.mem_input_written_address,
+            ctx.comment_str("aux = input_written")
+        );
+        *code += &format!(
+            "\tcmp rdi, {} {}\n",
+            ctx.mem_input_written_address,
+            ctx.comment_str("required <= written")
+        );
+        *code += &format!(
+            "\tja pc_{:x}_wait_for_input_avail {}\n",
+            ctx.pc,
+            ctx.comment_str("if there is data, done")
+        );
+        *code += &format!("pc_{:x}_wait_for_input_avail_done:\n", ctx.pc);
+
+        // Call wait_for_input_avail()
+        *unusual_code += &format!("pc_{:x}_wait_for_input_avail:\n", ctx.pc);
+        Self::push_internal_registers(ctx, unusual_code, false);
+        *unusual_code += "\tcall _wait_for_input_avail\n";
+        *unusual_code += "\tcmp rax, 0\n";
+        *unusual_code += "\tjne execute_pop_internal_regs_and_end\n";
+        Self::pop_internal_registers(ctx, unusual_code, false);
+        *unusual_code += &format!("\tjmp pc_{:x}_wait_for_input_avail_done\n", ctx.pc);
     }
 
     /*******************/

@@ -51,6 +51,7 @@ use proofman_common::ProofCtx;
 use std::{collections::HashMap, sync::Mutex, thread::JoinHandle};
 use zisk_common::{io::ZiskStdin, AsmExecutionInfo, EmuTrace, ExecutorStatsHandle, StatsScope};
 
+use anyhow::Result;
 /// Trait for unified execution across different emulator backends
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::type_complexity)]
@@ -65,14 +66,14 @@ pub trait Emulator<F: PrimeField64>: Send + Sync {
         use_hints: bool,
         stats: &ExecutorStatsHandle,
         caller_stats_scope: &StatsScope,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    );
+    )>;
 }
 
 /// Enum wrapper for different emulator backends (no heap allocation)
@@ -132,14 +133,14 @@ impl<F: PrimeField64> Emulator<F> for EmulatorKind {
         use_hints: bool,
         stats: &ExecutorStatsHandle,
         caller_stats_scope: &StatsScope,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    ) {
+    )> {
         match self {
             Self::Asm(e) => {
                 e.execute(zisk_rom, stdin, pctx, sm_bundle, use_hints, stats, caller_stats_scope)

@@ -17,6 +17,8 @@ use crate::{
     DeviceMetricsList, DummyCounter, NestedDeviceMetricsList, StaticSMBundle, MAX_NUM_STEPS,
 };
 
+use anyhow::Result;
+
 pub struct EmulatorRust {
     /// Chunk size for processing.
     chunk_size: u64,
@@ -56,14 +58,14 @@ impl EmulatorRust {
         zisk_rom: &ZiskRom,
         stdin: &Mutex<ZiskStdin>,
         sm_bundle: &StaticSMBundle<F>,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    ) {
+    )> {
         let min_traces = self.run_emulator(zisk_rom, Self::NUM_THREADS, &stdin.lock().unwrap());
 
         // Store execute steps
@@ -73,7 +75,7 @@ impl EmulatorRust {
         let (main_count, secn_count) = self.count(zisk_rom, &min_traces, sm_bundle);
         timer_stop_and_log_info!(COUNT);
 
-        (min_traces, main_count, secn_count, None, None, steps)
+        Ok((min_traces, main_count, secn_count, None, None, steps))
     }
 
     fn run_emulator(
@@ -172,14 +174,14 @@ impl<F: PrimeField64> crate::Emulator<F> for EmulatorRust {
         _use_hints: bool,
         _stats: &ExecutorStatsHandle,
         _caller_stats_scope: &zisk_common::StatsScope,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    ) {
+    )> {
         self.execute(zisk_rom, stdin, sm_bundle)
     }
 }

@@ -20,6 +20,8 @@ use zisk_common::{
 use zisk_core::ZiskRom;
 use ziskemu::ZiskEmulator;
 
+use anyhow::Result;
+
 pub struct EmulatorAsm {
     /// World rank for distributed execution. Default to 0 for single-node execution.
     world_rank: i32,
@@ -111,20 +113,22 @@ impl EmulatorAsm {
         use_hints: bool,
         stats: &ExecutorStatsHandle,
         _caller_stats_scope: &StatsScope,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    ) {
+    )> {
         let asm_resources_guard = self.asm_resources.lock().unwrap();
-        let asm_resources = asm_resources_guard.as_ref().expect("AsmResources not initialized");
+        let asm_resources = asm_resources_guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("AsmResources not initialized"))?;
 
         let has_hints_stream = asm_resources.is_hints_stream_initialized();
         if use_hints && has_hints_stream {
-            asm_resources.start_stream().expect("Failed to start hints stream");
+            asm_resources.start_stream()?;
         }
 
         stats_begin!(stats, _caller_stats_scope, _exec_scope, "EXECUTE_WITH_ASSEMBLY", 0);
@@ -133,9 +137,7 @@ impl EmulatorAsm {
 
         let config = asm_resources.config();
 
-        asm_resources
-            .write_input(&stdin.lock().unwrap())
-            .expect("Failed to write input to shared memory");
+        asm_resources.write_input(&stdin.lock().unwrap())?;
 
         stats_end!(stats, &_write_scope);
 
@@ -192,7 +194,7 @@ impl EmulatorAsm {
 
         stats_end!(stats, &_exec_scope);
 
-        (min_traces, main_count, secn_count, Some(handle_mo), handle_rh, steps)
+        Ok((min_traces, main_count, secn_count, Some(handle_mo), handle_rh, steps))
     }
 
     fn run_mt_assembly<F: PrimeField64>(
@@ -298,14 +300,14 @@ impl<F: PrimeField64> crate::Emulator<F> for EmulatorAsm {
         use_hints: bool,
         stats: &ExecutorStatsHandle,
         caller_stats_scope: &StatsScope,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    ) {
+    )> {
         self.execute(zisk_rom, stdin, pctx, sm_bundle, use_hints, stats, caller_stats_scope)
     }
 }

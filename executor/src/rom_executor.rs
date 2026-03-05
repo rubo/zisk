@@ -14,6 +14,8 @@ use std::{sync::Mutex, thread::JoinHandle};
 use zisk_common::{io::ZiskStdin, AsmExecutionInfo, EmuTrace, ExecutorStatsHandle, StatsScope};
 use zisk_core::ZiskRom;
 
+use anyhow::Result;
+
 /// Output from ROM execution.
 pub struct RomExecutionOutput {
     /// Minimal traces collected during execution.
@@ -90,11 +92,17 @@ impl RomExecutor {
         use_hints: bool,
         stats: &ExecutorStatsHandle,
         caller_stats_scope: &StatsScope,
-    ) -> RomExecutionOutput {
-        let (min_traces, main_count, secn_count, handle_mo, handle_rh, steps) = self
-            .emulator
-            .execute(zisk_rom, &self.stdin, pctx, sm_bundle, use_hints, stats, caller_stats_scope);
+    ) -> Result<RomExecutionOutput> {
+        let (min_traces, main_count, secn_count, handle_mo, handle_rh, steps) = self.emulator.execute(
+            zisk_rom,
+            &self.stdin,
+            pctx,
+            sm_bundle,
+            use_hints,
+            stats,
+            caller_stats_scope,
+        )?;
 
-        RomExecutionOutput { min_traces, main_count, secn_count, handle_mo, handle_rh, steps }
+        Ok(RomExecutionOutput { min_traces, main_count, secn_count, handle_mo, handle_rh, steps })
     }
 }

@@ -146,14 +146,17 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
             .state
             .get_rom()
             .map_err(|e| proofman_common::ProofmanError::InvalidSetup(e.to_string()))?;
-        let output = self.rom_executor.execute(
-            &zisk_rom,
-            &pctx,
-            self.registry.sm_bundle(),
-            self.state.use_hints.load(std::sync::atomic::Ordering::SeqCst),
-            &self.state.stats,
-            &_exec_scope,
-        );
+        let output = self
+            .rom_executor
+            .execute(
+                &zisk_rom,
+                &pctx,
+                self.registry.sm_bundle(),
+                self.state.use_hints.load(std::sync::atomic::Ordering::SeqCst),
+                &self.state.stats,
+                &_exec_scope,
+            )
+            .expect("Failed to execute ROM and collect minimal traces");
 
         let execution_duration = start_partial.elapsed();
         timer_stop_and_log_info!(COMPUTE_MINIMAL_TRACE);

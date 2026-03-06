@@ -284,6 +284,8 @@ int _wait_for_prec_avail (void)
     // Increment wait counter
     wait_prec_avail_counter++;
 
+    //printf("wait_for_prec_avail() counter=%lu\n", wait_prec_avail_counter);
+
     // Sync control output shared memory so that the writer can see the precompile reads we have
     // done, and thus update the precompile_written_address if needed
     if (msync((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE, MS_SYNC) != 0) {
@@ -392,6 +394,8 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
     // Increment wait counter
     wait_input_avail_counter++;
 
+    //printf("wait_for_input_avail() required_input_bytes=%lu counter=%lu\n", required_input_bytes, wait_input_avail_counter);
+
     // Make sure the input available semaphore is reset before checking the condition,
     // since the caller may have posted it (even several times) before we called sem_wait()
     while (sem_trywait(sem_input_avail) == 0) {/*printf("Purging sem_input_avail\n");*/};
@@ -408,7 +412,8 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
     if (*input_written_address > required_input_bytes)
     {
         // Sync input shared memory
-        if (msync((void *)shmem_input_address, MAX_INPUT_SIZE, MS_SYNC) != 0) {
+        if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) 
+        {
             printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
             fflush(stdout);
             fflush(stderr);
@@ -461,7 +466,7 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
         if (*input_written_address > required_input_bytes)
         {
             // Sync input shared memory
-            if (msync((void *)shmem_input_address, MAX_INPUT_SIZE, MS_SYNC) != 0) {
+            if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) {
                 printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
                 fflush(stdout);
                 fflush(stderr);

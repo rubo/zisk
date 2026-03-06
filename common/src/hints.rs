@@ -22,11 +22,13 @@
 //! ├─────────────────────────────────────────────────────────────┤
 //! │                             ...                             │
 //! ├─────────────────────────────────────────────────────────────┤
-//! │                     Data[length-1] (u64)                    │
+//! │                       Data[N-1] (u64)                       │
 //! └─────────────────────────────────────────────────────────────┘
 //!
+//! where N = ceil(Length / 8)
+//!
 //! - Hint Code — Control code or Data Hint Type
-//! - Length — Number of following u64 data words
+//! - Length — Data length in bytes
 //!
 //! ## Hint Type Layout
 //!

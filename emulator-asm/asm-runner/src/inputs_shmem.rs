@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use named_sem::NamedSemaphore;
-use tracing::info;
 use zisk_common::{io::StreamSink, reinterpret_vec};
 use zisk_core::MAX_INPUT_SIZE;
 
@@ -55,23 +54,6 @@ impl InputsShmemWriter {
     }
 
     pub fn append_input(&self, inputs: &[u8]) -> Result<()> {
-        info!("Appending input of size {} bytes to shared memory", inputs.len());
-        // Print the first 4 u64 in hexadecimal for debugging
-        for (i, chunk) in inputs.chunks(8).take(4).enumerate() {
-            let value = u64::from_le_bytes(chunk.try_into().unwrap_or_default());
-            info!("Input chunk {}: 0x{:016x}", i, value);
-        }
-        // Printhe two last u64 in hexadecimal for debugging
-        for (i, chunk) in inputs.chunks(8).rev().take(2).enumerate() {
-            let value = u64::from_le_bytes(chunk.try_into().unwrap_or_default());
-            info!("Input chunk {}: 0x{:016x}", inputs.len() - (i + 1) * 8, value);
-        }
-        // Print if the input is divisible by 8tes
-        if inputs.len() % 8 == 0 {
-            info!("Input size is divisible by 8 bytes");
-        } else {
-            info!("Input size is not divisible by 8 bytes");
-        }
         self.writer.lock().unwrap().append_input(inputs)?;
         self.control_writer.inc_inputs_size(inputs.len());
         self.sem_avail.lock().unwrap().post()?;

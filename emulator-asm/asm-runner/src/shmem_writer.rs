@@ -2,7 +2,6 @@
 use libc::{mmap, msync, shm_open, MAP_FAILED, MAP_SHARED, MS_SYNC};
 use std::io::{self, Result};
 use std::ptr;
-use tracing::info;
 
 use libc::{c_void, close, munmap, PROT_READ, PROT_WRITE, S_IRUSR, S_IWUSR};
 
@@ -142,22 +141,15 @@ impl SharedMemoryWriter {
         }
 
         unsafe {
-            let offset = self.current_ptr.offset_from(self.ptr) as usize;
-            info!(
-            "Appending data of size {} bytes to shared memory '{}' at offset {} (current_ptr: {:p})",
-            byte_size, self.name, offset, self.current_ptr
-            );
-        }
-        unsafe {
             ptr::copy_nonoverlapping(data.as_ptr() as *const u8, self.current_ptr, byte_size);
             // Force changes to be flushed to the shared memory
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             if msync(self.ptr as *mut _, self.size, MS_SYNC) != 0 {
                 return Err(io::Error::last_os_error());
             }
-        }
 
-        self.current_ptr = unsafe { self.current_ptr.add(byte_size) };
+            self.current_ptr = self.current_ptr.add(byte_size);
+        }
 
         Ok(())
     }

@@ -69,19 +69,27 @@ enum ZiskCoordinatorCommands {
         data_id: Option<String>,
 
         /// Path to the input file
-        #[arg(long, help = "Path to the input file for proof generation")]
+        #[arg(
+            long,
+            help = "Path to the input file for proof generation",
+            conflicts_with = "hints_uri"
+        )]
         inputs_uri: Option<String>,
 
         /// Precompiles Hints path
-        #[arg(long, help = "Path to the precompiles hints file for proof generation")]
+        #[arg(
+            long,
+            help = "Path to the precompiles hints file for proof generation",
+            conflicts_with = "inputs_uri"
+        )]
         hints_uri: Option<String>,
 
         /// Whether to send the input data directly
-        #[clap(short = 'x', long, default_value_t = false)]
+        #[clap(short = 'x', long, default_value_t = false, conflicts_with = "hints_uri")]
         direct_inputs: bool,
 
         /// Whether to send the input data directly
-        #[clap(long, default_value_t = false)]
+        #[clap(long, default_value_t = false, conflicts_with = "inputs_uri")]
         stream_hints: bool,
 
         /// Compute capacity needed to generate the proof

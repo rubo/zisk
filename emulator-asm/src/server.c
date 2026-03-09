@@ -78,10 +78,14 @@ void server_setup (void)
     {
         if (!open_input_shm)
         {
+            printf("PATH open_input_shm(%s) 0\n", shmem_input_name);
+            fflush(stdout);
             // Make sure the input shared memory is deleted
             shm_unlink(shmem_input_name);
 
             // Create the input shared memory
+            printf("PATH open_input_shm(%s) 1\n", shmem_input_name);
+            fflush(stdout);
             shmem_input_fd = shm_open(shmem_input_name, O_RDWR | O_CREAT | O_EXCL, 0666);
             if (shmem_input_fd < 0)
             {
@@ -92,6 +96,8 @@ void server_setup (void)
             }
 
             // Size it
+            printf("PATH open_input_shm(%s) 2\n", shmem_input_name);
+            fflush(stdout);
             result = ftruncate(shmem_input_fd, MAX_INPUT_SIZE);
             if (result != 0)
             {
@@ -102,9 +108,13 @@ void server_setup (void)
             }
 
             // Sync
+            printf("PATH open_input_shm(%s) 3\n", shmem_input_name);
+            fflush(stdout);
             fsync(shmem_input_fd);
 
             // Close the descriptor
+            printf("PATH open_input_shm(%s) 4\n", shmem_input_name);
+            fflush(stdout);
             if (close(shmem_input_fd) != 0)
             {
                 printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
@@ -112,9 +122,13 @@ void server_setup (void)
                 fflush(stderr);
                 exit(-1);
             }
+            printf("PATH open_input_shm(%s) 5\n", shmem_input_name);
+            fflush(stdout);
         }
 
         // Open the input shared memory as read-only
+        printf("BEFORE shm_open(%s)\n", shmem_input_name);
+        fflush(stdout);
         shmem_input_fd = shm_open(shmem_input_name, O_RDONLY, 0666);
         if (shmem_input_fd < 0)
         {
@@ -146,7 +160,10 @@ void server_setup (void)
             fflush(stderr);
             exit(-1);
         }
-        if (verbose) printf("mmap(input) mapped %lu B and returned address %p in %lu us\n", MAX_INPUT_SIZE, pInput, duration);
+        if (verbose) {
+            printf("mmap(input) mapped %lu B and returned address %p in %lu us\n", MAX_INPUT_SIZE, pInput, duration);
+            fflush(stdout);
+        }
     }
 
     /**********************/

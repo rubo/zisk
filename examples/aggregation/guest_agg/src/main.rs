@@ -9,13 +9,13 @@ fn main() {
     let proof2 = ziskos::io::read_proof();
 
     // Verify the first proof
-    let valid_proof1 = ziskos::verify_zisk_proof(&proof1);
+    let valid_proof1 = ziskos::io::verify_zisk_proof(&proof1);
     if !valid_proof1 {
         panic!("Proof 1 verification failed");
     }
 
     // Verify the second proof
-    let valid_proof2 = ziskos::verify_zisk_proof(&proof2);
+    let valid_proof2 = ziskos::io::verify_zisk_proof(&proof2);
     if !valid_proof2 {
         panic!("Proof 2 verification failed");
     }

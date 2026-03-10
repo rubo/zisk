@@ -1,19 +1,20 @@
-use std::sync::{Arc, Mutex};
+use std::cell::RefCell;
+use std::sync::Arc;
 
 use named_sem::NamedSemaphore;
 use zisk_common::{io::StreamSink, reinterpret_vec};
 use zisk_core::MAX_INPUT_SIZE;
 
 use crate::{
-    shmem_input_avail_name, shmem_input_name, AsmServices, ControlShmem, SharedMemoryWriter,
+    sem_input_avail_name, shmem_input_name, AsmServices, ControlShmem, SharedMemoryWriter,
 };
 
 use anyhow::Result;
 
 pub struct InputsShmemWriter {
-    writer: Mutex<SharedMemoryWriter>,
+    writer: RefCell<SharedMemoryWriter>,
     control_writer: Arc<ControlShmem>,
-    sem_avail: Mutex<NamedSemaphore>,
+    sem_avails: RefCell<Vec<NamedSemaphore>>,
 }
 
 unsafe impl Send for InputsShmemWriter {}
@@ -37,40 +38,59 @@ impl InputsShmemWriter {
         writer.reset();
         writer.append_input(&0u64.to_le_bytes())?;
 
-        let sem_avail = Mutex::new(NamedSemaphore::create(
-            shmem_input_avail_name(port, local_rank).clone(),
-            0,
-        )?);
+        // Create one semaphore per ASM service
+        let sem_avails: Vec<NamedSemaphore> = AsmServices::SERVICES
+            .iter()
+            .map(|service| {
+                let name = sem_input_avail_name(port, *service, local_rank);
+                NamedSemaphore::create(&name, 0)
+                    .map_err(|e| anyhow::anyhow!("Failed to create semaphore '{}': {}", name, e))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self { writer: Mutex::new(writer), control_writer, sem_avail })
+        Ok(Self {
+            writer: RefCell::new(writer),
+            control_writer,
+            sem_avails: RefCell::new(sem_avails),
+        })
     }
 
     pub fn write_input(&self, inputs: &[u8]) -> Result<()> {
-        self.writer.lock().unwrap().write_at(8, inputs)?;
+        self.writer.borrow_mut().write_at(8, inputs)?;
         self.control_writer.inc_inputs_size(inputs.len());
-        self.sem_avail.lock().unwrap().post()?;
+        self.notify_all_services()?;
 
         Ok(())
     }
 
     pub fn append_input(&self, inputs: &[u8]) -> Result<()> {
-        self.writer.lock().unwrap().append_input(inputs)?;
+        self.writer.borrow_mut().append_input(inputs)?;
         self.control_writer.inc_inputs_size(inputs.len());
-        self.sem_avail.lock().unwrap().post()?;
+        self.notify_all_services()?;
 
         Ok(())
     }
 
+    /// Notify all ASM services that new input data is available
+    fn notify_all_services(&self) -> Result<()> {
+        for sem in self.sem_avails.borrow_mut().iter_mut() {
+            sem.post()?;
+        }
+        Ok(())
+    }
+
     pub fn reset(&self) {
-        let mut writer = self.writer.lock().unwrap();
+        let mut writer = self.writer.borrow_mut();
         writer.reset();
         writer
             .append_input(&0u64.to_le_bytes())
             .expect("Failed to write initial header after reset");
 
         self.control_writer.reset();
-        let mut sem_avail_guard = self.sem_avail.lock().unwrap();
-        while sem_avail_guard.try_wait().is_ok() {}
+        // Drain all the semaphore signals from all services
+        for sem in self.sem_avails.borrow_mut().iter_mut() {
+            while sem.try_wait().is_ok() {}
+        }
     }
 }
 

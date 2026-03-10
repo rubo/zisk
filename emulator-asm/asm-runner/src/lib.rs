@@ -110,6 +110,11 @@ pub fn shmem_input_avail_name(port: u16, local_rank: i32) -> String {
     build_shmem_name2(port, local_rank, "input_avail")
 }
 
+/// Semaphore name for input availability (per service)
+pub fn sem_input_avail_name(port: u16, asm_service: AsmService, local_rank: i32) -> String {
+    build_sem_name(port, asm_service, local_rank, "input_avail")
+}
+
 /// Shared memory name for precompile hints data
 pub fn shmem_precompile_name(port: u16, local_rank: i32) -> String {
     build_shmem_name2(port, local_rank, "precompile")

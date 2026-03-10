@@ -76,6 +76,7 @@ impl AsmResources {
         verbose_mode: proofman_common::VerboseMode,
         with_hints: bool,
         mpi_broadcast_fn: Option<MpiBroadcastFn>,
+        init_rom: bool,
     ) -> Result<Self> {
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
         let asm_shmem_mt = MTShMemReader::new(local_rank, base_port, unlock_mapped_memory)?;
@@ -136,6 +137,10 @@ impl AsmResources {
 
                     (builder.build().expect("Failed to build HintsProcessor"), hints_file)
                 };
+
+            if init_rom {
+                hints_processor.set_has_rom_sm(true);
+            }
 
             (Some(Arc::new(Mutex::new(ZiskStream::new(hints_processor)))), Some(hints_sink))
         } else {

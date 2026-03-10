@@ -194,6 +194,8 @@ impl ProverEngine for AsmProver {
             }) as Arc<dyn Fn(&mut Vec<u8>) -> Result<()> + Send + Sync>
         });
 
+        let init_rom = !is_distributed && world_rank == 0;
+
         let asm_resources = AsmResources::new(
             local_rank,
             base_port,
@@ -201,6 +203,7 @@ impl ProverEngine for AsmProver {
             verbose_mode,
             elf.with_hints(),
             mpi_broadcast_fn,
+            init_rom,
         )?;
 
         self.n_setups.fetch_add(1, Ordering::SeqCst);

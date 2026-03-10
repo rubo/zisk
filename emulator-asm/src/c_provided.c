@@ -467,7 +467,7 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
             fflush(stderr);
             exit(-1);
         }
-        if (*input_written_address > required_input_bytes)
+        if (*input_written_address >= required_input_bytes)
         {
             // Sync input shared memory
             if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) {

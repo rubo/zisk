@@ -194,6 +194,7 @@ impl AsmResources {
             hints_stream.lock().unwrap().reset();
             self.hints_stream_initialized.store(false, Ordering::SeqCst);
         }
+        self.inputs_shmem_writer.reset();
     }
 
     pub fn config(&self) -> &AsmResourcesConfig {

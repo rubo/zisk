@@ -110,7 +110,7 @@ impl HintsShmem {
         Ok(Self {
             unified: RefCell::new(unified),
             separate: RefCell::new(separate),
-            has_rom_sm: AtomicBool::new(true),
+            has_rom_sm: AtomicBool::new(false),
         })
     }
 
@@ -186,7 +186,7 @@ impl StreamSink for HintsShmem {
     /// * `Ok(())` - If hints were successfully written to shared memory
     /// * `Err` - If writing to shared memory fails
     #[inline]
-    fn submit(&self, processed: Vec<u64>) -> anyhow::Result<()> {
+    fn submit(&self, processed: &[u64]) -> anyhow::Result<()> {
         let data_size = processed.len() as u64;
 
         // Early return for empty data
@@ -258,7 +258,7 @@ impl StreamSink for HintsShmem {
         }
 
         // Write data ONCE to the unified shared memory buffer
-        unified.data_writer.write_ring_buffer(&processed)?;
+        unified.data_writer.write_ring_buffer(processed)?;
 
         fence(Ordering::Release);
 
@@ -292,6 +292,8 @@ impl StreamSink for HintsShmem {
                 "Control reader position should be reset to 0"
             );
         }
+
+        self.has_rom_sm.store(false, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn set_has_rom_sm(&self, has_rom_sm: bool) {

@@ -8,6 +8,8 @@ members = [
     "aggregation/host",
     "aggregation/guest",
     "aggregation/guest_agg",
+    "big-program/host",
+    "big-program/guest",
 ]
 
 resolver = "2"

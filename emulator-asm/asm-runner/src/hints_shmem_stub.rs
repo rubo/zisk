@@ -1,5 +1,6 @@
 use crate::{AsmService, ControlShmem};
 use anyhow::Result;
+use std::sync::Arc;
 use zisk_common::io::StreamSink;
 
 /// HintsShmem struct manages the writing of processed precompile hints to shared memory.

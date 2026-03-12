@@ -37,7 +37,6 @@ pub struct AsmResources {
     config: AsmResourcesConfig,
 
     /// Shared memory for writing inputs to the assembly microservices.
-    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     pub inputs_shmem_writer: Arc<InputsShmemWriter>,
 
     /// Pipeline for handling precompile hints.
@@ -124,7 +123,6 @@ impl AsmResources {
             mo_shmem_reader: Arc::new(Mutex::new(asm_shmem_mo)),
             #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             rh_shmem_reader: Arc::new(Mutex::new(None)),
-            #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
             inputs_shmem_writer,
         })
     }

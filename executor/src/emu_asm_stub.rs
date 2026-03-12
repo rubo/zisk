@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{DeviceMetricsList, NestedDeviceMetricsList, StaticSMBundle};
+use anyhow::Result;
 use asm_runner::{AsmRunnerMO, AsmRunnerRH};
 
 use crate::AsmResources;

@@ -258,6 +258,25 @@ impl<F: PrimeField64> WitnessComponent<F> for ZiskExecutor<F> {
         stats_end!(self.state.stats, &_config_scope);
         stats_end!(self.state.stats, &_exec_scope);
 
+        let secn_instances = self.state.secn_instances.read().unwrap();
+        for (global_id, instance) in secn_instances.iter() {
+            let (airgroup_id, air_id) =
+                pctx.dctx_get_instance_info(*global_id).expect("Failed to get instance info");
+
+            let setup = sctx.get_setup(airgroup_id, air_id).unwrap();
+            let n_bits = setup.stark_info.stark_struct.n_bits;
+            let total_cols: u64 = setup
+                .stark_info
+                .map_sections_n
+                .iter()
+                .filter(|(key, _)| *key != "const")
+                .map(|(_, value)| *value)
+                .sum();
+            let cost = (1 << n_bits) * total_cols;
+            let stats_type = instance.stats_type();
+            cost_per_type.add_cost(stats_type, cost);
+        }
+
         let tables_air_ids =
             [SPECIFIED_RANGES_AIR_IDS[0], VIRTUAL_TABLE_0_AIR_IDS[0], VIRTUAL_TABLE_1_AIR_IDS[0]];
         for air_id in tables_air_ids {

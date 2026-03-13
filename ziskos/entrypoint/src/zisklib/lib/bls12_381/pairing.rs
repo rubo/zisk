@@ -100,21 +100,7 @@ pub fn pairing_batch_bls12_381(
     )
 }
 
-/// BLS12-381 pairing check with validation.
-///
-/// Validates all points are on curve and in subgroup.
-///
-/// # Arguments
-/// * `g1_points` - Slice of G1 points as [u64; 12]
-/// * `g2_points` - Slice of G2 points as [u64; 24]
-///
-/// # Returns
-/// * `Ok(true)` - Pairing check passed
-/// * `Ok(false)` - Pairing check failed
-/// * `Err(PAIRING_CHECK_ERR_G1_NOT_ON_CURVE)` - G1 point not on curve
-/// * `Err(PAIRING_CHECK_ERR_G1_NOT_IN_SUBGROUP)` - G1 point not in subgroup
-/// * `Err(PAIRING_CHECK_ERR_G2_NOT_ON_CURVE)` - G2 point not on curve
-/// * `Err(PAIRING_CHECK_ERR_G2_NOT_IN_SUBGROUP)` - G2 point not in subgroup
+/// Pairing check with validation
 pub fn pairing_check_bls12_381(
     g1_points: &[[u64; 12]],
     g2_points: &[[u64; 24]],

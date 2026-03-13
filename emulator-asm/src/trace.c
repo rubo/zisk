@@ -15,6 +15,7 @@
 #include "constants.hpp"
 #include "globals.hpp"
 #include "emu.hpp"
+#include "log.hpp"
 
 uint64_t next_chunk_id = 0; // Next trace chunk id to be mapped, starting from 0
 int trace_chunk_fd[TRACE_NUMBER_OF_CHUNKS]; // File descriptors for each chunk
@@ -56,9 +57,7 @@ void trace_generate_shmem_chunk_name(char * shmem_chunk_name, size_t shmem_chunk
     int result = snprintf(shmem_chunk_name, shmem_chunk_name_size, "%s_%lu", shmem_output_name, chunk_id);
     if (result < 0 || result >= (int)shmem_chunk_name_size)
     {
-        printf("ERROR: trace_generate_shmem_chunk_name() failed to create chunk shared memory name\n");
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: trace_generate_shmem_chunk_name() failed to create chunk shared memory name\n");
         exit(-1);
     }
 }
@@ -73,9 +72,7 @@ void trace_cleanup (void)
         int result = munmap(chunk_address, chunk_size);
         if (result != 0)
         {
-            printf("ERROR: trace_cleanup() failed calling munmap() chunk id=%lu size=%lu B address=0x%lx errno=%d=%s\n", chunk_id, chunk_size, (uint64_t)chunk_address, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: trace_cleanup() failed calling munmap() chunk id=%lu size=%lu B address=0x%lx errno=%d=%s\n", chunk_id, chunk_size, (uint64_t)chunk_address, errno, strerror(errno));
             exit(-1);
         }
 
@@ -110,7 +107,7 @@ void trace_preventive_cleanup (void)
         {
             break;
         }
-        if (verbose) printf("trace_preventive_cleanup() unlinked chunk shared memory %s\n", shmem_chunk_name);
+        if (verbose) asm_printf("trace_preventive_cleanup() unlinked chunk shared memory %s\n", shmem_chunk_name);
     }
 }
 
@@ -120,15 +117,13 @@ void trace_map_next_chunk (void)
     uint64_t chunk_id = next_chunk_id;
     if (chunk_id >= TRACE_NUMBER_OF_CHUNKS)
     {
-        printf("ERROR: trace_map_next_chunk() exceeded maximum number of chunks %lu\n", TRACE_NUMBER_OF_CHUNKS);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: trace_map_next_chunk() exceeded maximum number of chunks %lu\n", TRACE_NUMBER_OF_CHUNKS);
         exit(-1);
     }
     uint64_t chunk_size = trace_get_chunk_size(chunk_id);
     void * chunk_address = trace_get_chunk_address(chunk_id);
 
-    if (verbose) printf("trace_map_next_chunk() mapping chunk id=%lu size=%lu B address=0x%lx\n", chunk_id, chunk_size, (uint64_t)chunk_address);
+    if (verbose) asm_printf("trace_map_next_chunk() mapping chunk id=%lu size=%lu B address=0x%lx\n", chunk_id, chunk_size, (uint64_t)chunk_address);
 
     // Build the chunk shared memory name
     char shmem_chunk_name[128];
@@ -141,9 +136,7 @@ void trace_map_next_chunk (void)
     trace_chunk_fd[chunk_id] = shm_open(shmem_chunk_name, O_RDWR | O_CREAT | O_EXCL, 0666);
     if (trace_chunk_fd[chunk_id] < 0)
     {
-        printf("ERROR: trace_map_next_chunk() failed calling trace shm_open(%s) errno=%d=%s\n", shmem_chunk_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: trace_map_next_chunk() failed calling trace shm_open(%s) errno=%d=%s\n", shmem_chunk_name, errno, strerror(errno));
         exit(-1);
     }
 
@@ -151,9 +144,7 @@ void trace_map_next_chunk (void)
     int result = ftruncate(trace_chunk_fd[chunk_id], chunk_size);
     if (result != 0)
     {
-        printf("ERROR: trace_map_next_chunk() failed calling ftruncate(%s) errno=%d=%s\n", shmem_chunk_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: trace_map_next_chunk() failed calling ftruncate(%s) errno=%d=%s\n", shmem_chunk_name, errno, strerror(errno));
         exit(-1);
     }
 
@@ -184,19 +175,15 @@ void trace_map_next_chunk (void)
     }
     if (pTrace == MAP_FAILED)
     {
-        printf("ERROR: trace_map_next_chunk() failed calling mmap(pTrace) name=%s errno=%d=%s\n", shmem_chunk_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: trace_map_next_chunk() failed calling mmap(pTrace) name=%s errno=%d=%s\n", shmem_chunk_name, errno, strerror(errno));
         exit(-1);
     }
     if ((gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain) && ((uint64_t)pTrace != (uint64_t)requested_address))
     {
-        printf("ERROR: trace_map_next_chunk() called mmap(trace) but returned address = %p != 0x%lx\n", pTrace, (uint64_t)requested_address);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: trace_map_next_chunk() called mmap(trace) but returned address = %p != 0x%lx\n", pTrace, (uint64_t)requested_address);
         exit(-1);
     }
-    if (verbose) printf("trace_map_next_chunk() mapped %lu B to %s and returned address %p in %lu us\n", chunk_size, shmem_chunk_name, pTrace, duration);
+    if (verbose) asm_printf("trace_map_next_chunk() mapped %lu B to %s and returned address %p in %lu us\n", chunk_size, shmem_chunk_name, pTrace, duration);
 
     // Update total mapped size
     trace_total_mapped_size += chunk_size;

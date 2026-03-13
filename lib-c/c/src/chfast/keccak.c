@@ -273,6 +273,19 @@ extern void keccakf1600_generic(uint64_t state[25])
     keccakf1600_implementation(state);
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+extern void zisk_keccakf1600(uint64_t state[25])
+{
+    keccakf1600_implementation(state);
+}
+
+#ifdef __cplusplus
+}
+#endif
+
 /// The pointer to the best Keccak-f[1600] function implementation,
 /// selected during runtime initialization.
 static void (*keccakf1600_best)(uint64_t[25]) = keccakf1600_generic;

@@ -63,9 +63,9 @@ build/zisk.ld:
 	    > build/zisk.ld
 
 # Compile the final executable
-$(OUT_PATH): build/zisk.ld build/emu.o src/main.c src/globals.c src/configuration.c src/trace_logs.c src/server.c src/client.c src/c_provided.c src/trace.c src/emu.c src/chfast/keccak.c src/bcon/bcon_sha256.c build/dma.o
+$(OUT_PATH): build/zisk.ld build/emu.o src/main.c src/globals.c src/configuration.c src/trace_logs.c src/server.c src/client.c src/c_provided.c src/trace.c src/emu.c build/dma.o
 	mkdir -p $(OUT_DIR)
-	gcc $(CFLAGS)  -Wl,-T,build/zisk.ld src/main.c src/globals.c src/configuration.c src/trace_logs.c src/server.c src/client.c src/c_provided.c src/trace.c src/emu.c src/chfast/keccak.c src/bcon/bcon_sha256.c -L../lib-c/c/lib -L../../bin -L../target/release -L../target/debug -lc build/emu.o -lc build/dma.o -lziskc -lziskclib -lgmp -lstdc++ -lgmpxx -o $@
+	gcc $(CFLAGS)  -Wl,-T,build/zisk.ld src/main.c src/globals.c src/configuration.c src/trace_logs.c src/server.c src/client.c src/c_provided.c src/trace.c src/emu.c -L../lib-c/c/lib -L../../bin -L../target/release -L../target/debug -lc build/emu.o -lc build/dma.o -lziskc -lziskclib -lgmp -lstdc++ -lgmpxx -o $@
 
 clean:
 	rm -rf build

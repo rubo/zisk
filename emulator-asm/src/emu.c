@@ -18,11 +18,9 @@
 #include "../../lib-c/c/src/bls12_381/bls12_381.hpp"
 #include "../../lib-c/c/src/poseidon2/poseidon2_goldilocks.hpp"
 #include "../../lib-c/c/src/blake2/blake2.hpp"
-#include "bcon/bcon_sha256.hpp"
+#include "../../lib-c/c/src/chfast/zisk_keccak.h"
 
 extern void zisk_sha256(uint64_t state[4], uint64_t input[8]);
-
-extern void keccakf1600_generic(uint64_t state[25]);
 
 #ifdef DEBUG
 bool emu_verbose = false;
@@ -512,11 +510,11 @@ extern int _opcode_keccak(uint64_t address)
 #endif
 #ifdef DEBUG
 #ifdef ASM_CALL_METRICS
-    if (emu_verbose) printf("opcode_keccak() calling keccakf1600_generic() counter=%lu address=%08lx\n", asm_call_metrics.keccak_counter, address);
+    if (emu_verbose) printf("opcode_keccak() calling zisk_keccakf1600() counter=%lu address=%08lx\n", asm_call_metrics.keccak_counter, address);
 #else
     if (emu_verbose)
     {
-        printf("opcode_keccak() calling keccakf1600_generic() address=%08lx\n", address);
+        printf("opcode_keccak() calling zisk_keccakf1600() address=%08lx\n", address);
         for (uint64_t i=0; i<200; i++)
         {
             printf("%02x", ((uint8_t *)(uintptr_t)address)[i]);
@@ -531,7 +529,7 @@ extern int _opcode_keccak(uint64_t address)
     {
 #endif
         // Call keccak-f compression function
-        keccakf1600_generic((uint64_t *)address);
+        zisk_keccakf1600((uint64_t *)address);
 
 #ifdef ASM_PRECOMPILE_CACHE
         // Store result in cache
@@ -547,7 +545,7 @@ extern int _opcode_keccak(uint64_t address)
 #ifdef DEBUG
     if (emu_verbose)
     {
-        printf("opcode_keccak() called keccakf1600_generic()\n");
+        printf("opcode_keccak() called zisk_keccakf1600()\n");
         for (uint64_t i=0; i<200; i++)
         {
             printf("%02x", ((uint8_t *)(uintptr_t)address)[i]);

@@ -20,8 +20,6 @@ pub const ZISK_VERSION_MESSAGE: &str = concat!(
 
 pub const ZISK_TARGET: &str = "riscv64ima-zisk-zkvm-elf";
 
-pub const HELPER_TARGET_SUBDIR: &str = "elf";
-
 /// Arguments for building a ZisK program.
 #[derive(Default, Clone, Parser, Debug)]
 #[command(author, about, long_about = None, version = ZISK_VERSION_MESSAGE)]
@@ -44,12 +42,20 @@ pub struct BuildArgs {
     #[clap(long, value_name = "ELF_NAME")]
     elf_name: Option<String>,
 
+    #[clap(long, value_name = "ASM")]
+    pub asm: Option<bool>,
+
     #[clap(long, value_name = "HINTS")]
     pub hints: Option<bool>,
 }
 
 pub fn build_program(path: &str) {
     build_program_internal(path, None)
+}
+
+pub fn build_program_asm(path: &str) {
+    let args = BuildArgs { asm: Some(true), ..Default::default() };
+    build_program_internal(path, Some(args))
 }
 
 pub fn build_program_with_args(path: &str, args: BuildArgs) {

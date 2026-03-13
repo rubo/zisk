@@ -290,6 +290,22 @@ impl ElfBinaryFromFile {
             path: Some(elf.to_str().unwrap().to_string()),
         })
     }
+
+    pub fn elf(&self) -> &[u8] {
+        &self.elf
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn with_hints(&self) -> bool {
+        self.with_hints
+    }
+
+    pub fn path(&self) -> Option<String> {
+        self.path.clone()
+    }
 }
 
 impl ElfBinaryLike for ElfBinaryFromFile {
@@ -312,6 +328,24 @@ pub struct ElfBinary {
     pub name: &'static str,
     pub with_hints: bool,
     pub path: Option<&'static str>,
+}
+
+impl ElfBinary {
+    pub fn elf(&self) -> &[u8] {
+        self.elf
+    }
+
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    pub fn with_hints(&self) -> bool {
+        self.with_hints
+    }
+
+    pub fn path(&self) -> Option<String> {
+        self.path.map(|s| s.to_string())
+    }
 }
 
 impl ElfBinaryLike for ElfBinary {

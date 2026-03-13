@@ -23,7 +23,10 @@ mod hints_file;
 mod hints_shmem;
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 mod hints_shmem_stub;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod inputs_shmem;
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+mod inputs_shmem_stub;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod multi_shmem;
 mod shmem_reader;
@@ -53,7 +56,10 @@ pub use hints_file::*;
 pub use hints_shmem::*;
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 pub use hints_shmem_stub::*;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub use inputs_shmem::*;
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+pub use inputs_shmem_stub::*;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub use multi_shmem::*;
 pub use shmem_reader::*;

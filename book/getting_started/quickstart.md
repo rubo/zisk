@@ -64,14 +64,12 @@ This will create a project with the following structure:
 
 The example program takes a number `n` as input and computes the SHA-256 hash `n` times.
 
-The `build.rs` file generates an `input.bin` file containing the value of `n` (e.g., 20). This file is used in `main.rs` as input to calculate the hash.
-
 ## Build
 
-The next step is to build the program using the `cargo-zisk` command to generate an ELF file (RISC-V), which will be used later to generate the proof. Execute:
+The next step is to build the program to generate an ELF file (RISC-V), which will be used later to generate the proof. Execute:
 
 ```bash
-cargo-zisk build --release
+cargo build --release
 ```
 
 This command builds the program using the `zkvm` target. The resulting `sha_hasher` ELF file (without extension) is generated in the `./target/elf/riscv64ima-zisk-zkvm-elf/release` directory.

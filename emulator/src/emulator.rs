@@ -325,6 +325,29 @@ impl Emulator for ZiskEmulator {
             inputs = fs::read(path).expect("Could not read inputs file");
         }
 
+        // Build an input data buffer either from the provided inputs path (if provided), or leave
+        // it empty
+        if options.legacy_inputs.is_some() {
+            if options.inputs.is_some() {
+                return Err(ZiskEmulatorErr::WrongArguments(ErrWrongArguments::new(
+                    "Legacy input file and input file options are incompatible",
+                )));
+            }
+            // Read inputs data from the provided inputs path
+            let path = PathBuf::from(options.legacy_inputs.clone().unwrap());
+            let file_data = fs::read(path).expect("Could not read inputs file");
+
+            // Build legacy format: 8 bytes length (native endianness) + file content + padding to multiple of 8
+            let file_len = file_data.len() as u64;
+            let total_len = 8 + file_data.len();
+            let padding = (8 - (total_len % 8)) % 8;
+
+            inputs = Vec::with_capacity(total_len + padding);
+            inputs.extend_from_slice(&file_len.to_ne_bytes());
+            inputs.extend_from_slice(&file_data);
+            inputs.resize(total_len + padding, 0);
+        }
+
         // If a rom file path is provided, load the rom from it
         if options.rom.is_some() {
             // Get the rom file name

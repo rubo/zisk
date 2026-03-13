@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use cargo_zisk::commands::{
-    ZiskBuild, ZiskCheckSetup, ZiskClean, ZiskExecute, ZiskProve, ZiskProveSnark, ZiskRomSetup,
-    ZiskRun, ZiskSdk, ZiskStats, ZiskVerify, ZiskVerifyConstraints, ZiskVerifySnark,
+    ZiskBuild, ZiskCheckSetup, ZiskClean, ZiskConvertInput, ZiskExecute, ZiskProve, ZiskProveSnark,
+    ZiskRomSetup, ZiskRun, ZiskSdk, ZiskStats, ZiskVerify, ZiskVerifyConstraints, ZiskVerifySnark,
 };
 use clap::Parser;
 use zisk_build::ZISK_VERSION_MESSAGE;
@@ -17,6 +17,7 @@ use zisk_build::ZISK_VERSION_MESSAGE;
 )]
 pub enum Cargo {
     Build(ZiskBuild),
+    ConvertInput(ZiskConvertInput),
     CheckSetup(ZiskCheckSetup),
     Clean(ZiskClean),
     Execute(ZiskExecute),
@@ -38,6 +39,9 @@ fn main() -> Result<()> {
     match cargo_args {
         Cargo::Build(cmd) => {
             cmd.run().context("Error executing Build command")?;
+        }
+        Cargo::ConvertInput(cmd) => {
+            cmd.run().context("Error executing ConvertInput command")?;
         }
         Cargo::CheckSetup(cmd) => {
             cmd.run().context("Error executing CheckSetup command")?;

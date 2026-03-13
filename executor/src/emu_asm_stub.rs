@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{DeviceMetricsList, NestedDeviceMetricsList, StaticSMBundle};
+use anyhow::Result;
 use asm_runner::{AsmRunnerMO, AsmRunnerRH};
 
 use crate::AsmResources;
@@ -39,14 +40,14 @@ impl EmulatorAsm {
         _use_hints: bool,
         _stats: &ExecutorStatsHandle,
         _caller_stats_scope: &StatsScope,
-    ) -> (
+    ) -> Result<(
         Vec<EmuTrace>,
         DeviceMetricsList,
         NestedDeviceMetricsList,
         Option<JoinHandle<AsmRunnerMO>>,
         Option<JoinHandle<AsmRunnerRH>>,
         u64,
-    ) {
+    )> {
         unimplemented!("AsmRunner is only supported on Linux x86_64 platforms.");
     }
 

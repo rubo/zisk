@@ -85,6 +85,11 @@ To update ZisK to the latest version, simply run:
 
 You can use the flags `--provingkey`, `--verifykey` or `--nokey` to specify the installation setup and skip the selection prompt.
 
+To install the PLONK proving key (provingKeySnark), run:
+    ```bash
+    ziskup setup_snark
+    ```
+
 
 ### Option 2: Building from Source
 

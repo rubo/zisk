@@ -27,6 +27,9 @@ pub struct EmuOptions {
     /// Sets the input data file path
     #[clap(short, long, value_name = "INPUT_FILE")]
     pub inputs: Option<String>,
+    /// Sets the legacy input data file path
+    #[clap(long, value_name = "LEGACY_INPUT_FILE")]
+    pub legacy_inputs: Option<String>,
     /// Sets the output data file path
     #[clap(short, long, value_name = "OUTPUT_FILE")]
     pub output: Option<String>,
@@ -176,6 +179,7 @@ impl Default for EmuOptions {
             max_input_mem: MAX_INPUT_SIZE,
             steps: false,
             with_progress: false,
+            legacy_inputs: None,
         }
     }
 }

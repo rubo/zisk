@@ -254,7 +254,7 @@ void client_write_precompile_results (void)
     }
     if ((precompile_data_size & 0x7) != 0)
     {
-        asm_printf("ERROR: Precompile results file (%s) size (%lu) is not a multiple of 8 B\n", precompile_file_name, precompile_data_size);
+        asm_printf("ERROR: Precompile results file (%s) size (%ld) is not a multiple of 8 B\n", precompile_file_name, precompile_data_size);
         exit(-1);
     }
 

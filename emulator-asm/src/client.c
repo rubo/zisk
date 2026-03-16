@@ -370,13 +370,13 @@ void client_write_precompile_results (void)
         while (precompile_read_so_far < (uint64_t)precompile_data_size)
         {
             uint64_t data;
-            uint64_t bytes_to_read = sizeof(data);
+            size_t bytes_to_read = sizeof(data);
 
             // Copy input data into input memory
             size_t precompile_read = fread(&data, 1, bytes_to_read, precompile_fp);
             if (precompile_read != bytes_to_read)
             {
-                asm_printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, bytes_to_read);
+                asm_printf("ERROR: Input read (%zu) != expected read size (%zu)\n", precompile_read, bytes_to_read);
                 exit(-1);
             }
             precompile_read_so_far += bytes_to_read;
@@ -424,7 +424,7 @@ void client_write_precompile_results (void)
                         size_t precompile_read = fread(&value, 1, 8, precompile_fp);
                         if (precompile_read != 8)
                         {
-                            asm_printf("ERROR: Input read (%lu) != expected read size (8)\n", precompile_read);
+                            asm_printf("ERROR: Input read (%zu) != expected read size (8)\n", precompile_read);
                             exit(-1);
                         }
                         memcpy(&precompile_results_address[(precompile_written_so_far >> 3) % (MAX_PRECOMPILE_SIZE >> 3)], &value, 8);

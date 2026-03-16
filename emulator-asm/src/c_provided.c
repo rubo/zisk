@@ -143,7 +143,7 @@ extern int _print_pc (uint64_t pc, uint64_t c)
         if (duration > 900)
         {
             uint64_t chunk = print_pc_counter / chunk_size;
-            asm_printf("print_pc() pc=%lx counter=%lu sec=%lu usec=%lu duration=%lu chunk=%lu\n", pc, print_pc_counter, tv.tv_sec, tv.tv_usec, duration, chunk);
+            asm_printf("print_pc() pc=%lx counter=%lu sec=%ld usec=%ld duration=%lu chunk=%lu\n", pc, print_pc_counter, tv.tv_sec, tv.tv_usec, duration, chunk);
             fflush(stdout);
         }
         print_pc_tv = tv;

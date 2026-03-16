@@ -20,6 +20,7 @@
 #include "trace.hpp"
 #include "emu.hpp"
 #include "c_provided.hpp"
+#include "log.hpp"
 
 /**********/
 /* SERVER */
@@ -55,19 +56,15 @@ void server_setup (void)
         }
         if (pRom == MAP_FAILED)
         {
-            printf("ERROR: Failed calling mmap(rom) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling mmap(rom) errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         if ((uint64_t)pRom != ROM_ADDR)
         {
-            printf("ERROR: Called mmap(rom) but returned address = %p != 0x%lx\n", pRom, ROM_ADDR);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Called mmap(rom) but returned address = %p != 0x%lx\n", pRom, ROM_ADDR);
             exit(-1);
         }
-        if (verbose) printf("mmap(rom) mapped %ld B and returned address %p in %lu us\n", ROM_SIZE, pRom, duration);
+        if (verbose) asm_printf("mmap(rom) mapped %lu B and returned address %p in %lu us\n", ROM_SIZE, pRom, duration);
     }
 
     /*********/
@@ -85,9 +82,7 @@ void server_setup (void)
             shmem_input_fd = shm_open(shmem_input_name, O_RDWR | O_CREAT | O_EXCL, 0666);
             if (shmem_input_fd < 0)
             {
-                printf("ERROR: Failed calling input RW shm_open(%s) as read-write errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling input RW shm_open(%s) as read-write errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
                 exit(-1);
             }
 
@@ -95,9 +90,7 @@ void server_setup (void)
             result = ftruncate(shmem_input_fd, MAX_INPUT_SIZE);
             if (result != 0)
             {
-                printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
                 exit(-1);
             }
 
@@ -107,9 +100,7 @@ void server_setup (void)
             // Close the descriptor
             if (close(shmem_input_fd) != 0)
             {
-                printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
                 exit(-1);
             }
         }
@@ -118,9 +109,7 @@ void server_setup (void)
         shmem_input_fd = shm_open(shmem_input_name, O_RDONLY, 0666);
         if (shmem_input_fd < 0)
         {
-            printf("ERROR: Failed calling input RO shm_open(%s) as read-only errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling input RO shm_open(%s) as read-only errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
             exit(-1);
         }
 
@@ -134,21 +123,16 @@ void server_setup (void)
         }
         if (pInput == MAP_FAILED)
         {
-            printf("ERROR: Failed calling mmap(input) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling mmap(input) errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         if ((uint64_t)pInput != INPUT_ADDR)
         {
-            printf("ERROR: Called mmap(pInput) but returned address = %p != 0x%lx\n", pInput, INPUT_ADDR);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Called mmap(pInput) but returned address = %p != 0x%lx\n", pInput, INPUT_ADDR);
             exit(-1);
         }
         if (verbose) {
-            printf("mmap(input) mapped %lu B and returned address %p in %lu us\n", MAX_INPUT_SIZE, pInput, duration);
-            fflush(stdout);
+            asm_printf("mmap(input) mapped %lu B and returned address %p in %lu us\n", MAX_INPUT_SIZE, pInput, duration);
         }
     }
 
@@ -171,9 +155,7 @@ void server_setup (void)
             shmem_precompile_fd = shm_open(shmem_precompile_name, O_RDWR | O_CREAT, 0666);
             if (shmem_precompile_fd < 0)
             {
-                printf("ERROR: Failed calling precompile shm_open(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling precompile shm_open(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
                 exit(-1);
             }
 
@@ -181,9 +163,7 @@ void server_setup (void)
             result = ftruncate(shmem_precompile_fd, MAX_PRECOMPILE_SIZE);
             if (result != 0)
             {
-                printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
                 exit(-1);
             }
 
@@ -193,9 +173,7 @@ void server_setup (void)
             // Close the descriptor
             if (close(shmem_precompile_fd) != 0)
             {
-                printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
                 exit(-1);
             }
         }
@@ -204,9 +182,7 @@ void server_setup (void)
         shmem_precompile_fd = shm_open(shmem_precompile_name, O_RDONLY, 0666);
         if (shmem_precompile_fd < 0)
         {
-            printf("ERROR: Failed calling precompile RO shm_open(%s) as read-only errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling precompile RO shm_open(%s) as read-only errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
             exit(-1);
         }
 
@@ -220,14 +196,12 @@ void server_setup (void)
         }
         if (pPrecompile == MAP_FAILED)
         {
-            printf("ERROR: Failed calling mmap(precompile) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling mmap(precompile) errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         shmem_precompile_address = pPrecompile;
         precompile_results_address = (uint64_t *)pPrecompile;
-        if (verbose) printf("mmap(precompile) mapped %lu B and returned address %p in %lu us\n", MAX_PRECOMPILE_SIZE, precompile_results_address, duration);
+        if (verbose) asm_printf("mmap(precompile) mapped %lu B and returned address %p in %lu us\n", MAX_PRECOMPILE_SIZE, precompile_results_address, duration);
 
         /*************************/
         /* PRECOMPILE SEMAPHORES */
@@ -241,12 +215,10 @@ void server_setup (void)
         sem_prec_avail = sem_open(sem_prec_avail_name, O_CREAT | O_EXCL, 0666, 0);
         if (sem_prec_avail == SEM_FAILED)
         {
-            printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
             exit(-1);
         }
-        if (verbose) printf("sem_open(%s) succeeded sem_prec_avail=%p\n", sem_prec_avail_name, sem_prec_avail);
+        if (verbose) asm_printf("sem_open(%s) succeeded sem_prec_avail=%p\n", sem_prec_avail_name, sem_prec_avail);
 
         // Create the semaphore for precompile results read signal
         assert(strlen(sem_prec_read_name) > 0);
@@ -256,12 +228,10 @@ void server_setup (void)
         sem_prec_read = sem_open(sem_prec_read_name, O_CREAT | O_EXCL, 0666, 0);
         if (sem_prec_read == SEM_FAILED)
         {
-            printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
             exit(-1);
         }
-        if (verbose) printf("sem_open(%s) succeeded sem_prec_read=%p\n", sem_prec_read_name, sem_prec_read);
+        if (verbose) asm_printf("sem_open(%s) succeeded sem_prec_read=%p\n", sem_prec_read_name, sem_prec_read);
     }
 
     /*****************/
@@ -277,9 +247,7 @@ void server_setup (void)
         shmem_control_input_fd = shm_open(shmem_control_input_name, O_RDWR | O_CREAT, 0666);
         if (shmem_control_input_fd < 0)
         {
-            printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
             exit(-1);
         }
 
@@ -287,9 +255,7 @@ void server_setup (void)
         result = ftruncate(shmem_control_input_fd, CONTROL_INPUT_SIZE);
         if (result != 0)
         {
-            printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
             exit(-1);
         }
 
@@ -299,9 +265,7 @@ void server_setup (void)
         // Close the descriptor
         if (close(shmem_control_input_fd) != 0)
         {
-            printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling close(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
             exit(-1);
         }
     }
@@ -310,9 +274,7 @@ void server_setup (void)
     shmem_control_input_fd = shm_open(shmem_control_input_name, O_RDONLY, 0666);
     if (shmem_control_input_fd < 0)
     {
-        printf("ERROR: Failed calling precompile RO shm_open(%s) as read-only errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling precompile RO shm_open(%s) as read-only errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
         exit(-1);
     }
 
@@ -326,23 +288,19 @@ void server_setup (void)
     }
     if (pControl == MAP_FAILED)
     {
-        printf("ERROR: Failed calling mmap(control_input) errno=%d=%s\n", errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling mmap(control_input) errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
     if (pControl != (void *)CONTROL_INPUT_ADDR)
     {
-        printf("ERROR: Called mmap(control_input) but returned address = %p != 0x%08lx\n", pControl, CONTROL_INPUT_ADDR);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Called mmap(control_input) but returned address = %p != 0x%08lx\n", pControl, CONTROL_INPUT_ADDR);
         exit(-1);
     }
     shmem_control_input_address = (uint64_t *)pControl;
     precompile_written_address = &shmem_control_input_address[0];
     precompile_exit_address = &shmem_control_input_address[1];
     input_written_address = &shmem_control_input_address[2];
-    if (verbose) printf("mmap(control_input) mapped %lu B and returned address %p in %lu us\n", CONTROL_INPUT_SIZE, shmem_control_input_address, duration);
+    if (verbose) asm_printf("mmap(control_input) mapped %lu B and returned address %p in %lu us\n", CONTROL_INPUT_SIZE, shmem_control_input_address, duration);
 
     /******************/
     /* CONTROL OUTPUT */
@@ -355,9 +313,7 @@ void server_setup (void)
     shmem_control_output_fd = shm_open(shmem_control_output_name, O_RDWR | O_CREAT, 0666);
     if (shmem_control_output_fd < 0)
     {
-        printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling control shm_open(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
         exit(-1);
     }
 
@@ -365,9 +321,7 @@ void server_setup (void)
     result = ftruncate(shmem_control_output_fd, CONTROL_OUTPUT_SIZE);
     if (result != 0)
     {
-        printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling ftruncate(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
         exit(-1);
     }
 
@@ -381,23 +335,19 @@ void server_setup (void)
     }
     if (pControl == MAP_FAILED)
     {
-        printf("ERROR: Failed calling mmap(control_output) errno=%d=%s\n", errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling mmap(control_output) errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
     if (pControl != (void *)CONTROL_OUTPUT_ADDR)
     {
-        printf("ERROR: Called mmap(control_output) but returned address = %p != 0x%08lx\n", pControl, CONTROL_OUTPUT_ADDR);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Called mmap(control_output) but returned address = %p != 0x%08lx\n", pControl, CONTROL_OUTPUT_ADDR);
         exit(-1);
     }
     shmem_control_output_address = (uint64_t *)pControl;
     precompile_read_address = &shmem_control_output_address[0];
     waiting_for_precompile_address = &shmem_control_output_address[1];
     waiting_for_input_address = &shmem_control_output_address[2];
-    if (verbose) printf("mmap(control_output) mapped %lu B and returned address %p in %lu us\n", CONTROL_OUTPUT_SIZE, shmem_control_output_address, duration);
+    if (verbose) asm_printf("mmap(control_output) mapped %lu B and returned address %p in %lu us\n", CONTROL_OUTPUT_SIZE, shmem_control_output_address, duration);
 
     /*******/
     /* RAM */
@@ -415,19 +365,15 @@ void server_setup (void)
         }
         if (pRam == MAP_FAILED)
         {
-            printf("ERROR: Failed calling mmap(ram) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling mmap(ram) errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         if ((uint64_t)pRam != RAM_ADDR)
         {
-            printf("ERROR: Called mmap(ram) but returned address = %p != 0x%08lx\n", pRam, RAM_ADDR);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Called mmap(ram) but returned address = %p != 0x%08lx\n", pRam, RAM_ADDR);
             exit(-1);
         }
-        if (verbose) printf("mmap(ram) mapped %lu B and returned address %p in %lu us\n", RAM_SIZE, pRam, duration);
+        if (verbose) asm_printf("mmap(ram) mapped %lu B and returned address %p in %lu us\n", RAM_SIZE, pRam, duration);
     }
 
     /****************/
@@ -476,9 +422,7 @@ void server_setup (void)
         shmem_mt_fd = shm_open(shmem_mt_name, O_RDONLY, 0666);
         if (shmem_mt_fd < 0)
         {
-            printf("ERROR: Failed calling mt shm_open(%s) errno=%d=%s\n", shmem_mt_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling mt shm_open(%s) errno=%d=%s\n", shmem_mt_name, errno, strerror(errno));
             exit(-1);
         }
 
@@ -493,19 +437,15 @@ void server_setup (void)
 #endif
         if (pTrace == MAP_FAILED)
         {
-            printf("ERROR: Failed calling mmap(MT) errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling mmap(MT) errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         if ((uint64_t)pTrace != TRACE_ADDR)
         {
-            printf("ERROR: Called mmap(MT) but returned address = %p != 0x%lx\n", pTrace, TRACE_ADDR);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Called mmap(MT) but returned address = %p != 0x%lx\n", pTrace, TRACE_ADDR);
             exit(-1);
         }
-        if (verbose) printf("mmap(MT) returned %p in %lu us\n", pTrace, duration);
+        if (verbose) asm_printf("mmap(MT) returned %p in %lu us\n", pTrace, duration);
     }
 
     /******************/
@@ -521,12 +461,10 @@ void server_setup (void)
         sem_chunk_done = sem_open(sem_chunk_done_name, O_CREAT | O_EXCL, 0666, 0);
         if (sem_chunk_done == SEM_FAILED)
         {
-            printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
             exit(-1);
         }
-        if (verbose) printf("sem_open(%s) succeeded\n", sem_chunk_done_name);
+        if (verbose) asm_printf("sem_open(%s) succeeded\n", sem_chunk_done_name);
     }
 
     /*********************/
@@ -540,12 +478,10 @@ void server_setup (void)
     sem_shutdown_done = sem_open(sem_shutdown_done_name, O_CREAT | O_EXCL, 0666, 0);
     if (sem_shutdown_done == SEM_FAILED)
     {
-        printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_shutdown_done_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_shutdown_done_name, errno, strerror(errno));
         exit(-1);
     }
-    if (verbose) printf("sem_open(%s) succeeded\n", sem_shutdown_done_name);    // Create the semaphore for input available signal
+    if (verbose) asm_printf("sem_open(%s) succeeded\n", sem_shutdown_done_name);    // Create the semaphore for input available signal
 
     /***********************/
     /* SEM INPUT AVAILABLE */
@@ -558,12 +494,10 @@ void server_setup (void)
     sem_input_avail = sem_open(sem_input_avail_name, O_CREAT | O_EXCL, 0666, 0);
     if (sem_input_avail == SEM_FAILED)
     {
-        printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling sem_open(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
         exit(-1);
     }
-    if (verbose) printf("sem_open(%s) succeeded\n", sem_input_avail_name);
+    if (verbose) asm_printf("sem_open(%s) succeeded\n", sem_input_avail_name);
 }
 
 void server_reset_fast (void)
@@ -577,9 +511,7 @@ void server_reset_fast (void)
         // Sync control output shared memory so that the writer can see the precompile reads we have
         // done, and thus update the precompile_written_address if needed
         if (msync((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE, MS_SYNC) != 0) {
-            printf("ERROR: server_reset_fast() msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: server_reset_fast() msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
     }
@@ -597,7 +529,7 @@ void server_reset_slow (void)
 #ifdef DEBUG
         gettimeofday(&stop_time, NULL);
         duration = TimeDiff(start_time, stop_time);
-        if (verbose) printf("server_reset_slow() memset(ram) in %lu us\n", duration);
+        if (verbose) asm_printf("server_reset_slow() memset(ram) in %lu us\n", duration);
 #endif
     }
 }
@@ -651,9 +583,7 @@ void server_run (void)
     // Sync input shared memory
     if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) 
     {
-        printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
 
@@ -661,17 +591,13 @@ void server_run (void)
     {
         // Sync control input shared memory
         if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
-            printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
 
         // Sync precompile shared memory
         if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
-            printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
     }
@@ -682,19 +608,9 @@ void server_run (void)
 
     // Call emulator assembly code
     gettimeofday(&start_time,NULL);
-    if (verbose)
-    {
-        printf("Before calling emulator_start() trace_address=%lx\n", trace_address);
-        fflush(stdout);
-        fflush(stderr);
-    }
+    if (verbose) asm_printf("Before calling emulator_start() trace_address=%lx\n", trace_address);
     emulator_start();
-    if (verbose)
-    {
-        printf("After calling emulator_start() trace_address=%lx\n", trace_address);
-        fflush(stdout);
-        fflush(stderr);
-    }
+    if (verbose) asm_printf("After calling emulator_start() trace_address=%lx\n", trace_address);
     gettimeofday(&stop_time,NULL);
     assembly_duration = TimeDiff(start_time, stop_time);
 
@@ -716,7 +632,7 @@ void server_run (void)
         uint64_t step_duration_ns = steps == 0 ? 0 : (duration * 1000) / steps;
         uint64_t step_tp_sec = duration == 0 ? 0 : steps * 1000000 / duration;
         uint64_t final_trace_size_percentage = (final_trace_size * 100) / trace_size;
-        printf("Duration = %lu us, realloc counter = %lu, wait prec counter = %lu, wait input counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%% of %lu), end=%lu, error=%lu, max steps=%lu, chunk size=%lu, prec_written=%lu, prec_read=%lu\n",
+        asm_printf("Duration = %lu us, realloc counter = %lu, wait prec counter = %lu, wait input counter = %lu, steps = %lu, step duration = %lu ns, tp = %lu steps/s, trace size = 0x%lx - 0x%lx = %lu B(%lu%% of %lu), end=%lu, error=%lu, max steps=%lu, chunk size=%lu, prec_written=%lu, prec_read=%lu\n",
             duration,
             realloc_counter,
             wait_prec_avail_counter,
@@ -740,16 +656,12 @@ void server_run (void)
         fflush(stderr);
         if (gen_method == RomHistogram)
         {
-            printf("Rom histogram size=%lu\n", histogram_size);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("Rom histogram size=%lu\n", histogram_size);
         }
     }
     if (MEM_ERROR)
     {
-        printf("Emulation ended with error code %lu\n", MEM_ERROR);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("Emulation ended with error code %lu\n", MEM_ERROR);
     }
 
     // Log output
@@ -760,9 +672,7 @@ void server_run (void)
 #ifdef DEBUG
         if (verbose)
         {
-            printf("Output size=%d\n", output_size);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("Output size=%d\n", output_size);
         }
 #endif
 
@@ -783,9 +693,7 @@ void server_run (void)
 #ifdef DEBUG
         if (verbose)
         {
-            printf("Output size=%d\n", output_size);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("Output size=%d\n", output_size);
         }
 #endif
 
@@ -837,9 +745,7 @@ void server_run (void)
     //     result = sem_post(sem_input);
     //     if (result == -1)
     //     {
-    //         printf("Failed calling sem_post(%s) errno=%d=%s\n", sem_input_name, errno, strerror(errno));
-    //         fflush(stdout);
-    //         fflush(stderr);
+    //         asm_printf("Failed calling sem_post(%s) errno=%d=%s\n", sem_input_name, errno, strerror(errno));
     //         exit(-1);
     //     }
     // }
@@ -890,26 +796,26 @@ void server_cleanup (void)
     int result = munmap((void *)ROM_ADDR, ROM_SIZE);
     if (result == -1)
     {
-        printf("ERROR: Failed calling munmap(rom) errno=%d=%s\n", errno, strerror(errno));
+        asm_printf("ERROR: Failed calling munmap(rom) errno=%d=%s\n", errno, strerror(errno));
     }
 
     // Cleanup RAM
     result = munmap((void *)RAM_ADDR, RAM_SIZE);
     if (result == -1)
     {
-        printf("ERROR: Failed calling munmap(ram) errno=%d=%s\n", errno, strerror(errno));
+        asm_printf("ERROR: Failed calling munmap(ram) errno=%d=%s\n", errno, strerror(errno));
     }
 
     // Cleanup INPUT
     result = munmap((void *)INPUT_ADDR, MAX_INPUT_SIZE);
     if (result == -1)
     {
-        printf("ERROR: Failed calling munmap(input) errno=%d=%s\n", errno, strerror(errno));
+        asm_printf("ERROR: Failed calling munmap(input) errno=%d=%s\n", errno, strerror(errno));
     }
     result = shm_unlink(shmem_input_name);
     if (result == -1)
     {
-        printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
+        asm_printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_input_name, errno, strerror(errno));
     }
 
     if (precompile_results_enabled && (gen_method != ChunkPlayerMTCollectMem) && (gen_method != ChunkPlayerMemReadsCollectMain))
@@ -918,39 +824,39 @@ void server_cleanup (void)
         result = munmap((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE);
         if (result == -1)
         {
-            printf("ERROR: Failed calling munmap(precompile) errno=%d=%s\n", errno, strerror(errno));
+            asm_printf("ERROR: Failed calling munmap(precompile) errno=%d=%s\n", errno, strerror(errno));
         }
         result = shm_unlink(shmem_precompile_name);
         if (result == -1)
         {
-            printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_precompile_name, errno, strerror(errno));
         }
 
         // Semaphores cleanup
         result = sem_close(sem_prec_avail);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
         }
         result = sem_unlink(sem_prec_avail_name);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
         }
         result = sem_close(sem_prec_read);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
         }
         result = sem_unlink(sem_prec_read_name);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_prec_read_name, errno, strerror(errno));
         }
         result = sem_close(sem_input_avail);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
         }
     }
 
@@ -958,27 +864,27 @@ void server_cleanup (void)
     result = munmap((void *)shmem_control_input_address, CONTROL_INPUT_SIZE);
     if (result == -1)
     {
-        printf("ERROR: Failed calling munmap(control_input) errno=%d=%s\n", errno, strerror(errno));
+        asm_printf("ERROR: Failed calling munmap(control_input) errno=%d=%s\n", errno, strerror(errno));
     }
     if (!wait_flag)
     {
         result = shm_unlink(shmem_control_input_name);
         if (result == -1)
         {
-            printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_input_name, errno, strerror(errno));
         }
     }
     result = munmap((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE);
     if (result == -1)
     {
-        printf("ERROR: Failed calling munmap(control_output) errno=%d=%s\n", errno, strerror(errno));
+        asm_printf("ERROR: Failed calling munmap(control_output) errno=%d=%s\n", errno, strerror(errno));
     }
     if (!wait_flag)
     {
         result = shm_unlink(shmem_control_output_name);
         if (result == -1)
         {
-            printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling shm_unlink(%s) errno=%d=%s\n", shmem_control_output_name, errno, strerror(errno));
         }
     }
 
@@ -991,12 +897,12 @@ void server_cleanup (void)
         result = sem_close(sem_chunk_done);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_close(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
         }
         result = sem_unlink(sem_chunk_done_name);
         if (result == -1)
         {
-            printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
+            asm_printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
         }
     }
 
@@ -1004,13 +910,13 @@ void server_cleanup (void)
     result = sem_unlink(sem_input_avail_name);
     if (result == -1)
     {
-        printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
+        asm_printf("ERROR: Failed calling sem_unlink(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
     }
 
     // Post shutdown done semaphore
     result = sem_post(sem_shutdown_done);
     if (result == -1)
     {
-        printf("ERROR: Failed calling sem_post(%s) errno=%d=%s\n", sem_shutdown_done_name, errno, strerror(errno));
+        asm_printf("ERROR: Failed calling sem_post(%s) errno=%d=%s\n", sem_shutdown_done_name, errno, strerror(errno));
     }
 }

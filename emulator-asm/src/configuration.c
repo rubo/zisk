@@ -6,6 +6,7 @@
 #include "configuration.hpp"
 #include "globals.hpp"
 #include "asm_provided.hpp"
+#include "log.hpp"
 
 /*******************************/
 /* ARGUMENTS AND CONFIGURATION */
@@ -17,45 +18,45 @@ uint16_t arguments_port = 0;
 // Print usage information: valid arguments
 void print_usage (void)
 {
-    printf("Usage: ziskemuasm\n");
-    printf("\t-s(server)\n");
-    printf("\t-c(client)\n");
-    printf("\t-i <input_file>\n");
-    printf("\t-p <port_number>\n");
-    printf("\t--gen=0|--generate_fast\n");
-    printf("\t--gen=1|--generate_minimal_trace\n");
-    printf("\t--gen=2|--generate_rom_histogram\n");
-    printf("\t--gen=3|--generate_main_trace\n");
-    printf("\t--gen=4|--generate_chunks\n");
-    printf("\t--gen=6|--generate_zip\n");
-    printf("\t--gen=9|--generate_mem_reads\n");
-    printf("\t--gen=10|--generate_chunk_player_mem_reads\n");
-    printf("\t--chunk <chunk_number>\n");
-    printf("\t--shutdown\n");
-    printf("\t--mt <number_of_mt_requests>\n");
-    printf("\t-o output on\n");
-    printf("\t--output_riscof output riscof on\n");
-    printf("\t--silent silent on\n");
-    printf("\t--shm_prefix <prefix> (default: ZISK)\n");
-    printf("\t-m metrics on\n");
-    printf("\t-t trace on\n");
-    printf("\t-tt trace_trace on\n");
-    printf("\t-f(save to file)\n");
-    printf("\t-a chunk_address\n");
-    printf("\t-v verbose on\n");
-    printf("\t-u unlock physical memory in mmap\n");
-    printf("\t--share_input_shm share input shared memories\n");
-    printf("\t--open_input_shm open existing input shared memories\n");
+    asm_printf("Usage: ziskemuasm\n");
+    asm_printf("\t-s(server)\n");
+    asm_printf("\t-c(client)\n");
+    asm_printf("\t-i <input_file>\n");
+    asm_printf("\t-p <port_number>\n");
+    asm_printf("\t--gen=0|--generate_fast\n");
+    asm_printf("\t--gen=1|--generate_minimal_trace\n");
+    asm_printf("\t--gen=2|--generate_rom_histogram\n");
+    asm_printf("\t--gen=3|--generate_main_trace\n");
+    asm_printf("\t--gen=4|--generate_chunks\n");
+    asm_printf("\t--gen=6|--generate_zip\n");
+    asm_printf("\t--gen=9|--generate_mem_reads\n");
+    asm_printf("\t--gen=10|--generate_chunk_player_mem_reads\n");
+    asm_printf("\t--chunk <chunk_number>\n");
+    asm_printf("\t--shutdown\n");
+    asm_printf("\t--mt <number_of_mt_requests>\n");
+    asm_printf("\t-o output on\n");
+    asm_printf("\t--output_riscof output riscof on\n");
+    asm_printf("\t--silent silent on\n");
+    asm_printf("\t--shm_prefix <prefix> (default: ZISK)\n");
+    asm_printf("\t-m metrics on\n");
+    asm_printf("\t-t trace on\n");
+    asm_printf("\t-tt trace_trace on\n");
+    asm_printf("\t-f(save to file)\n");
+    asm_printf("\t-a chunk_address\n");
+    asm_printf("\t-v verbose on\n");
+    asm_printf("\t-u unlock physical memory in mmap\n");
+    asm_printf("\t--share_input_shm share input shared memories\n");
+    asm_printf("\t--open_input_shm open existing input shared memories\n");
 #ifdef ASM_PRECOMPILE_CACHE
-    printf("\t--precompile-cache-store store precompile results in cache file\n");
-    printf("\t--precompile-cache-load load precompile results from cache file\n");
+    asm_printf("\t--precompile-cache-store store precompile results in cache file\n");
+    asm_printf("\t--precompile-cache-load load precompile results from cache file\n");
 #endif
     if (precompile_results_enabled)
     {
-        printf("\t-r <precompile_results_file>\n");
+        asm_printf("\t-r <precompile_results_file>\n");
     }
-    printf("\t--redirect-output-to-file redirect output to file\n");
-    printf("\t-h/--help print this\n");
+    asm_printf("\t--redirect-output-to-file redirect output to file\n");
+    asm_printf("\t-h/--help print this\n");
 }
 
 // Parse main function arguments and configure global variables accordingly
@@ -194,13 +195,13 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument -i in the last position; please provide input file after it\n");
+                    asm_printf("ERROR: Detected argument -i in the last position; please provide input file after it\n");
                     print_usage();
                     exit(-1);
                 }
                 if (strlen(argv[i]) > 4095)
                 {
-                    printf("ERROR: Detected argument -i but next argument is too long\n");
+                    asm_printf("ERROR: Detected argument -i but next argument is too long\n");
                     print_usage();
                     exit(-1);
                 }
@@ -212,13 +213,13 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument --shm_prefix in the last position; please provide shared mem prefix after it\n");
+                    asm_printf("ERROR: Detected argument --shm_prefix in the last position; please provide shared mem prefix after it\n");
                     print_usage();
                     exit(-1);
                 }
                 if (strlen(argv[i]) >= MAX_SHM_PREFIX_LENGTH)
                 {
-                    printf("ERROR: Detected argument --shm_prefix but next argument is too long\n");
+                    asm_printf("ERROR: Detected argument --shm_prefix but next argument is too long\n");
                     print_usage();
                     exit(-1);
                 }
@@ -230,7 +231,7 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument --chunk in the last position; please provide chunk number after it\n");
+                    asm_printf("ERROR: Detected argument --chunk in the last position; please provide chunk number after it\n");
                     print_usage();
                     exit(-1);
                 }
@@ -240,23 +241,23 @@ void parse_arguments(int argc, char *argv[])
 
                 // Check for errors
                 if (errno == ERANGE) {
-                    printf("ERROR: Chunk number is too large\n");
+                    asm_printf("ERROR: Chunk number is too large\n");
                     print_usage();
                     exit(-1);
                 } else if (endptr == argv[i]) {
-                    printf("ERROR: No digits found while parsing chunk number\n");
+                    asm_printf("ERROR: No digits found while parsing chunk number\n");
                     print_usage();
                     exit(-1);
                 } else if (*endptr != '\0') {
-                    printf("ERROR: Extra characters after chunk number: %s\n", endptr);
+                    asm_printf("ERROR: Extra characters after chunk number: %s\n", endptr);
                     print_usage();
                     exit(-1);
                 } else if (chunk_mask > MAX_CHUNK_MASK) {
-                    printf("ERROR: Invalid chunk number: %lu\n", chunk_mask);
+                    asm_printf("ERROR: Invalid chunk number: %lu\n", chunk_mask);
                     print_usage();
                     exit(-1);
                 } else {
-                    printf("Got chunk_mask= %lu\n", chunk_mask);
+                    asm_printf("Got chunk_mask= %lu\n", chunk_mask);
                 }
                 continue;
             }
@@ -270,7 +271,7 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument --mt in the last position; please provide number of MT requests after it\n");
+                    asm_printf("ERROR: Detected argument --mt in the last position; please provide number of MT requests after it\n");
                     print_usage();
                     exit(-1);
                 }
@@ -280,23 +281,23 @@ void parse_arguments(int argc, char *argv[])
 
                 // Check for errors
                 if (errno == ERANGE) {
-                    printf("ERROR: Number of MT requests is too large\n");
+                    asm_printf("ERROR: Number of MT requests is too large\n");
                     print_usage();
                     exit(-1);
                 } else if (endptr == argv[i]) {
-                    printf("ERROR: No digits found while parsing number of MT requests\n");
+                    asm_printf("ERROR: No digits found while parsing number of MT requests\n");
                     print_usage();
                     exit(-1);
                 } else if (*endptr != '\0') {
-                    printf("ERROR: Extra characters after number of MT requests: %s\n", endptr);
+                    asm_printf("ERROR: Extra characters after number of MT requests: %s\n", endptr);
                     print_usage();
                     exit(-1);
                 } else if (number_of_mt_requests > 1000000) {
-                    printf("ERROR: Invalid number of MT requests: %lu\n", number_of_mt_requests);
+                    asm_printf("ERROR: Invalid number of MT requests: %lu\n", number_of_mt_requests);
                     print_usage();
                     exit(-1);
                 } else {
-                    printf("Got number of MT requests= %lu\n", number_of_mt_requests);
+                    asm_printf("Got number of MT requests= %lu\n", number_of_mt_requests);
                 }
                 continue;
             }
@@ -305,7 +306,7 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument -p in the last position; please provide port number after it\n");
+                    asm_printf("ERROR: Detected argument -p in the last position; please provide port number after it\n");
                     print_usage();
                     exit(-1);
                 }
@@ -314,7 +315,7 @@ void parse_arguments(int argc, char *argv[])
                 uint64_t arguments_port_u64 = strtoul(argv[i], &endptr, 10);
                 if (arguments_port_u64 > 0xFFFF)
                 {
-                    printf("ERROR: Port number is too large, must be at most 65535\n");
+                    asm_printf("ERROR: Port number is too large, must be at most 65535\n");
                     print_usage();
                     exit(-1);
                 }
@@ -322,19 +323,19 @@ void parse_arguments(int argc, char *argv[])
 
                 // Check for errors
                 if (errno == ERANGE) {
-                    printf("ERROR: Port number is too large\n");
+                    asm_printf("ERROR: Port number is too large\n");
                     print_usage();
                     exit(-1);
                 } else if (endptr == argv[i]) {
-                    printf("ERROR: No digits found while parsing port number\n");
+                    asm_printf("ERROR: No digits found while parsing port number\n");
                     print_usage();
                     exit(-1);
                 } else if (*endptr != '\0') {
-                    printf("ERROR: Extra characters after port number: %s\n", endptr);
+                    asm_printf("ERROR: Extra characters after port number: %s\n", endptr);
                     print_usage();
                     exit(-1);
                 } else {
-                    printf("Got port number= %u\n", arguments_port);
+                    asm_printf("Got port number= %u\n", arguments_port);
                 }
                 continue;
             }
@@ -348,7 +349,7 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument -a in the last position; please provide chunk address after it\n");
+                    asm_printf("ERROR: Detected argument -a in the last position; please provide chunk address after it\n");
                     print_usage();
                     exit(-1);
                 }
@@ -360,19 +361,19 @@ void parse_arguments(int argc, char *argv[])
 
                 // Check for errors
                 if (errno == ERANGE) {
-                    printf("ERROR: Chunk address is too large\n");
+                    asm_printf("ERROR: Chunk address is too large\n");
                     print_usage();
                     exit(-1);
                 } else if (endptr == argument) {
-                    printf("ERROR: No digits found while parsing chunk address\n");
+                    asm_printf("ERROR: No digits found while parsing chunk address\n");
                     print_usage();
                     exit(-1);
                 } else if (*endptr != '\0') {
-                    printf("ERROR: Extra characters after chunk address: %s\n", endptr);
+                    asm_printf("ERROR: Extra characters after chunk address: %s\n", endptr);
                     print_usage();
                     exit(-1);
                 } else {
-                    printf("Got chunk address= %p\n", (void *)chunk_player_address);
+                    asm_printf("Got chunk address= %p\n", (void *)chunk_player_address);
                 }
                 continue;
             }
@@ -411,33 +412,29 @@ void parse_arguments(int argc, char *argv[])
                 i++;
                 if (i >= argc)
                 {
-                    printf("ERROR: Detected argument -r in the last position; please provide precompile results file after it\n");
+                    asm_printf("ERROR: Detected argument -r in the last position; please provide precompile results file after it\n");
                     print_usage();
                     exit(-1);
                 }
                 if (strlen(argv[i]) > 4095)
                 {
-                    printf("ERROR: Detected argument -r but next argument is too long\n");
+                    asm_printf("ERROR: Detected argument -r but next argument is too long\n");
                     print_usage();
                     exit(-1);
                 }
                 strcpy(precompile_file_name, argv[i]);
                 continue;
             }
-            printf("ERROR: parse_arguments() Unrecognized argument: %s\n", argv[i]);
+            asm_printf("ERROR: parse_arguments() Unrecognized argument: %s\n", argv[i]);
             print_usage();
-            fflush(stdout);
-            fflush(stderr);
             exit(-1);
         }
     }
 #ifdef ASM_PRECOMPILE_CACHE
     if (precompile_cache_enabled == false)
     {
-        printf("ERROR: parse_arguments() when in precompile cache mode, you need to use an argument: either --precompile-cache-store or --precompile-cache-load\n");
+        asm_printf("ERROR: parse_arguments() when in precompile cache mode, you need to use an argument: either --precompile-cache-store or --precompile-cache-load\n");
         print_usage();
-        fflush(stdout);
-        fflush(stderr);
         exit(-1);
     }
 #endif
@@ -445,10 +442,8 @@ void parse_arguments(int argc, char *argv[])
     // Check that only one generation method was selected as an argument
     if (number_of_selected_generation_methods != 1)
     {
-        printf("ERROR! parse_arguments() Invalid arguments: select 1 generation method, and only one\n");
+        asm_printf("ERROR! parse_arguments() Invalid arguments: select 1 generation method, and only one\n");
         print_usage();
-        fflush(stdout);
-        fflush(stderr);
         exit(-1);
     }
 
@@ -457,39 +452,31 @@ void parse_arguments(int argc, char *argv[])
     uint64_t asm_gen_method = get_gen_method();
     if (asm_gen_method != gen_method)
     {
-        printf("ERROR! parse_arguments() Inconsistency: C generation method is %u but ASM generation method is %lu\n",
+        asm_printf("ERROR! parse_arguments() Inconsistency: C generation method is %u but ASM generation method is %lu\n",
             gen_method,
             asm_gen_method);
         print_usage();
-        fflush(stdout);
-        fflush(stderr);
         exit(-1);
     }
 
     // Check server/client
     if (server && client)
     {
-        printf("ERROR! parse_arguments() Inconsistency: both server and client at the same time is not possible\n");
+        asm_printf("ERROR! parse_arguments() Inconsistency: both server and client at the same time is not possible\n");
         print_usage();
-        fflush(stdout);
-        fflush(stderr);
         exit(-1);
     }
     if (!server && !client)
     {
-        printf("ERROR! parse_arguments() Inconsistency: select server or client\n");
+        asm_printf("ERROR! parse_arguments() Inconsistency: select server or client\n");
         print_usage();
-        fflush(stdout);
-        fflush(stderr);
         exit(-1);
     }
 
     if (precompile_results_enabled && client && (strlen(precompile_file_name) == 0))
     {
-        printf("ERROR! parse_arguments() when in precompile results mode, you need to provide a precompile results file using -r <precompile_results_file>\n");
+        asm_printf("ERROR! parse_arguments() when in precompile results mode, you need to provide a precompile results file using -r <precompile_results_file>\n");
         print_usage();
-        fflush(stdout);
-        fflush(stderr);
         exit(-1);
     }
 }
@@ -950,18 +937,14 @@ void configure (void)
         }
         default:
         {
-            printf("ERROR: configure() Invalid gen_method = %u\n", gen_method);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: configure() Invalid gen_method = %u\n", gen_method);
             exit(-1);
         }
     }
 
     if (precompile_results_enabled && (gen_method == ChunkPlayerMTCollectMem || gen_method == ChunkPlayerMemReadsCollectMain))
     {
-        printf("ERROR: configure() precompile results enabled is not compatible with generation method %u\n", gen_method);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: configure() precompile results enabled is not compatible with generation method %u\n", gen_method);
         exit(-1);
     }
 
@@ -972,28 +955,28 @@ void configure (void)
 
     if (verbose)
     {
-        printf("ziskemuasm configuration:\n");
-        printf("\tgen_method=%u\n", gen_method);
-        printf("\tshm_prefix=%s\n", shm_prefix);
-        printf("\tfile_lock_name=%s\n", file_lock_name);
-        printf("\tlog_name=%s\n", log_name);
-        printf("\tport=%u\n", port);
-        printf("\tcall_chunk_done=%u\n", call_chunk_done);
-        printf("\tchunk_size=%lu\n", chunk_size);
-        printf("\tshmem_control_input=%s\n", shmem_control_input_name);
-        printf("\tshmem_control_output=%s\n", shmem_control_output_name);
-        printf("\tshmem_input=%s\n", shmem_input_name);
-        printf("\tshmem_precompile=%s\n", shmem_precompile_name);
-        printf("\tshmem_output=%s\n", shmem_output_name);
-        printf("\tshmem_mt=%s\n", shmem_mt_name);
-        printf("\tsem_chunk_done=%s\n", sem_chunk_done_name);
-        printf("\tsem_shutdown_done=%s\n", sem_shutdown_done_name);
-        printf("\tsem_prec_avail=%s\n", sem_prec_avail_name);
-        printf("\tsem_prec_read=%s\n", sem_prec_read_name);
-        printf("\tsem_input_avail=%s\n", sem_input_avail_name);
-        printf("\tmap_locked_flag=%d\n", map_locked_flag);
-        printf("\toutput=%u\n", output);
-        printf("\tprecompile_results_enabled=%u\n", precompile_results_enabled);
-        printf("\toutput_riscof=%u\n", output_riscof);
+        asm_printf("ziskemuasm configuration:\n");
+        asm_printf("\tgen_method=%u\n", gen_method);
+        asm_printf("\tshm_prefix=%s\n", shm_prefix);
+        asm_printf("\tfile_lock_name=%s\n", file_lock_name);
+        asm_printf("\tlog_name=%s\n", log_name);
+        asm_printf("\tport=%u\n", port);
+        asm_printf("\tcall_chunk_done=%u\n", call_chunk_done);
+        asm_printf("\tchunk_size=%lu\n", chunk_size);
+        asm_printf("\tshmem_control_input=%s\n", shmem_control_input_name);
+        asm_printf("\tshmem_control_output=%s\n", shmem_control_output_name);
+        asm_printf("\tshmem_input=%s\n", shmem_input_name);
+        asm_printf("\tshmem_precompile=%s\n", shmem_precompile_name);
+        asm_printf("\tshmem_output=%s\n", shmem_output_name);
+        asm_printf("\tshmem_mt=%s\n", shmem_mt_name);
+        asm_printf("\tsem_chunk_done=%s\n", sem_chunk_done_name);
+        asm_printf("\tsem_shutdown_done=%s\n", sem_shutdown_done_name);
+        asm_printf("\tsem_prec_avail=%s\n", sem_prec_avail_name);
+        asm_printf("\tsem_prec_read=%s\n", sem_prec_read_name);
+        asm_printf("\tsem_input_avail=%s\n", sem_input_avail_name);
+        asm_printf("\tmap_locked_flag=%d\n", map_locked_flag);
+        asm_printf("\toutput=%u\n", output);
+        asm_printf("\tprecompile_results_enabled=%u\n", precompile_results_enabled);
+        asm_printf("\toutput_riscof=%u\n", output_riscof);
     }
 }

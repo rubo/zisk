@@ -27,6 +27,7 @@
 #include "server.hpp"
 #include "client.hpp"
 #include "trace.hpp"
+#include "log.hpp"
 
 // Returns the acronym of the generation method, used for logging and file naming
 const char * gen_method_acronym(GenMethod method)
@@ -68,9 +69,7 @@ void set_max_steps (uint64_t new_max_steps)
 {
     if (!is_power_of_two(new_max_steps))
     {
-        printf("ERROR: set_max_steps() got a new max steps = %lu that is not a power of two\n", new_max_steps);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: set_max_steps() got a new max steps = %lu that is not a power of two\n", new_max_steps);
         exit(-1);
     }
     max_steps = new_max_steps;
@@ -84,9 +83,7 @@ void set_chunk_size (uint64_t new_chunk_size)
 {
     if (!is_power_of_two(new_chunk_size))
     {
-        printf("ERROR: set_chunk_size() got a new chunk size = %lu that is not a power of two\n", new_chunk_size);
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: set_chunk_size() got a new chunk size = %lu that is not a power of two\n", new_chunk_size);
         exit(-1);
     }
     chunk_size = new_chunk_size;
@@ -150,9 +147,7 @@ int main(int argc, char *argv[])
         FILE * file_pointer = freopen(redirect_output_file, "w", stdout);
         if (file_pointer == NULL)
         {
-            printf("ERROR: Failed to redirect stdout to file %s\n", redirect_output_file);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed to redirect stdout to file %s\n", redirect_output_file);
             exit(-1);
         }
         
@@ -160,9 +155,7 @@ int main(int argc, char *argv[])
         file_pointer = freopen(redirect_output_file, "a", stderr);
         if (file_pointer == NULL)
         {
-            printf("ERROR: Failed to redirect stderr to file %s\n", redirect_output_file);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed to redirect stderr to file %s\n", redirect_output_file);
             exit(-1);
         }
     }
@@ -209,9 +202,7 @@ int main(int argc, char *argv[])
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == 0)
     {
-        printf("%s ERROR: Failed calling socket() errno=%d=%s\n", log_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling socket() errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
 
@@ -220,9 +211,7 @@ int main(int argc, char *argv[])
     result = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     if (result != 0)
     {
-        printf("%s ERROR: Failed calling setsockopt() result=%d errno=%d=%s\n", log_name, result, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling setsockopt() result=%d errno=%d=%s\n", result, errno, strerror(errno));
         exit(-1);
     }
 
@@ -235,9 +224,7 @@ int main(int argc, char *argv[])
     result = bind(server_fd, (struct sockaddr *)&address, sizeof(address));
     if (result != 0)
     {
-        printf("%s ERROR: Failed calling bind() result=%d errno=%d=%s\n", log_name, result, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling bind() result=%d errno=%d=%s\n", result, errno, strerror(errno));
         exit(-1);
     }
 
@@ -245,9 +232,7 @@ int main(int argc, char *argv[])
     result = listen(server_fd, 5);
     if (result != 0)
     {
-        printf("%s ERROR: Failed calling listen() result=%d errno=%d=%s\n", log_name, result, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling listen() result=%d errno=%d=%s\n", result, errno, strerror(errno));
         exit(-1);
     }
 
@@ -259,20 +244,16 @@ int main(int argc, char *argv[])
         int client_fd;
         if (!silent)
         {
-            printf("%s Waiting for incoming connections to port %u...\n", log_name, port);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("Waiting for incoming connections to port %u...\n", port);
         }
         client_fd = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen);
         if (client_fd < 0)
         {
-            printf("ERROR: Failed calling accept() client_fd=%d errno=%d=%s\n", client_fd, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: Failed calling accept() client_fd=%d errno=%d=%s\n", client_fd, errno, strerror(errno));
             exit(-1);
         }
 #ifdef DEBUG
-        if (verbose) printf("%s New client: %s:%d\n", log_name, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+        if (verbose) asm_printf("New client: %s:%d\n", inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 #endif
 
         // Configure linger to send data before closing the socket
@@ -294,34 +275,26 @@ int main(int argc, char *argv[])
             ssize_t bytes_read = recv(client_fd, request, sizeof(request), MSG_WAITALL);
             if (bytes_read < 0)
             {
-                printf("%s ERROR: Failed calling recv() bytes_read=%ld errno=%d=%s\n", log_name, bytes_read, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling recv() bytes_read=%ld errno=%d=%s\n", bytes_read, errno, strerror(errno));
                 break;
             }
             if (bytes_read != sizeof(request))
             {
                 if ((errno != 0) && (errno != 2))
                 {
-                    printf("%s WARNING: Failed calling recv() invalid bytes_read=%ld errno=%d=%s\n", log_name, bytes_read, errno, strerror(errno));
-                    fflush(stdout);
-                    fflush(stderr);
+                    asm_printf("WARNING: Failed calling recv() invalid bytes_read=%ld errno=%d=%s\n", bytes_read, errno, strerror(errno));
                 }
                 break;
             }
 #ifdef DEBUG
             if (verbose)
             {
-                printf("%s recv() returned: %ld\n", log_name, bytes_read);
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("recv() returned: %ld\n", bytes_read);
             }
 #endif
             if (verbose)
             {
-                printf("%s recv()'d request=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", log_name, request[0], request[1], request[2], request[3], request[4]);
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("recv()'d request=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", request[0], request[1], request[2], request[3], request[4]);
             }
 
             uint64_t response[5];
@@ -331,7 +304,7 @@ int main(int argc, char *argv[])
                 case TYPE_PING:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s PING received\n", log_name);
+                    if (verbose) asm_printf("PING received\n");
 #endif
                     response[0] = TYPE_PONG;
                     response[1] = gen_method;
@@ -343,7 +316,7 @@ int main(int argc, char *argv[])
                 case TYPE_MT_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s MINIMAL TRACE received\n", log_name);
+                    if (verbose) asm_printf("MINIMAL TRACE received\n");
 #endif
                     if (gen_method == MinimalTrace)
                     {
@@ -375,7 +348,7 @@ int main(int argc, char *argv[])
                 case TYPE_RH_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s ROM HISTOGRAM received\n", log_name);
+                    if (verbose) asm_printf("ROM HISTOGRAM received\n");
 #endif
                     if (gen_method == RomHistogram)
                     {
@@ -406,7 +379,7 @@ int main(int argc, char *argv[])
                 case TYPE_MO_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s MEMORY OPERATIONS received\n", log_name);
+                    if (verbose) asm_printf("MEMORY OPERATIONS received\n");
 #endif
                     if (gen_method == MemOp)
                     {
@@ -438,7 +411,7 @@ int main(int argc, char *argv[])
                 case TYPE_MA_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s MAIN TRACE received\n", log_name);
+                    if (verbose) asm_printf("MAIN TRACE received\n");
 #endif
                     if (gen_method == MainTrace)
                     {
@@ -470,7 +443,7 @@ int main(int argc, char *argv[])
                 case TYPE_CM_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s COLLECT MEMORY received\n", log_name);
+                    if (verbose) asm_printf("COLLECT MEMORY received\n");
 #endif
                     if (gen_method == ChunkPlayerMTCollectMem)
                     {
@@ -505,7 +478,7 @@ int main(int argc, char *argv[])
                 case TYPE_FA_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s FAST received\n", log_name);
+                    if (verbose) asm_printf("FAST received\n");
 #endif
                     if (gen_method == Fast)
                     {
@@ -537,7 +510,7 @@ int main(int argc, char *argv[])
                 case TYPE_MR_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s MEMORY READS received\n", log_name);
+                    if (verbose) asm_printf("MEMORY READS received\n");
 #endif
                     if (gen_method == MemReads)
                     {
@@ -569,7 +542,7 @@ int main(int argc, char *argv[])
                 case TYPE_CA_REQUEST:
                 {
 #ifdef DEBUG
-                    if (verbose) printf("%s COLLECT MAIN received\n", log_name);
+                    if (verbose) asm_printf("COLLECT MAIN received\n");
 #endif
                     if (gen_method == ChunkPlayerMemReadsCollectMain)
                     {
@@ -603,7 +576,7 @@ int main(int argc, char *argv[])
                 }
                 case TYPE_SD_REQUEST:
                 {
-                    if (!silent) printf("%s SHUTDOWN received\n", log_name);
+                    if (!silent) asm_printf("SHUTDOWN received\n");
                     bShutdown = true;
 
                     response[0] = TYPE_SD_RESPONSE;
@@ -615,34 +588,26 @@ int main(int argc, char *argv[])
                 }
                 default:
                 {
-                    printf("%s ERROR: Invalid request id=%lu\n", log_name, request[0]);
-                    fflush(stdout);
-                    fflush(stderr);
+                    asm_printf("ERROR: Invalid request id=%lu\n", request[0]);
                     exit(-1);                
                 }
             }
 
             if (verbose)
             {
-                printf("%s send()'ing response=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", log_name, response[0], response[1], response[2], response[3], response[4]);
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("send()'ing response=[%lu, 0x%lx, 0x%lx, 0x%lx, 0x%lx]\n", response[0], response[1], response[2], response[3], response[4]);
             }
 
             ssize_t bytes_sent = send(client_fd, response, sizeof(response), MSG_WAITALL);
             if (bytes_sent != sizeof(response))
             {
-                printf("%s ERROR: Failed calling send() invalid bytes_sent=%ld errno=%d=%s\n", log_name, bytes_sent, errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: Failed calling send() invalid bytes_sent=%ld errno=%d=%s\n", bytes_sent, errno, strerror(errno));
                 break;
             }
 //#ifdef DEBUG
             else if (verbose)
             {
-                printf("Response sent to client\n");
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("Response sent to client\n");
             }
 //#endif
             if (bReset)
@@ -691,7 +656,7 @@ int main(int argc, char *argv[])
         gettimeofday(&total_stop_time, NULL);
         total_duration = TimeDiff(total_start_time, total_stop_time);
         uint64_t assembly_percentage = total_duration == 0 ? 0 : assembly_duration * 1000 / total_duration;
-        if (verbose) printf("Emulator C end total_duration = %lu us assembly_duration = %lu us (%lu %%o)\n", total_duration, assembly_duration, assembly_percentage);
+        if (verbose) asm_printf("Emulator C end total_duration = %lu us assembly_duration = %lu us (%lu %%o)\n", total_duration, assembly_duration, assembly_percentage);
     #endif
 }
 
@@ -707,18 +672,14 @@ void file_lock(void)
     // Open (or create) the lock file. We don't need to write to it.
     file_lock_fd = open(file_lock_name, O_CREAT | O_RDONLY, 0644);
     if (file_lock_fd == -1) {
-        printf("ERROR: file_lock() failed calling open(%s) errno=%d=%s\n", file_lock_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: file_lock() failed calling open(%s) errno=%d=%s\n", file_lock_name, errno, strerror(errno));
         exit(1);
     }
 
     // Try to acquire an exclusive lock, non-blocking.
     if (flock(file_lock_fd, LOCK_EX | LOCK_NB) == -1) {
         // If we fail to get the lock, another instance is running.
-        printf("ERROR: Another instance of this program is already running.\n");
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Another instance of this program is already running.\n");
         exit(1);
     }
 }

@@ -15,6 +15,7 @@
 #include "globals.hpp"
 #include "trace.hpp"
 #include "emu.hpp"
+#include "log.hpp"
 
 /**************/
 /* TRACE SIZE */
@@ -23,7 +24,7 @@
 void set_trace_size (uint64_t new_trace_size)
 {
     // Update trace global variables
-    // printf("%s trace resize (trace_resize_request: %ld):  %ld MB => %ld MB\n", log_name, trace_resize_request, trace_size >> 20, new_trace_size >> 20);
+    // asm_printf("%s trace resize (trace_resize_request: %ld):  %ld MB => %ld MB\n", log_name, trace_resize_request, trace_size >> 20, new_trace_size >> 20);
     
     // trace_resize_request = 0;
 
@@ -116,6 +117,7 @@ extern int _print_regs()
     printf("\treg[33]=%lu=0x%lx=@%p\n", reg_33, reg_33, &reg_33);
     printf("\treg[34]=%lu=0x%lx=@%p\n", reg_34, reg_34, &reg_34);
     printf("\n");
+    fflush(stdout);
 #endif
     return 0;
 }
@@ -141,14 +143,14 @@ extern int _print_pc (uint64_t pc, uint64_t c)
         if (duration > 900)
         {
             uint64_t chunk = print_pc_counter / chunk_size;
-            printf("print_pc() pc=%lx counter=%lu sec=%lu usec=%lu duration=%lu chunk=%lu\n", pc, print_pc_counter, tv.tv_sec, tv.tv_usec, duration, chunk);
+            asm_printf("print_pc() pc=%lx counter=%lu sec=%ld usec=%ld duration=%lu chunk=%lu\n", pc, print_pc_counter, tv.tv_sec, tv.tv_usec, duration, chunk);
             fflush(stdout);
         }
         print_pc_tv = tv;
     }
 #endif
 
-    printf("s=%lu pc=%lx c=%lx", print_pc_counter, pc, c);
+    asm_printf("s=%lu pc=%lx c=%lx", print_pc_counter, pc, c);
 
 //#define PRINT_PC_REGS
 #ifdef PRINT_PC_REGS
@@ -221,8 +223,7 @@ extern void _chunk_done()
         uint64_t duration = TimeDiff(chunk_done_tv, tv);
         if (duration > 5000)
         {
-            printf("chunk_done() counter=%lu sec=%lu usec=%lu duration=%lu\n", chunk_done_counter, tv.tv_sec, tv.tv_usec, duration);
-            fflush(stdout);
+            asm_printf("chunk_done() counter=%lu sec=%lu usec=%lu duration=%lu\n", chunk_done_counter, tv.tv_sec, tv.tv_usec, duration);
         }
         chunk_done_tv = tv;
     }
@@ -237,7 +238,7 @@ extern void _chunk_done()
 #ifdef CHUNK_DONE_SYNC_DURATION
     gettimeofday(&sync_stop, NULL);
     sync_duration += TimeDiff(sync_start, sync_stop);
-    printf("chunk_done() sync_duration=%lu\n", sync_duration);
+    asm_printf("chunk_done() sync_duration=%lu\n", sync_duration);
 #endif
 
     // Notify the caller that a new chunk is done and its trace is ready to be consumed
@@ -245,9 +246,7 @@ extern void _chunk_done()
     int result = sem_post(sem_chunk_done);
     if (result == -1)
     {
-        printf("ERROR: Failed calling sem_post(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: Failed calling sem_post(%s) errno=%d=%s\n", sem_chunk_done_name, errno, strerror(errno));
         exit(-1);
     }
 }
@@ -270,7 +269,7 @@ extern void _realloc_trace (void)
     set_trace_size(trace_total_mapped_size);
 
 #ifdef DEBUG
-    if (verbose) printf("realloc_trace() realloc counter=%lu trace_address=0x%lx trace_size=%lu=%lx max_address=0x%lx trace_address_threshold=0x%lx chunk_size=%lu\n", realloc_counter, trace_address, trace_size, trace_size, trace_address + trace_size, trace_address_threshold, chunk_size);
+    if (verbose) asm_printf("realloc_trace() realloc counter=%lu trace_address=0x%lx trace_size=%lu=%lx max_address=0x%lx trace_address_threshold=0x%lx chunk_size=%lu\n", realloc_counter, trace_address, trace_size, trace_size, trace_address + trace_size, trace_address_threshold, chunk_size);
 #endif
 }
 
@@ -284,14 +283,12 @@ int _wait_for_prec_avail (void)
     // Increment wait counter
     wait_prec_avail_counter++;
 
-    //printf("wait_for_prec_avail() counter=%lu\n", wait_prec_avail_counter);
+    //asm_printf("wait_for_prec_avail() counter=%lu\n", wait_prec_avail_counter);
 
     // Sync control output shared memory so that the writer can see the precompile reads we have
     // done, and thus update the precompile_written_address if needed
     if (msync((void *)shmem_control_output_address, CONTROL_OUTPUT_SIZE, MS_SYNC) != 0) {
-        printf("ERROR: msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: msync failed for shmem_control_output_address errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
 
@@ -300,13 +297,11 @@ int _wait_for_prec_avail (void)
 
     // Make sure the precompile available semaphore is reset before checking the condition,
     // since the caller may have posted it (even several times) before we called sem_wait()
-    while (sem_trywait(sem_prec_avail) == 0) {/*printf("Purging sem_prec_avail\n");*/};
+    while (sem_trywait(sem_prec_avail) == 0) {/*asm_printf("Purging sem_prec_avail\n");*/};
 
     // Sync control input shared memory so that we can see the latest precompile_written_address value
     if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
-        printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
 
@@ -315,9 +310,7 @@ int _wait_for_prec_avail (void)
     {
         // Sync precompile shared memory
         if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
-            printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
 
@@ -331,48 +324,38 @@ int _wait_for_prec_avail (void)
         int result = clock_gettime(CLOCK_REALTIME, &ts);
         if (result == -1)
         {
-            printf("ERROR: wait_for_prec_avail() failed calling clock_gettime() errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: wait_for_prec_avail() failed calling clock_gettime() errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         ts.tv_sec += 5; // 5 seconds timeout
 
-        //printf("_wait_for_prec_avail() calling sem_wait precompile_written_address=%lu precompile_read_address=%lu\n", *precompile_written_address, *precompile_read_address);
+        //asm_printf("_wait_for_prec_avail() calling sem_wait precompile_written_address=%lu precompile_read_address=%lu\n", *precompile_written_address, *precompile_read_address);
         if (wait_flag) *waiting_for_precompile_address = wait_prec_avail_counter << 1; // Leave a mark in shmem that we are waiting; for debugging purposes
         result = sem_timedwait(sem_prec_avail, &ts);
         if (wait_flag) *waiting_for_precompile_address = (wait_prec_avail_counter << 1) + 1; // Clear the mark in shmem that we are waiting; for debugging purposes
-        //printf("_wait_for_prec_avail() called sem_wait precompile_written_address=%lu precompile_read_address=%lu\n", *precompile_written_address, *precompile_read_address);
+        //asm_printf("_wait_for_prec_avail() called sem_wait precompile_written_address=%lu precompile_read_address=%lu\n", *precompile_written_address, *precompile_read_address);
         if ((result == -1) && (errno != ETIMEDOUT))
         {
-            printf("ERROR: wait_for_prec_avail() failed calling sem_wait(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: wait_for_prec_avail() failed calling sem_wait(%s) errno=%d=%s\n", sem_prec_avail_name, errno, strerror(errno));
             exit(-1);
         }
 
         // Sync control input shared memory so that we can see the latest precompile_written_address value
         if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
-            printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
 
         if (*precompile_exit_address != 0)
         {
-            printf("ERROR: wait_for_prec_avail() found precompile_exit_address=%lu\n", *precompile_exit_address);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: wait_for_prec_avail() found precompile_exit_address=%lu\n", *precompile_exit_address);
             exit(-1);
         }
         if (*precompile_written_address > *precompile_read_address)
         {
             // Sync precompile shared memory
             if (msync((void *)shmem_precompile_address, MAX_PRECOMPILE_SIZE, MS_SYNC) != 0) {
-                printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: msync failed for shmem_precompile_address errno=%d=%s\n", errno, strerror(errno));
                 exit(-1);
             }
 
@@ -380,9 +363,7 @@ int _wait_for_prec_avail (void)
         }
     }
 
-    printf("ERROR: wait_for_prec_avail() unreachable code\n");
-    fflush(stdout);
-    fflush(stderr);
+    asm_printf("ERROR: wait_for_prec_avail() unreachable code\n");
     exit(-1);
 }
 
@@ -396,17 +377,15 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
     // Increment wait counter
     wait_input_avail_counter++;
 
-    //printf("wait_for_input_avail() required_input_bytes=%lu counter=%lu\n", required_input_bytes, wait_input_avail_counter);
+    //asm_printf("wait_for_input_avail() required_input_bytes=%lu counter=%lu\n", required_input_bytes, wait_input_avail_counter);
 
     // Make sure the input available semaphore is reset before checking the condition,
     // since the caller may have posted it (even several times) before we called sem_wait()
-    while (sem_trywait(sem_input_avail) == 0) {/*printf("Purging sem_input_avail\n");*/};
+    while (sem_trywait(sem_input_avail) == 0) {/*asm_printf("Purging sem_input_avail\n");*/};
     
     // Sync control input shared memory so that we can see the latest input_written_address value
     if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
-        printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
-        fflush(stdout);
-        fflush(stderr);
+        asm_printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
         exit(-1);
     }
 
@@ -416,9 +395,7 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
         // Sync input shared memory
         if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) 
         {
-            printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
 
@@ -432,48 +409,38 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
         int result = clock_gettime(CLOCK_REALTIME, &ts);
         if (result == -1)
         {
-            printf("ERROR: wait_for_input_avail() failed calling clock_gettime() errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: wait_for_input_avail() failed calling clock_gettime() errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
         ts.tv_sec += 5; // 5 seconds timeout
 
-        //printf("_wait_for_input_avail() calling sem_wait input_written_address=%lu required_input_bytes=%lu\n", *input_written_address, required_input_bytes);
+        //asm_printf("_wait_for_input_avail() calling sem_wait input_written_address=%lu required_input_bytes=%lu\n", *input_written_address, required_input_bytes);
         if (wait_flag) *waiting_for_input_address = wait_input_avail_counter << 1; // Leave a mark in shmem that we are waiting; for debugging purposes
         result = sem_timedwait(sem_input_avail, &ts);
         if (wait_flag) *waiting_for_input_address = (wait_input_avail_counter << 1) + 1; // Clear the mark in shmem that we are waiting; for debugging purposes
-        //printf("_wait_for_input_avail() called sem_wait input_written_address=%lu required_input_bytes=%lu\n", *input_written_address, required_input_bytes);
+        //asm_printf("_wait_for_input_avail() called sem_wait input_written_address=%lu required_input_bytes=%lu\n", *input_written_address, required_input_bytes);
         if ((result == -1) && (errno != ETIMEDOUT))
         {
-            printf("ERROR: wait_for_input_avail() failed calling sem_wait(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: wait_for_input_avail() failed calling sem_wait(%s) errno=%d=%s\n", sem_input_avail_name, errno, strerror(errno));
             exit(-1);
         }
 
         // Sync control input shared memory so that we can see the latest input_written_address value
         if (msync((void *)shmem_control_input_address, CONTROL_INPUT_SIZE, MS_SYNC) != 0) {
-            printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: msync failed for shmem_control_input_address errno=%d=%s\n", errno, strerror(errno));
             exit(-1);
         }
 
         if (*precompile_exit_address != 0)
         {
-            printf("ERROR: wait_for_input_avail() found precompile_exit_address=%lu\n", *precompile_exit_address);
-            fflush(stdout);
-            fflush(stderr);
+            asm_printf("ERROR: wait_for_input_avail() found precompile_exit_address=%lu\n", *precompile_exit_address);
             exit(-1);
         }
         if (*input_written_address >= required_input_bytes)
         {
             // Sync input shared memory
             if (msync((void *)INPUT_ADDR, MAX_INPUT_SIZE, MS_SYNC) != 0) {
-                printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
-                fflush(stdout);
-                fflush(stderr);
+                asm_printf("ERROR: msync failed for shmem_input_address errno=%d=%s\n", errno, strerror(errno));
                 exit(-1);
             }
 
@@ -481,8 +448,6 @@ int _wait_for_input_avail (uint64_t required_input_bytes)
         }
     }
 
-    printf("ERROR: wait_for_input_avail() unreachable code\n");
-    fflush(stdout);
-    fflush(stderr);
+    asm_printf("ERROR: wait_for_input_avail() unreachable code\n");
     exit(-1);
 }

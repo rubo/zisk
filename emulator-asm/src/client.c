@@ -279,7 +279,7 @@ void client_write_precompile_results (void)
             // Check the precompile data size is inside the proper range
             if (precompile_data_size > MAX_PRECOMPILE_SIZE)
             {
-                asm_printf("ERROR: Size of precompile results file (%s) is too long (%lu)\n", precompile_file_name, precompile_data_size);
+                asm_printf("ERROR: Size of precompile results file (%s) is too long (%ld)\n", precompile_file_name, precompile_data_size);
                 exit(-1);
             }
 
@@ -287,7 +287,7 @@ void client_write_precompile_results (void)
             size_t precompile_read = fread(precompile_results_address, 1, precompile_data_size, precompile_fp);
             if (precompile_read != precompile_data_size)
             {
-                asm_printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, precompile_data_size);
+                asm_printf("ERROR: Input read (%zu) != expected read size (%ld)\n", precompile_read, precompile_data_size);
                 exit(-1);
             }
 
@@ -330,7 +330,7 @@ void client_write_precompile_results (void)
                 size_t precompile_read = fread(data, 1, bytes_to_read, precompile_fp);
                 if (precompile_read != bytes_to_read)
                 {
-                    asm_printf("ERROR: Input read (%lu) != expected read size (%lu)\n", precompile_read, bytes_to_read);
+                    asm_printf("ERROR: Input read (%zu) != expected read size (%zu)\n", precompile_read, bytes_to_read);
                     exit(-1);
                 }
 
@@ -525,7 +525,7 @@ void client_run (void)
         // Check the input data size is inside the proper range
         if (input_data_size > (MAX_INPUT_SIZE - 16))
         {
-            asm_printf("ERROR: Size of input file (%s) is too long (%lu)\n", input_file, input_data_size);
+            asm_printf("ERROR: Size of input file (%s) is too long (%ld)\n", input_file, input_data_size);
             exit(-1);
         }
 
@@ -552,7 +552,7 @@ void client_run (void)
         size_t input_read = fread(shmem_input_address + 8, 1, input_data_size, input_fp);
         if (input_read != input_data_size)
         {
-            asm_printf("ERROR: Input read (%lu) != input file size (%lu)\n", input_read, input_data_size);
+            asm_printf("ERROR: Input read (%zu) != input file size (%ld)\n", input_read, input_data_size);
             exit(-1);
         }
 

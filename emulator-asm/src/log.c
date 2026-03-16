@@ -11,11 +11,23 @@ void asm_printf(const char *format, ...)
 
     // Get current date and time
     time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
     
     // Custom format: YYYY-MM-DD HH:MM:SS
     char date_and_time[80];
-    strftime(date_and_time, sizeof(date_and_time), "%Y-%m-%d %H:%M:%S", tm_info);
+    if (now == (time_t)-1)
+    {
+        // Fallback if time() fails
+        snprintf(date_and_time, sizeof(date_and_time), "0000-00-00 00:00:00");
+    }
+    else
+    {
+        struct tm *tm_info = localtime(&now);
+        if (tm_info == NULL || strftime(date_and_time, sizeof(date_and_time), "%Y-%m-%d %H:%M:%S", tm_info) == 0)
+        {
+            // Fallback if localtime() fails or strftime() cannot format
+            snprintf(date_and_time, sizeof(date_and_time), "0000-00-00 00:00:00");
+        }
+    }
 
     // Print the prefix first
     printf("[ASM %s %s] ", log_name, date_and_time);

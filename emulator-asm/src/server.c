@@ -64,7 +64,7 @@ void server_setup (void)
             asm_printf("ERROR: Called mmap(rom) but returned address = %p != 0x%lx\n", pRom, ROM_ADDR);
             exit(-1);
         }
-        if (verbose) asm_printf("mmap(rom) mapped %ld B and returned address %p in %lu us\n", ROM_SIZE, pRom, duration);
+        if (verbose) asm_printf("mmap(rom) mapped %lu B and returned address %p in %lu us\n", ROM_SIZE, pRom, duration);
     }
 
     /*********/

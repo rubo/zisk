@@ -99,8 +99,6 @@ fn xor_block_into_state(state: &mut [u64; 25], block: &[u8]) {
 
 /// C-compatible wrapper for Keccak-256 hash
 ///
-/// This is the function that `alloy-primitives` will call when the `native-keccak` feature is enabled.
-///
 /// # Safety
 /// - `input` must point to at least `input_len` bytes
 /// - `output` must point to a writable buffer of at least 32 bytes

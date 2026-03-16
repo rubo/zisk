@@ -1,7 +1,4 @@
-use crate::{
-    command::create_command, utils::cargo_rerun_if_changed, BuildArgs, HELPER_TARGET_SUBDIR,
-    ZISK_TARGET,
-};
+use crate::{command::create_command, utils::cargo_rerun_if_changed, BuildArgs, ZISK_TARGET};
 use cargo_metadata::camino::Utf8PathBuf;
 use rom_setup::{assembly_files_exist, gen_assembly, get_assembly_file_paths, get_output_path};
 use std::{
@@ -30,17 +27,27 @@ pub(crate) fn build_program_internal(path: &str, args: Option<BuildArgs>) {
     let is_clippy_driver = std::env::var("RUSTC_WORKSPACE_WRAPPER")
         .map(|val| val.contains("clippy-driver"))
         .unwrap_or(false);
-    if is_clippy_driver {
-        // Still need to set ELF env vars even if build is skipped.
-        let target_elf_paths = generate_elf_paths(&metadata, args.as_ref());
-        let hints = args
-            .as_ref()
-            .and_then(|a| a.hints)
-            .or_else(|| std::env::var("ZISK_HINTS").ok().and_then(|v| v.parse().ok()))
-            .unwrap_or(false);
-        print_elf_paths_cargo_directives(&target_elf_paths, hints);
 
-        println!("cargo:warning=Skipping build due to clippy invocation.");
+    // Check if this is a cargo check (when ELF files don't exist yet)
+    let is_cargo_check = std::env::var("CARGO_CFG_CHECK").is_ok();
+
+    if is_clippy_driver || is_cargo_check {
+        // For cargo check, skip setting env vars to avoid include_bytes! errors
+        if !is_cargo_check {
+            // Still need to set ELF env vars for clippy
+            let target_elf_paths = generate_elf_paths(&metadata, args.as_ref());
+            let hints = args
+                .as_ref()
+                .and_then(|a| a.hints)
+                .or_else(|| std::env::var("ZISK_HINTS").ok().and_then(|v| v.parse().ok()))
+                .unwrap_or(false);
+            print_elf_paths_cargo_directives(&target_elf_paths, hints);
+        }
+
+        println!(
+            "cargo:warning=Skipping build due to {} invocation.",
+            if is_cargo_check { "cargo check" } else { "clippy" }
+        );
         return;
     }
 
@@ -94,6 +101,7 @@ pub fn execute_build_program(
     execute_command(cmd)?;
 
     // Generate assembly for all ELF files (only if not already generated)
+    let asm = args.asm.unwrap_or(false);
     let hints = args.hints.unwrap_or(false);
     println!("cargo:rerun-if-env-changed=ZISK_HINTS");
 
@@ -113,7 +121,7 @@ pub fn execute_build_program(
             Err(_) => true,
         };
 
-        if !assembly_exists || hints_changed {
+        if asm && (!assembly_exists || hints_changed) {
             gen_assembly(elf_path_std, &None, hints, true)?;
             std::fs::write(&hints_marker, new_value)?;
         }
@@ -193,12 +201,8 @@ pub fn generate_elf_paths(
     let profile = args.map(|v| if v.release { "release" } else { "debug" }).unwrap_or("debug");
     let root_package = metadata.root_package().expect("No root package found in metadata");
     let bin_target = root_package.targets.first().unwrap();
-    let target_elf_path = metadata
-        .target_directory
-        .join(HELPER_TARGET_SUBDIR)
-        .join(ZISK_TARGET)
-        .join(profile)
-        .join(&bin_target.name);
+    let target_elf_path =
+        metadata.target_directory.join(ZISK_TARGET).join(profile).join(&bin_target.name);
 
     vec![(bin_target.name.to_owned(), target_elf_path)]
 }
@@ -206,9 +210,12 @@ fn print_elf_paths_cargo_directives(target_elf_paths: &[(String, Utf8PathBuf)], 
     println!("cargo:rerun-if-env-changed=ZISK_HINTS");
 
     for (target_name, elf_path) in target_elf_paths.iter() {
-        println!("cargo:rustc-env=ZISK_ELF_{target_name}={elf_path}");
-        if hints {
-            println!("cargo:rustc-env=ZISK_ELF_{target_name}_WITH_HINTS=1");
+        // Only set env var if the ELF file actually exists
+        if elf_path.exists() {
+            println!("cargo:rustc-env=ZISK_ELF_{target_name}={elf_path}");
+            if hints {
+                println!("cargo:rustc-env=ZISK_ELF_{target_name}_WITH_HINTS=1");
+            }
         }
     }
 }

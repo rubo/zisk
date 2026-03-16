@@ -1,3 +1,4 @@
+mod arith256;
 mod array_lib;
 mod blake2b;
 mod bls12_381;
@@ -10,6 +11,7 @@ mod sha256;
 mod utils;
 
 // For public consumption
+pub use arith256::*;
 pub use array_lib::*;
 pub use blake2b::*;
 pub use bls12_381::*;

@@ -1,5 +1,5 @@
-static mut HEAP_POS: usize = 0;
-static mut HEAP_TOP: usize = 0;
+pub static mut HEAP_POS: usize = 0;
+pub static mut HEAP_TOP: usize = 0;
 
 #[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
 #[no_mangle]
@@ -20,6 +20,12 @@ pub unsafe extern "C" fn init_sys_alloc() {
 #[no_mangle]
 #[inline(never)]
 pub unsafe extern "C" fn sys_alloc_aligned(bytes: usize, align: usize) -> *mut u8 {
+    inline_bump_alloc_aligned(bytes, align)
+}
+
+#[cfg(all(target_os = "zkvm", target_vendor = "zisk"))]
+#[inline(always)]
+pub unsafe fn inline_bump_alloc_aligned(bytes: usize, align: usize) -> *mut u8 {
     // SAFETY: Single threaded, so nothing else can touch this while we're working.
     let mut heap_pos = unsafe { HEAP_POS };
 

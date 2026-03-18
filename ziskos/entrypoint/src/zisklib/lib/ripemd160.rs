@@ -15,8 +15,8 @@ fn ripemd160(input: &[u8]) -> [u8; 32] {
 /// # Safety
 /// - `input` must point to at least `input_len` bytes
 /// - `output` must point to a writable buffer of at least 32 bytes
-#[cfg_attr(not(feature = "hints"), no_mangle)]
-pub unsafe extern "C" fn ripemd160_c(input: *const u8, input_len: usize, output: *mut u8) {
+#[inline]
+pub(crate) unsafe fn ripemd160_c(input: *const u8, input_len: usize, output: *mut u8) {
     let input_slice = core::slice::from_raw_parts(input, input_len);
     let hash = ripemd160(input_slice);
     let output_slice = core::slice::from_raw_parts_mut(output, 32);

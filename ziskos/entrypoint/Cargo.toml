@@ -58,6 +58,9 @@ zisk-embedded-dlmalloc-alloc = ["dep:embedded-alloc", "dep:critical-section", "d
 zisk-embedded-talc-alloc = ["dep:embedded-alloc", "dep:critical-section", "dep:talc"]
 zisk-embedded-tlfs-alloc = ["dep:embedded-alloc", "dep:critical-section"]
 
+[build-dependencies]
+bindgen = "0.72"
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
 'cfg(zisk_hints)',

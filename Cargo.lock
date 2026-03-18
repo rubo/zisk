@@ -499,6 +499,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "bindgen"
+version = "0.72.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.13.0",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 2.1.1",
+ "shlex",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2478,7 +2498,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f655543f54b263cbc3d2456bf714bd807d66a33eff8f70136687f0776d34f76"
 dependencies = [
- "bindgen",
+ "bindgen 0.69.5",
  "build-probe-mpi",
  "cc",
 ]
@@ -6260,6 +6280,7 @@ version = "0.17.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "bindgen 0.72.1",
  "bytes",
  "cfg-if",
  "critical-section",
@@ -6294,6 +6315,7 @@ version = "0.17.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "bindgen 0.72.1",
  "cfg-if",
  "fields",
  "getrandom 0.2.17",

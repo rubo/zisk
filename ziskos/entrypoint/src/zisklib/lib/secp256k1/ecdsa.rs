@@ -206,6 +206,58 @@ pub fn secp256k1_ecdsa_recover(
 
 // ==================== C FFI Functions ====================
 
+/// C-compatible wrapper for secp256k1_ecdsa_verify
+///
+/// # Safety
+/// - `sig` must point to at least 64 bytes (r || s, big-endian)
+/// - `msg` must point to at least 32 bytes (message hash, big-endian)
+/// - `pk` must point to at least 64 bytes (x || y, big-endian)
+///
+/// # Arguments
+/// - `sig` - 64 bytes: r (32 bytes) || s (32 bytes), big-endian
+/// - `msg` - 32 bytes message hash, big-endian
+/// - `pk` - 64 bytes: x (32 bytes) || y (32 bytes), big-endian
+///
+/// # Returns
+/// - `Ok([u8; 32])` - Recovered address if signature is valid
+/// - `Err(u8)` - Error code
+#[inline]
+pub(crate) unsafe fn secp256k1_ecdsa_verify_c(
+    sig: *const u8,
+    msg: *const u8,
+    pk: *const u8,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> bool {
+    let sig_bytes: &[u8; 64] = &*(sig as *const [u8; 64]);
+    let msg_bytes: &[u8; 32] = &*(msg as *const [u8; 32]);
+    let pk_bytes: &[u8; 64] = &*(pk as *const [u8; 64]);
+
+    // Parse r, s from big-endian bytes
+    let r_bytes: [u8; 32] = sig_bytes[0..32].try_into().unwrap();
+    let s_bytes: [u8; 32] = sig_bytes[32..64].try_into().unwrap();
+
+    // Parse pk_x, pk_y from big-endian bytes
+    let pk_x_bytes: [u8; 32] = pk_bytes[0..32].try_into().unwrap();
+    let pk_y_bytes: [u8; 32] = pk_bytes[32..64].try_into().unwrap();
+
+    // Convert to little-endian u64 limbs
+    let r = bytes_be_to_u64_le(&r_bytes);
+    let s = bytes_be_to_u64_le(&s_bytes);
+    let z = bytes_be_to_u64_le(msg_bytes);
+    let pk_x = bytes_be_to_u64_le(&pk_x_bytes);
+    let pk_y = bytes_be_to_u64_le(&pk_y_bytes);
+
+    let pk_arr: [u64; 8] = [pk_x[0], pk_x[1], pk_x[2], pk_x[3], pk_y[0], pk_y[1], pk_y[2], pk_y[3]];
+    secp256k1_ecdsa_verify(
+        &pk_arr,
+        &z,
+        &r,
+        &s,
+        #[cfg(feature = "hints")]
+        hints,
+    )
+}
+
 /// C-compatible wrapper for secp256k1_ecdsa_verify and address recovery
 ///
 /// # Safety
@@ -267,6 +319,63 @@ pub unsafe extern "C" fn secp256k1_ecdsa_verify_and_address_recover_c(
         ECDSA_VERIFY_SUCCESS
     } else {
         ECDSA_VERIFY_ERROR
+    }
+}
+
+/// C-compatible wrapper for secp256k1_ecdsa_recover
+///
+/// # Safety
+/// - `sig` must point to at least 64 bytes (r || s, big-endian)
+/// - `msg` must point to at least 32 bytes (message hash, big-endian)
+/// - `output` must point to a writable buffer of 64 bytes
+///
+/// # Arguments
+/// - `sig` - 64 bytes: r (32 bytes) || s (32 bytes), big-endian
+/// - `recid` - Recovery ID (0 or 1)
+/// - `msg` - 32 bytes message hash, big-endian
+/// - `output` - Output buffer for the recovered public key (64 bytes)
+///
+/// # Returns
+/// - `Ok([u64; 8])` - Recovered pubkey if recovery is successful
+/// - `Err(u8)` - Error code
+#[inline]
+pub(crate) unsafe fn secp256k1_ecdsa_recover_c(
+    sig: *const u8,
+    recid: u8,
+    msg: *const u8,
+    output: *mut u8,
+    #[cfg(feature = "hints")] hints: &mut Vec<u64>,
+) -> u8 {
+    let sig_bytes: &[u8; 64] = &*(sig as *const [u8; 64]);
+    let msg_bytes: &[u8; 32] = &*(msg as *const [u8; 32]);
+    let output_bytes: &mut [u8; 64] = &mut *(output as *mut [u8; 64]);
+
+    // Parse r, s, z from big-endian bytes
+    let r_bytes: [u8; 32] = sig_bytes[0..32].try_into().unwrap();
+    let s_bytes: [u8; 32] = sig_bytes[32..64].try_into().unwrap();
+
+    let r = bytes_be_to_u64_le(&r_bytes);
+    let s = bytes_be_to_u64_le(&s_bytes);
+    let z = bytes_be_to_u64_le(msg_bytes);
+
+    // Perform ecrecover
+    match secp256k1_ecdsa_recover(
+        &r,
+        &s,
+        &z,
+        recid,
+        #[cfg(feature = "hints")]
+        hints,
+    ) {
+        Ok(pk) => {
+            // pk is [u64; 8]: x in limbs [0..4] and y in limbs [4..8], little-endian
+            let x = [pk[0], pk[1], pk[2], pk[3]];
+            let y = [pk[4], pk[5], pk[6], pk[7]];
+            output_bytes[..32].copy_from_slice(&u64_le_to_bytes_be(&x));
+            output_bytes[32..].copy_from_slice(&u64_le_to_bytes_be(&y));
+            ECDSA_RECOVER_SUCCESS
+        }
+        Err(code) => code,
     }
 }
 

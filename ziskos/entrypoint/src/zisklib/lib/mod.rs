@@ -10,6 +10,7 @@ mod secp256k1;
 mod secp256r1;
 mod sha256;
 mod utils;
+mod zkvm_accelerators;
 
 // For public consumption
 pub use arith256::*;

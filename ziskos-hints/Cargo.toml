@@ -42,6 +42,9 @@ zisk-verifier = { workspace = true }
 default = ["hints"]
 hints = []
 
+[build-dependencies]
+bindgen = "0.72"
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
 'cfg(zisk_hints)',

@@ -1,8 +1,6 @@
 use core::alloc::{GlobalAlloc, Layout};
 
-use crate::alloc::{
-    inline_bump_alloc_aligned, sys_alloc_aligned, sys_alloc_log
-};
+use crate::alloc::{inline_bump_alloc_aligned, sys_alloc_aligned, sys_alloc_log};
 use crate::ziskos_memcpy;
 
 #[global_allocator]

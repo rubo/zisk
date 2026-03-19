@@ -6335,6 +6335,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ziskos-static-lib"
+version = "0.17.0"
+dependencies = [
+ "ziskos",
+]
+
+[[package]]
 name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"

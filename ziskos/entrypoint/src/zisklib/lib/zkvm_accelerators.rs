@@ -37,7 +37,6 @@ extern "C" {
     fn hint_keccak256(input_ptr: *const u8, input_len: usize);
 }
 
-/// Compute Keccak-256 hash
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_keccak256")]
 pub unsafe extern "C" fn zkvm_keccak256(
@@ -56,7 +55,6 @@ pub unsafe extern "C" fn zkvm_keccak256(
     ZKVM_EOK
 }
 
-/// Compute SHA-256 hash (precompile 0x02)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_sha256")]
 pub unsafe extern "C" fn zkvm_sha256(
@@ -75,7 +73,6 @@ pub unsafe extern "C" fn zkvm_sha256(
     ZKVM_EOK
 }
 
-/// Compute RIPEMD-160 hash (precompile 0x03)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_ripemd160")]
 pub unsafe extern "C" fn zkvm_ripemd160(
@@ -88,7 +85,6 @@ pub unsafe extern "C" fn zkvm_ripemd160(
     ZKVM_EOK
 }
 
-/// Modular exponentiation (precompile 0x05)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_modexp")]
 pub unsafe extern "C" fn zkvm_modexp(
@@ -115,7 +111,6 @@ pub unsafe extern "C" fn zkvm_modexp(
     ZKVM_EOK
 }
 
-/// BN254 G1 point addition (precompile 0x06, EIP-196)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bn254_g1_add")]
 pub unsafe extern "C" fn zkvm_bn254_g1_add(
@@ -138,7 +133,6 @@ pub unsafe extern "C" fn zkvm_bn254_g1_add(
     }
 }
 
-/// BN254 G1 scalar multiplication (precompile 0x07, EIP-196)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bn254_g1_mul")]
 pub unsafe extern "C" fn zkvm_bn254_g1_mul(
@@ -161,9 +155,6 @@ pub unsafe extern "C" fn zkvm_bn254_g1_mul(
     }
 }
 
-/// BN254 pairing check (precompile 0x08, EIP-197)
-///
-/// Each pair in `pairs` must be laid out as: 64 bytes G1 point || 128 bytes G2 point.
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bn254_pairing")]
 pub unsafe extern "C" fn zkvm_bn254_pairing(
@@ -191,10 +182,6 @@ pub unsafe extern "C" fn zkvm_bn254_pairing(
     }
 }
 
-/// BLAKE2f compression function (precompile 0x09, EIP-152)
-///
-/// `h` is the 8×u64 state (64 bytes), `m` is the 16×u64 message block (128 bytes),
-/// `t` is the 2×u64 offset counters (16 bytes). All fields are little-endian.
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_blake2f")]
 pub unsafe extern "C" fn zkvm_blake2f(
@@ -217,7 +204,6 @@ pub unsafe extern "C" fn zkvm_blake2f(
     ZKVM_EOK
 }
 
-/// KZG point evaluation / proof verification (precompile 0x0a, EIP-4844)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_kzg_point_eval")]
 pub unsafe extern "C" fn zkvm_kzg_point_eval(
@@ -240,7 +226,6 @@ pub unsafe extern "C" fn zkvm_kzg_point_eval(
     ZKVM_EOK
 }
 
-/// BLS12-381 G1 point addition (precompile 0x0b, EIP-2537)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_g1_add")]
 pub unsafe extern "C" fn zkvm_bls12_g1_add(
@@ -249,7 +234,6 @@ pub unsafe extern "C" fn zkvm_bls12_g1_add(
     result: *mut zkvm_bls12_381_g1_point,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> zkvm_status {
-    // bls12_381_g1_add_c takes (ret, a, b) — result first
     let ret = super::bls12_381_g1_add_c(
         (*result).data.as_mut_ptr(),
         (*p1).data.as_ptr(),
@@ -264,9 +248,6 @@ pub unsafe extern "C" fn zkvm_bls12_g1_add(
     }
 }
 
-/// BLS12-381 G1 multi-scalar multiplication (precompile 0x0c, EIP-2537)
-///
-/// Each pair in `pairs` must be laid out as: 96 bytes G1 point || 32 bytes scalar.
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_g1_msm")]
 pub unsafe extern "C" fn zkvm_bls12_g1_msm(
@@ -275,7 +256,6 @@ pub unsafe extern "C" fn zkvm_bls12_g1_msm(
     result: *mut zkvm_bls12_381_g1_point,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> zkvm_status {
-    // bls12_381_g1_msm_c takes (ret, pairs, num_pairs) — result first
     let ret = super::bls12_381_g1_msm_c(
         (*result).data.as_mut_ptr(),
         pairs as *const u8,
@@ -290,7 +270,6 @@ pub unsafe extern "C" fn zkvm_bls12_g1_msm(
     }
 }
 
-/// BLS12-381 G2 point addition (precompile 0x0d, EIP-2537)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_g2_add")]
 pub unsafe extern "C" fn zkvm_bls12_g2_add(
@@ -299,7 +278,6 @@ pub unsafe extern "C" fn zkvm_bls12_g2_add(
     result: *mut zkvm_bls12_381_g2_point,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> zkvm_status {
-    // bls12_381_g2_add_c takes (ret, a, b) — result first
     let ret = super::bls12_381_g2_add_c(
         (*result).data.as_mut_ptr(),
         (*p1).data.as_ptr(),
@@ -314,9 +292,6 @@ pub unsafe extern "C" fn zkvm_bls12_g2_add(
     }
 }
 
-/// BLS12-381 G2 multi-scalar multiplication (precompile 0x0e, EIP-2537)
-///
-/// Each pair in `pairs` must be laid out as: 192 bytes G2 point || 32 bytes scalar.
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_g2_msm")]
 pub unsafe extern "C" fn zkvm_bls12_g2_msm(
@@ -325,7 +300,6 @@ pub unsafe extern "C" fn zkvm_bls12_g2_msm(
     result: *mut zkvm_bls12_381_g2_point,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> zkvm_status {
-    // bls12_381_g2_msm_c takes (ret, pairs, num_pairs) — result first
     let ret = super::bls12_381_g2_msm_c(
         (*result).data.as_mut_ptr(),
         pairs as *const u8,
@@ -340,9 +314,6 @@ pub unsafe extern "C" fn zkvm_bls12_g2_msm(
     }
 }
 
-/// BLS12-381 pairing check (precompile 0x0f, EIP-2537)
-///
-/// Each pair in `pairs` must be laid out as: 96 bytes G1 point || 192 bytes G2 point.
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_pairing")]
 pub unsafe extern "C" fn zkvm_bls12_pairing(
@@ -370,7 +341,6 @@ pub unsafe extern "C" fn zkvm_bls12_pairing(
     }
 }
 
-/// BLS12-381 map Fp field element to G1 point (precompile 0x10, EIP-2537)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_map_fp_to_g1")]
 pub unsafe extern "C" fn zkvm_bls12_map_fp_to_g1(
@@ -378,7 +348,6 @@ pub unsafe extern "C" fn zkvm_bls12_map_fp_to_g1(
     result: *mut zkvm_bls12_381_g1_point,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> zkvm_status {
-    // bls12_381_fp_to_g1_c takes (ret, fp) — result first
     let ret = super::bls12_381_fp_to_g1_c(
         (*result).data.as_mut_ptr(),
         (*field_element).data.as_ptr(),
@@ -392,7 +361,6 @@ pub unsafe extern "C" fn zkvm_bls12_map_fp_to_g1(
     }
 }
 
-/// BLS12-381 map Fp2 field element to G2 point (precompile 0x11, EIP-2537)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_bls12_map_fp2_to_g2")]
 pub unsafe extern "C" fn zkvm_bls12_map_fp2_to_g2(
@@ -400,7 +368,6 @@ pub unsafe extern "C" fn zkvm_bls12_map_fp2_to_g2(
     result: *mut zkvm_bls12_381_g2_point,
     #[cfg(feature = "hints")] hints: &mut Vec<u64>,
 ) -> zkvm_status {
-    // bls12_381_fp2_to_g2_c takes (ret, fp2) — result first
     let ret = super::bls12_381_fp2_to_g2_c(
         (*result).data.as_mut_ptr(),
         (*field_element).data.as_ptr(),
@@ -414,7 +381,6 @@ pub unsafe extern "C" fn zkvm_bls12_map_fp2_to_g2(
     }
 }
 
-/// secp256r1 (P-256) signature verification (precompile 0x100, EIP-7212)
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_secp256r1_verify")]
 pub unsafe extern "C" fn zkvm_secp256r1_verify(
@@ -434,10 +400,6 @@ pub unsafe extern "C" fn zkvm_secp256r1_verify(
     ZKVM_EOK
 }
 
-/// secp256k1 ECDSA signature verification
-///
-/// Verifies that `sig` is a valid signature over `msg` with public key `pubkey`.
-/// Writes verification result to `*verified`.
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_secp256k1_verify")]
 pub unsafe extern "C" fn zkvm_secp256k1_verify(
@@ -458,11 +420,6 @@ pub unsafe extern "C" fn zkvm_secp256k1_verify(
     ZKVM_EOK
 }
 
-/// secp256k1 ECRECOVER — recover the public key from a signature (precompile 0x01)
-///
-/// Unlike the EVM ECRECOVER which returns an address, this function returns the raw
-/// uncompressed public key (64 bytes: x || y, big-endian). The caller can then
-/// derive the Ethereum address by computing keccak256(pubkey)[12..].
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_secp256k1_ecrecover")]
 pub unsafe extern "C" fn zkvm_secp256k1_ecrecover(

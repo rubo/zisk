@@ -73,8 +73,8 @@ pub const HINT_BN254_G1_MUL: u32 = 0x0201;
 pub const HINT_BN254_PAIRING_CHECK: u32 = 0x0205;
 
 // Secp256k1 hint codes
-pub const HINT_SECP256K1_ECDSA_ADDRESS_RECOVER: u32 = 0x0300;
-pub const HINT_SECP256K1_ECDSA_VERIFY_ADDRESS_RECOVER: u32 = 0x0301;
+pub const HINT_SECP256K1_ECRECOVER: u32 = 0x0300;
+pub const HINT_SECP256K1_ECDSA_VERIFY: u32 = 0x0301;
 
 // Secp256r1 hint codes
 pub const HINT_SECP256R1_ECDSA_VERIFY: u32 = 0x0380;
@@ -161,10 +161,10 @@ pub enum BuiltInHint {
     Bn254PairingCheck = HINT_BN254_PAIRING_CHECK,
 
     // Secp256k1 hint types.
-    /// secp256k1 ECDSA address recovery.
-    Secp256k1EcdsaAddressRecover = HINT_SECP256K1_ECDSA_ADDRESS_RECOVER,
-    /// secp256k1 ECDSA signature verification and address recovery.
-    Secp256k1EcdsaVerifyAddressRecover = HINT_SECP256K1_ECDSA_VERIFY_ADDRESS_RECOVER,
+    /// secp256k1 ECDSA recovery returning raw 64-byte public key (matches zkvm_secp256k1_ecrecover).
+    Secp256k1Ecrecover = HINT_SECP256K1_ECRECOVER,
+    /// secp256k1 ECDSA signature verification (matches zkvm_secp256k1_verify).
+    Secp256k1EcdsaVerify = HINT_SECP256K1_ECDSA_VERIFY,
 
     // Secp256r1 hint types.
     /// secp256r1 (P-256) signature verification.
@@ -215,10 +215,8 @@ impl Display for BuiltInHint {
             BuiltInHint::Bn254G1Mul => "BN254_G1_MUL",
             BuiltInHint::Bn254PairingCheck => "BN254_PAIRING_CHECK",
             // Secp256k1 Hints
-            BuiltInHint::Secp256k1EcdsaAddressRecover => "SECP256K1_ECDSA_ADDRESS_RECOVER",
-            BuiltInHint::Secp256k1EcdsaVerifyAddressRecover => {
-                "SECP256K1_ECDSA_VERIFY_ADDRESS_RECOVER"
-            }
+            BuiltInHint::Secp256k1Ecrecover => "SECP256K1_ECRECOVER",
+            BuiltInHint::Secp256k1EcdsaVerify => "SECP256K1_ECDSA_VERIFY",
             // Secp256r1 Hints
             BuiltInHint::Secp256r1EcdsaVerify => "SECP256R1_ECDSA_VERIFY",
             // BLS12-381 Hints
@@ -257,10 +255,8 @@ impl TryFrom<u32> for BuiltInHint {
             HINT_BN254_G1_MUL => Ok(Self::Bn254G1Mul),
             HINT_BN254_PAIRING_CHECK => Ok(Self::Bn254PairingCheck),
             // Secp256k1 Hints
-            HINT_SECP256K1_ECDSA_ADDRESS_RECOVER => Ok(Self::Secp256k1EcdsaAddressRecover),
-            HINT_SECP256K1_ECDSA_VERIFY_ADDRESS_RECOVER => {
-                Ok(Self::Secp256k1EcdsaVerifyAddressRecover)
-            }
+            HINT_SECP256K1_ECRECOVER => Ok(Self::Secp256k1Ecrecover),
+            HINT_SECP256K1_ECDSA_VERIFY => Ok(Self::Secp256k1EcdsaVerify),
             // Secp256r1 Hints
             HINT_SECP256R1_ECDSA_VERIFY => Ok(Self::Secp256r1EcdsaVerify),
             // BLS12-381 Hints
@@ -344,12 +340,8 @@ impl HintCode {
             HintCode::BuiltIn(BuiltInHint::Bn254G1Mul) => HINT_BN254_G1_MUL,
             HintCode::BuiltIn(BuiltInHint::Bn254PairingCheck) => HINT_BN254_PAIRING_CHECK,
             // Secp256k1 Hints
-            HintCode::BuiltIn(BuiltInHint::Secp256k1EcdsaAddressRecover) => {
-                HINT_SECP256K1_ECDSA_ADDRESS_RECOVER
-            }
-            HintCode::BuiltIn(BuiltInHint::Secp256k1EcdsaVerifyAddressRecover) => {
-                HINT_SECP256K1_ECDSA_VERIFY_ADDRESS_RECOVER
-            }
+            HintCode::BuiltIn(BuiltInHint::Secp256k1Ecrecover) => HINT_SECP256K1_ECRECOVER,
+            HintCode::BuiltIn(BuiltInHint::Secp256k1EcdsaVerify) => HINT_SECP256K1_ECDSA_VERIFY,
             // Secp256r1 Hints
             HintCode::BuiltIn(BuiltInHint::Secp256r1EcdsaVerify) => HINT_SECP256R1_ECDSA_VERIFY,
             // BLS12-381 Hints

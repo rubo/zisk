@@ -31,12 +31,6 @@ use bindings::{
     zkvm_status_ZKVM_EFAIL as ZKVM_EFAIL, zkvm_status_ZKVM_EOK as ZKVM_EOK,
 };
 
-// Hint for keccak256 on native with hints
-#[cfg(all(not(all(target_os = "zkvm", target_vendor = "zisk")), zisk_hints))]
-extern "C" {
-    fn hint_keccak256(input_ptr: *const u8, input_len: usize);
-}
-
 #[cfg_attr(not(feature = "hints"), no_mangle)]
 #[cfg_attr(feature = "hints", export_name = "hints_zkvm_keccak256")]
 pub unsafe extern "C" fn zkvm_keccak256(

@@ -62,7 +62,6 @@ opt-level = 3
 opt-level = 0
 
 [profile.release.package.ziskos-static-lib]
-opt-level = 3
 codegen-units = 1
 
 [profile.bench]

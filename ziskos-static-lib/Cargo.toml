@@ -14,9 +14,3 @@ crate-type = ["staticlib"]
 [dependencies]
 ziskos = { workspace = true }
 
-# When building this crate as a standalone package (outside the workspace),
-# use fat LTO and a single codegen unit for maximum dead-code elimination.
-[profile.release]
-opt-level = 3
-lto = "fat"
-codegen-units = 1

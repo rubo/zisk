@@ -23,5 +23,9 @@
 //! - `zkvm_secp256r1_verify`
 //! - `zkvm_secp256k1_verify`
 //! - `zkvm_secp256k1_ecrecover`
+//!
+//! Build commands:
+//! - cargo build -p ziskos-static-lib --release --config 'profile.release.lto="fat"'
+//! - cargo +zisk build -p ziskos-static-lib --release --target riscv64ima-zisk-zkvm-elf --config 'profile.release.lto="fat"'
 
 pub use ziskos::zisklib::lib::zkvm_accelerators::*;

@@ -1,9 +1,6 @@
 /// Compute RIPEMD-160 hash
 #[inline]
-pub fn ripemd160(
-    input: &[u8],
-    #[cfg(feature = "hints")] _hints: &mut Vec<u64>,
-) -> [u8; 32] {
+pub fn ripemd160(input: &[u8], #[cfg(feature = "hints")] _hints: &mut Vec<u64>) -> [u8; 32] {
     use ripemd::Digest;
     let mut hasher = ripemd::Ripemd160::new();
     hasher.update(input);

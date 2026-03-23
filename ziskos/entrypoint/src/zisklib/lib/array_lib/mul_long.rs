@@ -55,7 +55,7 @@ pub fn mul_long(
 
     // Finish the first row
     for j in 1..len_b {
-        // Compute a[0]·b[j] + out[j]
+        // Compute a[0]·b[j] + out[j] and set out[j]
         let out_j = out[j];
         let mut params = SyscallArith256Params {
             a: a[0].as_limbs(),
@@ -70,16 +70,20 @@ pub fn mul_long(
             hints,
         );
 
-        // Propagate the carry
+        // Set out[j+1]
         out[j + 1] = U256::from_u64s(params.dh);
     }
 
     // Finish the remaining rows
+    let last_b_idx = len_b - 1;
     for i in 1..len_a {
-        let mut carry_flag = 0u64;
-        for j in 0..(len_b - 1) {
+        // Process all chunks except the last one
+        let mut carry = 0u64;
+        #[allow(clippy::needless_range_loop)]
+        for j in 0..last_b_idx {
             // Compute a[i]·b[j] + out[i + j]
-            let out_ij = out[i + j];
+            let k = i + j;
+            let out_ij = out[k];
             let mut params_arith = SyscallArith256Params {
                 a: a[i].as_limbs(),
                 b: b[j].as_limbs(),
@@ -93,34 +97,18 @@ pub fn mul_long(
                 hints,
             );
 
-            // Set the result
-            out[i + j] = U256::from_u64s(params_arith.dl);
+            // Set out[i+j]
+            out[k] = U256::from_u64s(params_arith.dl);
 
-            if carry_flag == 1 {
-                let mut params_add = SyscallAdd256Params {
-                    a: &params_arith.dh.clone(),
-                    b: U256::ZERO.as_limbs(),
-                    cin: 1,
-                    c: params_arith.dh,
-                };
-                let _carry = syscall_add256(
-                    &mut params_add,
-                    #[cfg(feature = "hints")]
-                    hints,
-                );
-
-                debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
-            }
-
-            // Update out[i+j+1] with carry
-            let out_ij1 = out[i + j + 1];
+            // Update out[i+j+1]
+            let out_ij1 = out[k + 1];
             let mut params_add = SyscallAdd256Params {
                 a: out_ij1.as_limbs(),
                 b: params_arith.dh,
-                cin: 0,
-                c: out[i + j + 1].as_limbs_mut(),
+                cin: carry,
+                c: out[k + 1].as_limbs_mut(),
             };
-            carry_flag = syscall_add256(
+            carry = syscall_add256(
                 &mut params_add,
                 #[cfg(feature = "hints")]
                 hints,
@@ -129,13 +117,14 @@ pub fn mul_long(
 
         // Last chunk isolated
 
-        // Compute a[i]·b[len_b - 1] + out[i + len_b - 1]
-        let out_ilb1 = out[i + len_b - 1];
+        // Compute a[i]·b[len_b - 1] + out[i + len_b - 1] and set out[i + len_b - 1]
+        let k = i + last_b_idx;
+        let out_ilb1 = out[k];
         let mut params_arith = SyscallArith256Params {
             a: a[i].as_limbs(),
-            b: b[len_b - 1].as_limbs(),
+            b: b[last_b_idx].as_limbs(),
             c: out_ilb1.as_limbs(),
-            dl: out[i + len_b - 1].as_limbs_mut(),
+            dl: out[k].as_limbs_mut(),
             dh: &mut [0, 0, 0, 0],
         };
         syscall_arith256(
@@ -144,7 +133,7 @@ pub fn mul_long(
             hints,
         );
 
-        if carry_flag == 1 {
+        if carry == 1 {
             let a_in = *params_arith.dh;
             let mut params_add = SyscallAdd256Params {
                 a: &a_in,
@@ -161,7 +150,7 @@ pub fn mul_long(
             debug_assert!(_carry == 0, "Unexpected carry in intermediate addition");
         }
 
-        // Set out[i+j+1] = carry
+        // Set out[i + len_b]
         out[i + len_b] = U256::from_u64s(params_arith.dh);
     }
 

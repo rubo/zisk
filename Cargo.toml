@@ -28,7 +28,6 @@ members = [
     "state-machines/rom",
     "ziskos/entrypoint",
     "ziskos-hints",
-    "ziskos-static-lib",
     "precompiles/arith_eq",
     "precompiles/arith_eq_384",
     "precompiles/common",
@@ -61,9 +60,6 @@ opt-level = 3
 
 [profile.release.package."proofman-verifier"]
 opt-level = 0
-
-[profile.release.package.ziskos-static-lib]
-codegen-units = 1
 
 [profile.bench]
 opt-level = 3
